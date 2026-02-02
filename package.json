@@ -1,0 +1,19 @@
+{
+  "name": "satoshi-blackjack-casino",
+  "version": "1.0.0",
+  "description": "Casino Lightning multi-joueurs sur Vercel",
+  "type": "module",
+  "scripts": {
+    "dev": "vercel dev",
+    "deploy": "vercel --prod"
+  },
+  "dependencies": {
+    "@vercel/kv": "^1.0.1",
+    "axios": "^1.6.5",
+    "cookie": "^0.6.0",
+    "nanoid": "^5.0.4"
+  },
+  "devDependencies": {
+    "vercel": "^33.0.1"
+  }
+}

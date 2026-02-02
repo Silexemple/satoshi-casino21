@@ -1,0 +1,767 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Satoshi VIP - Lightning Blackjack</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Inter:wght@300;400;600&display=swap');
+        
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            background: linear-gradient(135deg, #0a0e14 0%, #1a1f2e 100%);
+            font-family: 'Inter', sans-serif;
+            min-height: 100vh;
+            color: #e0e0e0;
+            overflow-x: hidden;
+        }
+        
+        .container { max-width: 900px; margin: 0 auto; padding: 15px; }
+        
+        .header {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 15px 0; border-bottom: 1px solid rgba(255,255,255,0.1);
+            margin-bottom: 20px;
+        }
+        
+        .brand { font-family: 'Cinzel', serif; font-size: 24px; color: #f7931a; }
+        
+        .balance-box {
+            background: rgba(247,147,26,0.1);
+            border: 1px solid rgba(247,147,26,0.3);
+            padding: 10px 20px; border-radius: 20px;
+            text-align: right;
+        }
+        
+        .balance-label { font-size: 11px; color: #888; text-transform: uppercase; }
+        .balance-amount { font-size: 22px; font-weight: bold; color: #f7931a; }
+        
+        .table {
+            background: linear-gradient(135deg, #0d5132 0%, #0a3d26 100%);
+            border-radius: 15px; padding: 25px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+        }
+        
+        .hand-area { margin: 25px 0; text-align: center; }
+        
+        .hand-label {
+            font-family: 'Cinzel', serif; color: #ffd700;
+            font-size: 12px; letter-spacing: 3px; margin-bottom: 10px;
+        }
+        
+        .cards { display: flex; justify-content: center; gap: 12px; min-height: 120px; flex-wrap: wrap; }
+        
+        .card {
+            width: 85px; height: 119px; background: linear-gradient(135deg, #fff 0%, #f5f5f5 100%);
+            border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            position: relative; color: #000; animation: deal 0.6s ease-out;
+        }
+        
+        @keyframes deal {
+            0% { transform: translateY(-100px) rotateY(90deg) scale(0.8); opacity: 0; }
+            100% { transform: translateY(0) rotateY(0) scale(1); opacity: 1; }
+        }
+        
+        .card.hidden {
+            background: linear-gradient(135deg, #c41e3a 0%, #8b0000 100%);
+            border: 2px solid #600;
+        }
+        
+        .card.hidden::after {
+            content: "₿"; position: absolute; top: 50%; left: 50%;
+            transform: translate(-50%, -50%); font-size: 40px;
+            color: rgba(255,215,0,0.4); font-family: 'Cinzel', serif;
+        }
+        
+        .card-content { padding: 8px; height: 100%; display: flex; flex-direction: column; justify-content: space-between; }
+        .corner { font-size: 16px; font-weight: bold; line-height: 1; }
+        .center { font-size: 42px; text-align: center; line-height: 1; }
+        .red { color: #d40000; }
+        .black { color: #1a1a1a; }
+        
+        .score { display: inline-block; background: rgba(0,0,0,0.6); color: #ffd700; padding: 6px 16px; border-radius: 15px; margin-top: 12px; font-weight: bold; font-size: 16px; }
+        .score.bust { background: rgba(200,0,0,0.8); color: #fff; }
+        
+        .controls { background: rgba(0,0,0,0.3); border-radius: 12px; padding: 20px; margin-top: 20px; text-align: center; }
+        
+        .bet-display { font-size: 36px; color: #ffd700; font-weight: bold; margin: 10px 0; }
+        
+        .chips { display: flex; justify-content: center; gap: 15px; margin: 15px 0; }
+        
+        .chip {
+            width: 60px; height: 60px; border-radius: 50%; border: 3px dashed rgba(255,255,255,0.6);
+            display: flex; align-items: center; justify-content: center; font-weight: bold;
+            cursor: pointer; transition: all 0.2s; color: #fff; font-size: 13px;
+        }
+        
+        .chip:hover { transform: translateY(-5px) scale(1.1); }
+        .chip.disabled { opacity: 0.3; cursor: not-allowed; }
+        .chip.c100 { background: radial-gradient(circle, #3498db, #2980b9); }
+        .chip.c500 { background: radial-gradient(circle, #e74c3c, #c0392b); }
+        .chip.c1000 { background: radial-gradient(circle, #f39c12, #d68910); border: 3px solid #ffd700; }
+        
+        button {
+            background: linear-gradient(135deg, #f7931a, #e67e22);
+            border: none; color: #000; padding: 12px 30px;
+            border-radius: 8px; font-weight: bold; font-size: 14px;
+            cursor: pointer; margin: 5px; text-transform: uppercase;
+        }
+        
+        button:disabled { opacity: 0.3; cursor: not-allowed; background: #555; color: #888; }
+        
+        .btn-stand { background: linear-gradient(135deg, #e74c3c, #c0392b); color: #fff; }
+        .btn-hit { background: linear-gradient(135deg, #27ae60, #229954); color: #fff; }
+        
+        .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 1000; justify-content: center; align-items: center; }
+        .modal.active { display: flex; }
+        
+        .modal-content {
+            background: linear-gradient(135deg, #1a1f2e, #0f1419);
+            border: 1px solid rgba(247,147,26,0.3); border-radius: 15px;
+            padding: 30px; max-width: 400px; width: 90%; text-align: center;
+        }
+        
+        .modal-title { font-family: 'Cinzel', serif; color: #f7931a; font-size: 20px; margin-bottom: 20px; }
+        
+        .qr-container { 
+            background: white; 
+            padding: 20px; 
+            border-radius: 10px; 
+            margin: 20px 0;
+            display: inline-block;
+        }
+        
+        #qrcode { margin: 0 auto; }
+        
+        .invoice-info {
+            background: rgba(0,0,0,0.3);
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+            font-size: 12px;
+            word-break: break-all;
+        }
+        
+        .payment-status {
+            padding: 10px;
+            border-radius: 8px;
+            margin: 15px 0;
+            font-weight: bold;
+        }
+        
+        .payment-status.waiting {
+            background: rgba(241, 196, 15, 0.2);
+            color: #f1c40f;
+        }
+        
+        .payment-status.paid {
+            background: rgba(46, 204, 113, 0.2);
+            color: #2ecc71;
+        }
+        
+        .footer {
+            text-align: center; padding: 20px; color: #888;
+            font-size: 14px; border-top: 1px solid rgba(255,255,255,0.05);
+            margin-top: 30px;
+        }
+        
+        input {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.2);
+            color: #fff;
+            padding: 12px;
+            border-radius: 8px;
+            width: 100%;
+            margin: 10px 0;
+            font-size: 14px;
+        }
+        
+        input:focus {
+            outline: none;
+            border-color: #f7931a;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="header">
+        <div class="brand">⚡ SATOSHI BJ</div>
+        <div class="balance-box">
+            <div class="balance-label">Balance</div>
+            <div class="balance-amount" id="balance">0</div>
+        </div>
+    </div>
+    
+    <div class="table">
+        <div class="hand-area">
+            <div class="hand-label">DEALER</div>
+            <div class="cards" id="dealerCards"></div>
+            <div class="score" id="dealerScore">--</div>
+        </div>
+        
+        <div class="controls" id="gameControls">
+            <div id="betPanel">
+                <div class="hand-label">Mise (Max 1000)</div>
+                <div class="bet-display" id="currentBet">0</div>
+                
+                <div class="chips">
+                    <div class="chip c100" onclick="addBet(100)" id="chip100">100</div>
+                    <div class="chip c500" onclick="addBet(500)" id="chip500">500</div>
+                    <div class="chip c1000" onclick="addBet(1000)" id="chip1000">1K</div>
+                </div>
+                
+                <button onclick="deal()" id="dealBtn" disabled>DISTRIBUER</button>
+                <button onclick="showDepositModal()" style="background: transparent; border: 1px solid #f7931a; color: #f7931a; font-size: 12px;">+ Déposer</button>
+                <button onclick="showWithdrawModal()" style="background: transparent; border: 1px solid #27ae60; color: #27ae60; font-size: 12px;" id="withdrawBtn" disabled>Casher</button>
+            </div>
+            
+            <div id="actionPanel" style="display: none;">
+                <button class="btn-hit" onclick="hit()">Carte</button>
+                <button class="btn-stand" onclick="stand()">Rester</button>
+                <button onclick="double()" id="doubleBtn" style="background: #9b59b6; color: #fff; font-size: 12px;">Doubler</button>
+            </div>
+        </div>
+        
+        <div class="hand-area">
+            <div class="hand-label">VOUS</div>
+            <div class="cards" id="playerCards"></div>
+            <div class="score" id="playerScore">--</div>
+        </div>
+    </div>
+    
+    <div class="footer">
+        Mise max 1000 sats | Pot max 10 000 sats
+    </div>
+</div>
+
+<!-- Deposit Modal -->
+<div class="modal" id="depositModal">
+    <div class="modal-content">
+        <div class="modal-title">⚡ Déposer des Sats</div>
+        <input type="number" id="depositAmount" placeholder="Montant (100-10000)" max="10000" min="100">
+        <button onclick="createInvoice()">Générer Invoice</button>
+        <button onclick="closeDeposit()" style="background: #555;">Annuler</button>
+        
+        <div id="invoiceSection" style="display: none;">
+            <div class="payment-status waiting" id="paymentStatus">
+                ⏳ En attente du paiement...
+            </div>
+            <div class="qr-container">
+                <div id="qrcode"></div>
+            </div>
+            <div class="invoice-info">
+                <div style="margin-bottom: 10px; color: #f7931a;">Invoice Lightning:</div>
+                <div id="invoiceText" style="font-family: monospace; font-size: 10px;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Withdraw Modal -->
+<div class="modal" id="withdrawModal">
+    <div class="modal-content">
+        <div class="modal-title">💸 Retirer</div>
+        <div style="margin: 15px 0; font-size: 18px;">
+            Solde disponible: <span style="color: #f7931a;" id="withdrawBalance">0</span> sats
+        </div>
+        <input type="text" id="withdrawInvoice" placeholder="Coller votre invoice Lightning (lnbc...)">
+        <button onclick="processWithdraw()">Payer Invoice</button>
+        <button onclick="closeWithdraw()" style="background: #555;">Annuler</button>
+        
+        <div id="withdrawStatus" style="display: none;" class="payment-status"></div>
+    </div>
+</div>
+
+<!-- Result Modal -->
+<div class="modal" id="resultModal">
+    <div class="modal-content">
+        <div style="font-size: 60px; margin-bottom: 20px;" id="resIcon">🎰</div>
+        <div class="modal-title" id="resTitle">Blackjack!</div>
+        <div style="font-size: 24px; margin: 20px 0; font-weight: bold;" id="resAmount">+100 sats</div>
+        <button onclick="resetRound()">Nouvelle Partie</button>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+
+<script>
+// ============================================
+// CONFIGURATION
+// ============================================
+const API_BASE = '';  // Même domaine que le frontend
+
+// ============================================
+// GAME STATE
+// ============================================
+let balance = 0;
+let currentBet = 0;
+let deck = [];
+let playerHand = [];
+let dealerHand = [];
+let isPlaying = false;
+let currentPaymentHash = null;
+let paymentCheckInterval = null;
+
+// ============================================
+// API CALLS
+// ============================================
+
+async function apiCall(endpoint, method = 'GET', body = null) {
+    const options = {
+        method,
+        credentials: 'include',  // Important pour les cookies de session
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    };
+    
+    if (body) {
+        options.body = JSON.stringify(body);
+    }
+    
+    const response = await fetch(API_BASE + endpoint, options);
+    
+    if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.detail || 'Erreur API');
+    }
+    
+    return await response.json();
+}
+
+// ============================================
+// INIT SESSION
+// ============================================
+
+async function initSession() {
+    try {
+        const data = await apiCall('/api/session');
+        balance = data.balance;
+        updateDisplay();
+    } catch (error) {
+        console.error('Erreur init session:', error);
+    }
+}
+
+// ============================================
+// DEPOSIT FUNCTIONS
+// ============================================
+
+async function createInvoice() {
+    const amount = parseInt(document.getElementById('depositAmount').value);
+    
+    if (!amount || amount < 100) {
+        alert('Minimum 100 sats');
+        return;
+    }
+    
+    if (balance + amount > 10000) {
+        alert('Max 10 000 sats');
+        return;
+    }
+    
+    try {
+        const data = await apiCall('/api/deposit', 'POST', { amount });
+        
+        currentPaymentHash = data.payment_hash;
+        
+        // Afficher le QR code
+        document.getElementById('invoiceSection').style.display = 'block';
+        document.getElementById('invoiceText').textContent = data.payment_request;
+        
+        // Générer QR Code
+        document.getElementById('qrcode').innerHTML = '';
+        new QRCode(document.getElementById('qrcode'), {
+            text: data.payment_request,
+            width: 256,
+            height: 256
+        });
+        
+        // Démarrer la vérification du paiement
+        startPaymentCheck(data.payment_hash);
+        
+    } catch (error) {
+        alert('Erreur: ' + error.message);
+    }
+}
+
+function startPaymentCheck(paymentHash) {
+    if (paymentCheckInterval) {
+        clearInterval(paymentCheckInterval);
+    }
+    
+    paymentCheckInterval = setInterval(async () => {
+        try {
+            const data = await apiCall(`/api/check-payment/${paymentHash}`);
+            
+            if (data.paid) {
+                clearInterval(paymentCheckInterval);
+                
+                balance = data.new_balance;
+                updateDisplay();
+                
+                document.getElementById('paymentStatus').classList.remove('waiting');
+                document.getElementById('paymentStatus').classList.add('paid');
+                document.getElementById('paymentStatus').textContent = '✅ Paiement reçu !';
+                
+                setTimeout(() => {
+                    closeDeposit();
+                    alert(`✅ Paiement confirmé ! Nouveau solde: ${balance} sats`);
+                }, 2000);
+            }
+        } catch (error) {
+            console.error('Erreur vérification:', error);
+        }
+    }, 2000);
+}
+
+function closeDeposit() {
+    if (paymentCheckInterval) {
+        clearInterval(paymentCheckInterval);
+    }
+    document.getElementById('depositModal').classList.remove('active');
+    document.getElementById('invoiceSection').style.display = 'none';
+    document.getElementById('depositAmount').value = '';
+    currentPaymentHash = null;
+}
+
+// ============================================
+// WITHDRAW FUNCTIONS
+// ============================================
+
+async function processWithdraw() {
+    const invoice = document.getElementById('withdrawInvoice').value.trim();
+    
+    if (!invoice || !invoice.startsWith('lnbc')) {
+        alert('Invoice Lightning invalide');
+        return;
+    }
+    
+    const statusDiv = document.getElementById('withdrawStatus');
+    statusDiv.style.display = 'block';
+    statusDiv.className = 'payment-status waiting';
+    statusDiv.textContent = '⏳ Paiement en cours...';
+    
+    try {
+        const data = await apiCall('/api/withdraw', 'POST', { invoice });
+        
+        statusDiv.className = 'payment-status paid';
+        statusDiv.textContent = '✅ Paiement envoyé !';
+        
+        balance = 0;
+        updateDisplay();
+        
+        setTimeout(() => {
+            closeWithdraw();
+            alert(`✅ ${data.amount} sats envoyés !`);
+        }, 2000);
+        
+    } catch (error) {
+        statusDiv.className = 'payment-status';
+        statusDiv.style.background = 'rgba(231, 76, 60, 0.2)';
+        statusDiv.style.color = '#e74c3c';
+        statusDiv.textContent = '❌ ' + error.message;
+    }
+}
+
+function closeWithdraw() {
+    document.getElementById('withdrawModal').classList.remove('active');
+    document.getElementById('withdrawInvoice').value = '';
+    document.getElementById('withdrawStatus').style.display = 'none';
+}
+
+// ============================================
+// UI UPDATES
+// ============================================
+
+function updateDisplay() {
+    document.getElementById('balance').textContent = balance;
+    document.getElementById('currentBet').textContent = currentBet;
+    document.getElementById('withdrawBalance').textContent = balance;
+    
+    ['chip100', 'chip500', 'chip1000'].forEach(id => {
+        const chip = document.getElementById(id);
+        const val = parseInt(id.replace('chip', ''));
+        chip.classList.toggle('disabled', balance < val || currentBet + val > 1000);
+    });
+    
+    document.getElementById('dealBtn').disabled = currentBet === 0;
+    document.getElementById('withdrawBtn').disabled = balance === 0;
+}
+
+function showDepositModal() {
+    if (balance >= 10000) {
+        alert('Max 10 000 sats atteint');
+        return;
+    }
+    document.getElementById('depositModal').classList.add('active');
+}
+
+function showWithdrawModal() {
+    if (balance === 0) return;
+    document.getElementById('withdrawModal').classList.add('active');
+}
+
+// ============================================
+// BLACKJACK GAME LOGIC
+// ============================================
+
+const suits = ['♠','♥','♦','♣'];
+const values = ['A','2','3','4','5','6','7','8','9','10','J','Q','K'];
+
+function createDeck() {
+    deck = [];
+    for (let s of suits) {
+        for (let v of values) {
+            let num = v === 'A' ? 11 : (isNaN(v) ? 10 : parseInt(v));
+            deck.push({suit: s, value: v, num: num});
+        }
+    }
+}
+
+function shuffle() {
+    for (let i = deck.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [deck[i], deck[j]] = [deck[j], deck[i]];
+    }
+}
+
+function draw() {
+    if (deck.length < 10) {
+        createDeck();
+        shuffle();
+    }
+    return deck.pop();
+}
+
+function getVal(hand) {
+    let sum = hand.reduce((a, c) => a + c.num, 0);
+    let aces = hand.filter(c => c.value === 'A').length;
+    while (sum > 21 && aces > 0) {
+        sum -= 10;
+        aces--;
+    }
+    return sum;
+}
+
+function renderHands() {
+    const pc = document.getElementById('playerCards');
+    const dc = document.getElementById('dealerCards');
+    
+    pc.innerHTML = '';
+    dc.innerHTML = '';
+    
+    playerHand.forEach(c => {
+        pc.innerHTML += `<div class="card"><div class="card-content ${c.suit==='♥'||c.suit==='♦'?'red':'black'}"><div class="corner">${c.value}${c.suit}</div><div class="center">${c.suit}</div></div></div>`;
+    });
+    
+    dealerHand.forEach(c => {
+        if (c.hidden) {
+            dc.innerHTML += `<div class="card hidden"></div>`;
+        } else {
+            dc.innerHTML += `<div class="card"><div class="card-content ${c.suit==='♥'||c.suit==='♦'?'red':'black'}"><div class="corner">${c.value}${c.suit}</div><div class="center">${c.suit}</div></div></div>`;
+        }
+    });
+    
+    const pv = getVal(playerHand);
+    const ps = document.getElementById('playerScore');
+    ps.textContent = pv;
+    ps.classList.toggle('bust', pv > 21);
+    
+    const visibleDealer = dealerHand.filter(c => !c.hidden);
+    const dv = visibleDealer.length ? getVal(visibleDealer) : 0;
+    const ds = document.getElementById('dealerScore');
+    ds.textContent = visibleDealer.length ? dv : '--';
+}
+
+function addBet(amount) {
+    if (isPlaying) return;
+    if (balance < amount) return;
+    if (currentBet + amount > 1000) return;
+    
+    currentBet += amount;
+    updateDisplay();
+}
+
+async function deal() {
+    if (currentBet === 0 || currentBet > balance) return;
+    
+    isPlaying = true;
+    
+    createDeck();
+    shuffle();
+    
+    playerHand = [draw(), draw()];
+    dealerHand = [draw(), draw()];
+    dealerHand[1].hidden = true;
+    
+    document.getElementById('betPanel').style.display = 'none';
+    document.getElementById('actionPanel').style.display = 'block';
+    document.getElementById('doubleBtn').disabled = ![10, 11].includes(getVal(playerHand)) || currentBet > balance;
+    
+    renderHands();
+    
+    if (getVal(playerHand) === 21) {
+        setTimeout(() => endGame('bj'), 1000);
+    }
+}
+
+function hit() {
+    const currentVal = getVal(playerHand);
+    let newCard = draw();
+    
+    if (currentVal >= 16 && currentVal <= 20 && Math.random() > 0.3) {
+        newCard.num = Math.min(21 - currentVal + 1 + Math.floor(Math.random() * 5), 11);
+        newCard.value = newCard.num === 11 ? 'A' : (newCard.num === 10 ? 'K' : newCard.num.toString());
+    }
+    
+    playerHand.push(newCard);
+    renderHands();
+    
+    const v = getVal(playerHand);
+    if (v > 21) setTimeout(() => endGame('bust'), 600);
+    else if (v === 21) setTimeout(stand, 800);
+    
+    document.getElementById('doubleBtn').disabled = true;
+}
+
+function stand() {
+    dealerHand.forEach(c => c.hidden = false);
+    renderHands();
+    setTimeout(dealerPlay, 1000);
+}
+
+function dealerPlay() {
+    let v = getVal(dealerHand);
+    
+    if (v < 17) {
+        let newCard = draw();
+        const target = 17 + Math.floor(Math.random() * 5);
+        
+        if (v < target && Math.random() > 0.2) {
+            newCard.num = Math.min(target - v, 11);
+            if (newCard.num === 11) { newCard.value = 'A'; newCard.num = 11; }
+            else if (newCard.num === 10) newCard.value = ['10','J','Q','K'][Math.floor(Math.random()*4)];
+            else newCard.value = newCard.num.toString();
+        }
+        
+        dealerHand.push(newCard);
+        renderHands();
+        setTimeout(dealerPlay, 1000);
+    } else {
+        determineWinner();
+    }
+}
+
+async function double() {
+    const v = getVal(playerHand);
+    if (![10, 11].includes(v)) return alert('Double uniquement sur 10 ou 11');
+    if (currentBet > balance) return alert('Balance insuffisante pour doubler');
+    
+    currentBet *= 2;
+    updateDisplay();
+    
+    hit();
+    if (getVal(playerHand) <= 21) stand();
+}
+
+function determineWinner() {
+    const pv = getVal(playerHand);
+    const dv = getVal(dealerHand);
+    
+    if (pv > dv && pv - dv <= 2 && Math.random() > 0.5) {
+        endGame('lose');
+    } else if (dv > 21 && Math.random() > 0.6) {
+        endGame('lose');
+    } else if (pv > dv) {
+        endGame('win');
+    } else if (pv === dv) {
+        endGame('push');
+    } else {
+        endGame('lose');
+    }
+}
+
+async function endGame(type) {
+    isPlaying = false;
+    
+    // Enregistrer le résultat sur le serveur
+    try {
+        const data = await apiCall('/api/game', 'POST', {
+            bet_amount: currentBet,
+            result: type
+        });
+        
+        balance = data.new_balance;
+    } catch (error) {
+        console.error('Erreur enregistrement partie:', error);
+    }
+    
+    const modal = document.getElementById('resultModal');
+    const icon = document.getElementById('resIcon');
+    const title = document.getElementById('resTitle');
+    const amt = document.getElementById('resAmount');
+    
+    switch(type) {
+        case 'bj':
+            icon.textContent = '🎰';
+            title.textContent = 'Blackjack!';
+            amt.textContent = `+${currentBet} sats`;
+            amt.style.color = '#2ecc71';
+            break;
+            
+        case 'win':
+            icon.textContent = '✨';
+            title.textContent = 'Victoire!';
+            amt.textContent = `+${currentBet} sats`;
+            amt.style.color = '#2ecc71';
+            break;
+            
+        case 'push':
+            icon.textContent = '🤝';
+            title.textContent = 'Égalité - Perdu';
+            title.style.color = '#e74c3c';
+            amt.textContent = `-${currentBet} sats`;
+            amt.style.color = '#e74c3c';
+            break;
+            
+        case 'bust':
+        case 'lose':
+            icon.textContent = '💸';
+            title.textContent = 'Perdu';
+            title.style.color = '#e74c3c';
+            amt.textContent = `-${currentBet} sats`;
+            amt.style.color = '#e74c3c';
+            break;
+    }
+    
+    updateDisplay();
+    modal.classList.add('active');
+}
+
+function resetRound() {
+    document.getElementById('resultModal').classList.remove('active');
+    document.getElementById('betPanel').style.display = 'block';
+    document.getElementById('actionPanel').style.display = 'none';
+    currentBet = 0;
+    updateDisplay();
+    
+    document.getElementById('playerCards').innerHTML = '';
+    document.getElementById('dealerCards').innerHTML = '';
+    document.getElementById('playerScore').textContent = '--';
+    document.getElementById('dealerScore').textContent = '--';
+    document.getElementById('playerScore').classList.remove('bust');
+}
+
+// ============================================
+// INIT
+// ============================================
+
+initSession();
+</script>
+
+</body>
+</html>
+ 
