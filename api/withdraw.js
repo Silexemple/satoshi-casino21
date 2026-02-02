@@ -1,6 +1,5 @@
 import { kv } from '@vercel/kv';
 import cookie from 'cookie';
-import axios from 'axios';
 
 export const config = {
   runtime: 'edge',
@@ -44,37 +43,61 @@ export default async function handler(req) {
   const currentBalance = player.balance;
   
   try {
-    // Payer l'invoice via LNbits
-    const response = await axios.post(
-      `${process.env.LNBITS_URL}/api/v1/payments`,
-      {
+    // Payer l'invoice via LNbits - UTILISER FETCH au lieu d'axios
+    const lnbitsUrl = process.env.LNBITS_URL || 'https://legend.lnbits.com';
+    const adminKey = process.env.LNBITS_ADMIN_KEY;
+    
+    if (!adminKey) {
+      throw new Error('LNBITS_ADMIN_KEY non configurée');
+    }
+    
+    const response = await fetch(`${lnbitsUrl}/api/v1/payments`, {
+      method: 'POST',
+      headers: {
+        'X-Api-Key': adminKey,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
         out: true,
         bolt11: invoice
-      },
-      {
-        headers: {
-          'X-Api-Key': process.env.LNBITS_ADMIN_KEY,
-          'Content-Type': 'application/json'
-        },
-        timeout: 30000
-      }
-    );
+      })
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('LNbits error:', response.status, errorText);
+      throw new Error(`LNbits API error: ${response.status}`);
+    }
+    
+    const payment = await response.json();
+    
+    // Calculer le montant (LNbits retourne en millisats)
+    const amountPaid = payment.amount ? Math.floor(payment.amount / 1000) : currentBalance;
+    
+    // Vérifier que le joueur a assez
+    if (amountPaid > currentBalance) {
+      throw new Error('Solde insuffisant pour cette invoice');
+    }
     
     // Paiement réussi, mettre à jour le solde
-    player.balance = 0;
+    player.balance = Math.max(0, currentBalance - amountPaid);
     player.last_activity = Date.now();
     await kv.set(`player:${sessionId}`, player);
     
     // Logger la transaction
     await kv.rpush(`transactions:${sessionId}`, {
       type: 'withdraw',
-      amount: currentBalance,
+      amount: amountPaid,
       timestamp: Date.now(),
       description: 'Retrait Lightning'
     });
     
     return new Response(
-      JSON.stringify({ success: true, amount: currentBalance }),
+      JSON.stringify({ 
+        success: true, 
+        amount: amountPaid,
+        payment_hash: payment.payment_hash
+      }),
       {
         status: 200,
         headers: { 'Content-Type': 'application/json' }
@@ -84,7 +107,7 @@ export default async function handler(req) {
   } catch (error) {
     console.error('Erreur paiement:', error);
     
-    const errorMessage = error.response?.data?.detail || 'Erreur lors du paiement';
+    const errorMessage = error.message || 'Erreur lors du paiement';
     
     return new Response(JSON.stringify({ error: errorMessage }), {
       status: 400,
