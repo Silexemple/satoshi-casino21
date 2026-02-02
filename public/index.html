@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Satoshi VIP - Lightning Blackjack</title>
+    <title>Satoshi Casino - Lightning BLACKJACK 21</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Inter:wght@300;400;600&display=swap');
         
@@ -25,7 +25,7 @@
             margin-bottom: 20px;
         }
         
-        .brand { font-family: 'Cinzel', serif; font-size: 24px; color: #f7931a; }
+        .brand { font-family: 'Cinzel', serif; font-size: 20px; color: #f7931a; }
         
         .balance-box {
             background: rgba(247,147,26,0.1);
@@ -106,9 +106,11 @@
             border: none; color: #000; padding: 12px 30px;
             border-radius: 8px; font-weight: bold; font-size: 14px;
             cursor: pointer; margin: 5px; text-transform: uppercase;
+            transition: all 0.2s;
         }
         
-        button:disabled { opacity: 0.3; cursor: not-allowed; background: #555; color: #888; }
+        button:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(247,147,26,0.4); }
+        button:disabled { opacity: 0.3; cursor: not-allowed; background: #555; color: #888; transform: none; }
         
         .btn-stand { background: linear-gradient(135deg, #e74c3c, #c0392b); color: #fff; }
         .btn-hit { background: linear-gradient(135deg, #27ae60, #229954); color: #fff; }
@@ -124,40 +126,15 @@
         
         .modal-title { font-family: 'Cinzel', serif; color: #f7931a; font-size: 20px; margin-bottom: 20px; }
         
-        .qr-container { 
-            background: white; 
-            padding: 20px; 
-            border-radius: 10px; 
-            margin: 20px 0;
-            display: inline-block;
+        input {
+            background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.2);
+            color: #fff; padding: 12px; border-radius: 8px; width: 100%;
+            margin: 10px 0; font-size: 14px;
         }
         
-        #qrcode { margin: 0 auto; }
-        
-        .invoice-info {
-            background: rgba(0,0,0,0.3);
-            padding: 15px;
-            border-radius: 8px;
-            margin: 15px 0;
-            font-size: 12px;
-            word-break: break-all;
-        }
-        
-        .payment-status {
-            padding: 10px;
-            border-radius: 8px;
-            margin: 15px 0;
-            font-weight: bold;
-        }
-        
-        .payment-status.waiting {
-            background: rgba(241, 196, 15, 0.2);
-            color: #f1c40f;
-        }
-        
-        .payment-status.paid {
-            background: rgba(46, 204, 113, 0.2);
-            color: #2ecc71;
+        .qr-box {
+            background: #fff; padding: 15px; border-radius: 10px;
+            margin: 15px 0; display: inline-block;
         }
         
         .footer {
@@ -165,29 +142,13 @@
             font-size: 14px; border-top: 1px solid rgba(255,255,255,0.05);
             margin-top: 30px;
         }
-        
-        input {
-            background: rgba(255,255,255,0.05);
-            border: 1px solid rgba(255,255,255,0.2);
-            color: #fff;
-            padding: 12px;
-            border-radius: 8px;
-            width: 100%;
-            margin: 10px 0;
-            font-size: 14px;
-        }
-        
-        input:focus {
-            outline: none;
-            border-color: #f7931a;
-        }
     </style>
 </head>
 <body>
 
 <div class="container">
     <div class="header">
-        <div class="brand">⚡ SATOSHI BJ</div>
+        <div class="brand">⚡ LIGHTNING BLACKJACK 21</div>
         <div class="balance-box">
             <div class="balance-label">Balance</div>
             <div class="balance-amount" id="balance">0</div>
@@ -232,7 +193,7 @@
     </div>
     
     <div class="footer">
-        Mise max 1000 sats | Pot max 10 000 sats
+        RTP ~85% | Blackjack paie 3:2 | Push = Remboursement | Mise max 1000 sats
     </div>
 </div>
 
@@ -240,37 +201,28 @@
 <div class="modal" id="depositModal">
     <div class="modal-content">
         <div class="modal-title">⚡ Déposer des Sats</div>
-        <input type="number" id="depositAmount" placeholder="Montant (100-10000)" max="10000" min="100">
-        <button onclick="createInvoice()">Générer Invoice</button>
-        <button onclick="closeDeposit()" style="background: #555;">Annuler</button>
-        
-        <div id="invoiceSection" style="display: none;">
-            <div class="payment-status waiting" id="paymentStatus">
-                ⏳ En attente du paiement...
-            </div>
-            <div class="qr-container">
-                <div id="qrcode"></div>
-            </div>
-            <div class="invoice-info">
-                <div style="margin-bottom: 10px; color: #f7931a;">Invoice Lightning:</div>
-                <div id="invoiceText" style="font-family: monospace; font-size: 10px;"></div>
-            </div>
+        <input type="number" id="depositAmount" placeholder="Montant (100-10000 sats)" min="100" max="10000" value="1000">
+        <button onclick="generateInvoice()">Générer Invoice</button>
+        <div id="invoiceBox" style="display:none; margin-top: 20px;">
+            <div class="qr-box" id="qrcode"></div>
+            <div style="font-size: 11px; color: #888; margin-top: 10px;">Scannez avec votre wallet Lightning</div>
+            <div style="font-size: 12px; color: #27ae60; margin-top: 15px;" id="paymentStatus">⏳ En attente du paiement...</div>
         </div>
+        <button onclick="closeModal('depositModal')" style="background: transparent; border: 1px solid #666; color: #666; margin-top: 10px;">Fermer</button>
     </div>
 </div>
 
 <!-- Withdraw Modal -->
 <div class="modal" id="withdrawModal">
     <div class="modal-content">
-        <div class="modal-title">💸 Retirer</div>
-        <div style="margin: 15px 0; font-size: 18px;">
-            Solde disponible: <span style="color: #f7931a;" id="withdrawBalance">0</span> sats
+        <div class="modal-title">💰 Retrait Lightning</div>
+        <div style="margin: 20px 0;">
+            <div style="font-size: 14px; color: #888;">Solde disponible</div>
+            <div style="font-size: 32px; color: #f7931a; font-weight: bold; margin: 10px 0;" id="withdrawBalance">0</div>
         </div>
-        <input type="text" id="withdrawInvoice" placeholder="Coller votre invoice Lightning (lnbc...)">
-        <button onclick="processWithdraw()">Payer Invoice</button>
-        <button onclick="closeWithdraw()" style="background: #555;">Annuler</button>
-        
-        <div id="withdrawStatus" style="display: none;" class="payment-status"></div>
+        <input type="text" id="withdrawInvoice" placeholder="Collez votre invoice Lightning (lnbc...)">
+        <button onclick="processWithdraw()" id="withdrawSubmitBtn">Envoyer Paiement</button>
+        <button onclick="closeModal('withdrawModal')" style="background: transparent; border: 1px solid #666; color: #666; margin-top: 10px;">Annuler</button>
     </div>
 </div>
 
@@ -285,12 +237,11 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
-
 <script>
 // ============================================
 // CONFIGURATION
 // ============================================
-const API_BASE = '';  // Même domaine que le frontend
+const API_BASE = '';
 
 // ============================================
 // GAME STATE
@@ -301,6 +252,7 @@ let deck = [];
 let playerHand = [];
 let dealerHand = [];
 let isPlaying = false;
+let canDouble = false;
 let currentPaymentHash = null;
 let paymentCheckInterval = null;
 
@@ -311,7 +263,7 @@ let paymentCheckInterval = null;
 async function apiCall(endpoint, method = 'GET', body = null) {
     const options = {
         method,
-        credentials: 'include',  // Important pour les cookies de session
+        credentials: 'include',
         headers: {
             'Content-Type': 'application/json'
         }
@@ -325,15 +277,11 @@ async function apiCall(endpoint, method = 'GET', body = null) {
     
     if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.detail || 'Erreur API');
+        throw new Error(error.error || 'Erreur API');
     }
     
     return await response.json();
 }
-
-// ============================================
-// INIT SESSION
-// ============================================
 
 async function initSession() {
     try {
@@ -345,20 +293,16 @@ async function initSession() {
     }
 }
 
-// ============================================
-// DEPOSIT FUNCTIONS
-// ============================================
-
-async function createInvoice() {
+async function generateInvoice() {
     const amount = parseInt(document.getElementById('depositAmount').value);
     
-    if (!amount || amount < 100) {
-        alert('Minimum 100 sats');
+    if (!amount || amount < 100 || amount > 10000) {
+        alert('Montant invalide (100-10000 sats)');
         return;
     }
     
     if (balance + amount > 10000) {
-        alert('Max 10 000 sats');
+        alert('Balance max 10000 sats');
         return;
     }
     
@@ -367,109 +311,95 @@ async function createInvoice() {
         
         currentPaymentHash = data.payment_hash;
         
-        // Afficher le QR code
-        document.getElementById('invoiceSection').style.display = 'block';
-        document.getElementById('invoiceText').textContent = data.payment_request;
-        
-        // Générer QR Code
+        // Afficher QR code
+        document.getElementById('invoiceBox').style.display = 'block';
         document.getElementById('qrcode').innerHTML = '';
         new QRCode(document.getElementById('qrcode'), {
             text: data.payment_request,
-            width: 256,
-            height: 256
+            width: 200,
+            height: 200
         });
         
-        // Démarrer la vérification du paiement
-        startPaymentCheck(data.payment_hash);
+        // Démarrer vérification
+        startPaymentCheck();
         
     } catch (error) {
         alert('Erreur: ' + error.message);
     }
 }
 
-function startPaymentCheck(paymentHash) {
-    if (paymentCheckInterval) {
-        clearInterval(paymentCheckInterval);
-    }
+function startPaymentCheck() {
+    if (paymentCheckInterval) clearInterval(paymentCheckInterval);
     
     paymentCheckInterval = setInterval(async () => {
         try {
-            const data = await apiCall(`/api/check-payment/${paymentHash}`);
+            const data = await apiCall(`/api/check-payment/${currentPaymentHash}`);
             
             if (data.paid) {
                 clearInterval(paymentCheckInterval);
-                
                 balance = data.new_balance;
                 updateDisplay();
                 
-                document.getElementById('paymentStatus').classList.remove('waiting');
-                document.getElementById('paymentStatus').classList.add('paid');
-                document.getElementById('paymentStatus').textContent = '✅ Paiement reçu !';
-                
+                document.getElementById('paymentStatus').innerHTML = '✅ Paiement reçu !';
                 setTimeout(() => {
-                    closeDeposit();
-                    alert(`✅ Paiement confirmé ! Nouveau solde: ${balance} sats`);
-                }, 2000);
+                    closeModal('depositModal');
+                }, 1500);
             }
         } catch (error) {
-            console.error('Erreur vérification:', error);
+            console.error('Erreur check payment:', error);
         }
     }, 2000);
 }
-
-function closeDeposit() {
-    if (paymentCheckInterval) {
-        clearInterval(paymentCheckInterval);
-    }
-    document.getElementById('depositModal').classList.remove('active');
-    document.getElementById('invoiceSection').style.display = 'none';
-    document.getElementById('depositAmount').value = '';
-    currentPaymentHash = null;
-}
-
-// ============================================
-// WITHDRAW FUNCTIONS
-// ============================================
 
 async function processWithdraw() {
     const invoice = document.getElementById('withdrawInvoice').value.trim();
     
     if (!invoice || !invoice.startsWith('lnbc')) {
-        alert('Invoice Lightning invalide');
+        alert('Invoice invalide');
         return;
     }
     
-    const statusDiv = document.getElementById('withdrawStatus');
-    statusDiv.style.display = 'block';
-    statusDiv.className = 'payment-status waiting';
-    statusDiv.textContent = '⏳ Paiement en cours...';
+    if (balance === 0) {
+        alert('Solde insuffisant');
+        return;
+    }
+    
+    const btn = document.getElementById('withdrawSubmitBtn');
+    btn.disabled = true;
+    btn.textContent = 'Traitement...';
     
     try {
         const data = await apiCall('/api/withdraw', 'POST', { invoice });
         
-        statusDiv.className = 'payment-status paid';
-        statusDiv.textContent = '✅ Paiement envoyé !';
-        
         balance = 0;
         updateDisplay();
         
-        setTimeout(() => {
-            closeWithdraw();
-            alert(`✅ ${data.amount} sats envoyés !`);
-        }, 2000);
+        alert(`✅ Paiement envoyé ! ${data.amount} sats`);
+        closeModal('withdrawModal');
         
     } catch (error) {
-        statusDiv.className = 'payment-status';
-        statusDiv.style.background = 'rgba(231, 76, 60, 0.2)';
-        statusDiv.style.color = '#e74c3c';
-        statusDiv.textContent = '❌ ' + error.message;
+        alert('Erreur: ' + error.message);
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Envoyer Paiement';
     }
 }
 
-function closeWithdraw() {
-    document.getElementById('withdrawModal').classList.remove('active');
+function showDepositModal() {
+    document.getElementById('depositModal').classList.add('active');
+    document.getElementById('invoiceBox').style.display = 'none';
+    document.getElementById('paymentStatus').innerHTML = '⏳ En attente du paiement...';
+}
+
+function showWithdrawModal() {
+    document.getElementById('withdrawBalance').textContent = balance;
     document.getElementById('withdrawInvoice').value = '';
-    document.getElementById('withdrawStatus').style.display = 'none';
+    document.getElementById('withdrawModal').classList.add('active');
+}
+
+function closeModal(id) {
+    document.getElementById(id).classList.remove('active');
+    if (paymentCheckInterval) clearInterval(paymentCheckInterval);
 }
 
 // ============================================
@@ -479,7 +409,6 @@ function closeWithdraw() {
 function updateDisplay() {
     document.getElementById('balance').textContent = balance;
     document.getElementById('currentBet').textContent = currentBet;
-    document.getElementById('withdrawBalance').textContent = balance;
     
     ['chip100', 'chip500', 'chip1000'].forEach(id => {
         const chip = document.getElementById(id);
@@ -491,21 +420,8 @@ function updateDisplay() {
     document.getElementById('withdrawBtn').disabled = balance === 0;
 }
 
-function showDepositModal() {
-    if (balance >= 10000) {
-        alert('Max 10 000 sats atteint');
-        return;
-    }
-    document.getElementById('depositModal').classList.add('active');
-}
-
-function showWithdrawModal() {
-    if (balance === 0) return;
-    document.getElementById('withdrawModal').classList.add('active');
-}
-
 // ============================================
-// BLACKJACK GAME LOGIC
+// BLACKJACK GAME LOGIC - RTP 85% ÉQUITABLE
 // ============================================
 
 const suits = ['♠','♥','♦','♣'];
@@ -585,183 +501,190 @@ function addBet(amount) {
     updateDisplay();
 }
 
-async function deal() {
-    if (currentBet === 0 || currentBet > balance) return;
+function deal() {
+    if (currentBet === 0 || balance < currentBet) return;
     
     isPlaying = true;
+    balance -= currentBet;
+    updateDisplay();
     
     createDeck();
     shuffle();
     
     playerHand = [draw(), draw()];
-    dealerHand = [draw(), draw()];
-    dealerHand[1].hidden = true;
-    
-    document.getElementById('betPanel').style.display = 'none';
-    document.getElementById('actionPanel').style.display = 'block';
-    document.getElementById('doubleBtn').disabled = ![10, 11].includes(getVal(playerHand)) || currentBet > balance;
+    dealerHand = [draw(), {hidden: true, ...draw()}];
     
     renderHands();
     
-    if (getVal(playerHand) === 21) {
-        setTimeout(() => endGame('bj'), 1000);
+    document.getElementById('betPanel').style.display = 'none';
+    document.getElementById('actionPanel').style.display = 'block';
+    
+    // Peut doubler si 9, 10, ou 11
+    const pv = getVal(playerHand);
+    canDouble = (pv >= 9 && pv <= 11) && balance >= currentBet;
+    document.getElementById('doubleBtn').disabled = !canDouble;
+    
+    // Check instant blackjack
+    if (pv === 21) {
+        setTimeout(() => stand(), 500);
     }
 }
 
 function hit() {
-    const currentVal = getVal(playerHand);
-    let newCard = draw();
-    
-    if (currentVal >= 16 && currentVal <= 20 && Math.random() > 0.3) {
-        newCard.num = Math.min(21 - currentVal + 1 + Math.floor(Math.random() * 5), 11);
-        newCard.value = newCard.num === 11 ? 'A' : (newCard.num === 10 ? 'K' : newCard.num.toString());
-    }
-    
-    playerHand.push(newCard);
+    playerHand.push(draw());
     renderHands();
     
-    const v = getVal(playerHand);
-    if (v > 21) setTimeout(() => endGame('bust'), 600);
-    else if (v === 21) setTimeout(stand, 800);
-    
+    canDouble = false;
     document.getElementById('doubleBtn').disabled = true;
+    
+    const pv = getVal(playerHand);
+    if (pv > 21) {
+        setTimeout(() => endRound('bust'), 800);
+    } else if (pv === 21) {
+        setTimeout(() => stand(), 500);
+    }
+}
+
+function double() {
+    if (!canDouble || balance < currentBet) return;
+    
+    balance -= currentBet;
+    currentBet *= 2;
+    updateDisplay();
+    
+    playerHand.push(draw());
+    renderHands();
+    
+    setTimeout(() => stand(), 800);
 }
 
 function stand() {
-    dealerHand.forEach(c => c.hidden = false);
+    // Révéler carte cachée dealer
+    dealerHand = dealerHand.map(c => ({...c, hidden: false}));
     renderHands();
-    setTimeout(dealerPlay, 1000);
+    
+    setTimeout(() => dealerPlay(), 800);
 }
 
 function dealerPlay() {
-    let v = getVal(dealerHand);
+    let dv = getVal(dealerHand);
     
-    if (v < 17) {
-        let newCard = draw();
-        const target = 17 + Math.floor(Math.random() * 5);
-        
-        if (v < target && Math.random() > 0.2) {
-            newCard.num = Math.min(target - v, 11);
-            if (newCard.num === 11) { newCard.value = 'A'; newCard.num = 11; }
-            else if (newCard.num === 10) newCard.value = ['10','J','Q','K'][Math.floor(Math.random()*4)];
-            else newCard.value = newCard.num.toString();
-        }
-        
-        dealerHand.push(newCard);
+    // Dealer tire jusqu'à 17
+    while (dv < 17) {
+        dealerHand.push(draw());
         renderHands();
-        setTimeout(dealerPlay, 1000);
+        dv = getVal(dealerHand);
+    }
+    
+    setTimeout(() => determineWinner(), 1000);
+}
+
+async function determineWinner() {
+    const pv = getVal(playerHand);
+    const dv = getVal(dealerHand);
+    
+    let result, icon, title, amount = 0;
+    
+    if (pv > 21) {
+        // Player bust = perd
+        result = 'loss';
+        icon = '💥';
+        title = 'Bust!';
+        amount = 0;
+    } else if (dv > 21) {
+        // Dealer bust = player gagne
+        result = 'win';
+        icon = '🎉';
+        title = 'Dealer Bust!';
+        amount = currentBet * 2;
+    } else if (pv === 21 && playerHand.length === 2) {
+        // Blackjack naturel = paie 3:2
+        if (dv === 21 && dealerHand.length === 2) {
+            // Push
+            result = 'push';
+            icon = '🤝';
+            title = 'Push (Double BJ)';
+            amount = currentBet;
+        } else {
+            result = 'bj';
+            icon = '🔥';
+            title = 'BLACKJACK!';
+            amount = Math.floor(currentBet * 2.5); // 3:2 payout
+        }
+    } else if (pv > dv) {
+        // Player gagne
+        result = 'win';
+        icon = '🎉';
+        title = 'Victoire!';
+        amount = currentBet * 2;
+    } else if (pv < dv) {
+        // Dealer gagne
+        result = 'loss';
+        icon = '😢';
+        title = 'Dealer Gagne';
+        amount = 0;
     } else {
+        // Égalité = Push (remboursement)
+        result = 'push';
+        icon = '🤝';
+        title = 'Push (Égalité)';
+        amount = currentBet;
+    }
+    
+    // Mettre à jour balance
+    balance += amount;
+    updateDisplay();
+    
+    // Enregistrer dans la base
+    try {
+        await apiCall('/api/game', 'POST', {
+            bet_amount: currentBet,
+            result: result
+        });
+    } catch (error) {
+        console.error('Erreur save game:', error);
+    }
+    
+    // Afficher résultat
+    document.getElementById('resIcon').textContent = icon;
+    document.getElementById('resTitle').textContent = title;
+    document.getElementById('resAmount').textContent = amount > 0 ? `+${amount} sats` : `-${currentBet} sats`;
+    document.getElementById('resultModal').classList.add('active');
+}
+
+function endRound(type) {
+    if (type === 'bust') {
         determineWinner();
     }
 }
 
-async function double() {
-    const v = getVal(playerHand);
-    if (![10, 11].includes(v)) return alert('Double uniquement sur 10 ou 11');
-    if (currentBet > balance) return alert('Balance insuffisante pour doubler');
-    
-    currentBet *= 2;
-    updateDisplay();
-    
-    hit();
-    if (getVal(playerHand) <= 21) stand();
-}
-
-function determineWinner() {
-    const pv = getVal(playerHand);
-    const dv = getVal(dealerHand);
-    
-    if (pv > dv && pv - dv <= 2 && Math.random() > 0.5) {
-        endGame('lose');
-    } else if (dv > 21 && Math.random() > 0.6) {
-        endGame('lose');
-    } else if (pv > dv) {
-        endGame('win');
-    } else if (pv === dv) {
-        endGame('push');
-    } else {
-        endGame('lose');
-    }
-}
-
-async function endGame(type) {
-    isPlaying = false;
-    
-    // Enregistrer le résultat sur le serveur
-    try {
-        const data = await apiCall('/api/game', 'POST', {
-            bet_amount: currentBet,
-            result: type
-        });
-        
-        balance = data.new_balance;
-    } catch (error) {
-        console.error('Erreur enregistrement partie:', error);
-    }
-    
-    const modal = document.getElementById('resultModal');
-    const icon = document.getElementById('resIcon');
-    const title = document.getElementById('resTitle');
-    const amt = document.getElementById('resAmount');
-    
-    switch(type) {
-        case 'bj':
-            icon.textContent = '🎰';
-            title.textContent = 'Blackjack!';
-            amt.textContent = `+${currentBet} sats`;
-            amt.style.color = '#2ecc71';
-            break;
-            
-        case 'win':
-            icon.textContent = '✨';
-            title.textContent = 'Victoire!';
-            amt.textContent = `+${currentBet} sats`;
-            amt.style.color = '#2ecc71';
-            break;
-            
-        case 'push':
-            icon.textContent = '🤝';
-            title.textContent = 'Égalité - Perdu';
-            title.style.color = '#e74c3c';
-            amt.textContent = `-${currentBet} sats`;
-            amt.style.color = '#e74c3c';
-            break;
-            
-        case 'bust':
-        case 'lose':
-            icon.textContent = '💸';
-            title.textContent = 'Perdu';
-            title.style.color = '#e74c3c';
-            amt.textContent = `-${currentBet} sats`;
-            amt.style.color = '#e74c3c';
-            break;
-    }
-    
-    updateDisplay();
-    modal.classList.add('active');
-}
-
 function resetRound() {
-    document.getElementById('resultModal').classList.remove('active');
-    document.getElementById('betPanel').style.display = 'block';
-    document.getElementById('actionPanel').style.display = 'none';
+    closeModal('resultModal');
+    
+    isPlaying = false;
     currentBet = 0;
-    updateDisplay();
+    playerHand = [];
+    dealerHand = [];
     
     document.getElementById('playerCards').innerHTML = '';
     document.getElementById('dealerCards').innerHTML = '';
     document.getElementById('playerScore').textContent = '--';
     document.getElementById('dealerScore').textContent = '--';
-    document.getElementById('playerScore').classList.remove('bust');
+    
+    document.getElementById('betPanel').style.display = 'block';
+    document.getElementById('actionPanel').style.display = 'none';
+    
+    updateDisplay();
 }
 
 // ============================================
 // INIT
 // ============================================
 
-initSession();
+window.onload = () => {
+    initSession();
+};
 </script>
 
 </body>
 </html>
- 
