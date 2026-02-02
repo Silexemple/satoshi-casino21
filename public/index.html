@@ -193,7 +193,7 @@
     </div>
     
     <div class="footer">
-        RTP ~85% | Blackjack paie 3:2 | Push = Remboursement | Mise max 1000 sats
+        RTP ~85% | Blackjack paie 3:2 | Push = Remboursement | Dealer bust à 22+
     </div>
 </div>
 
@@ -206,6 +206,9 @@
         <div id="invoiceBox" style="display:none; margin-top: 20px;">
             <div class="qr-box" id="qrcode"></div>
             <div style="font-size: 11px; color: #888; margin-top: 10px;">Scannez avec votre wallet Lightning</div>
+            <button onclick="copyInvoice()" id="copyBtn" style="background: transparent; border: 1px solid #f7931a; color: #f7931a; font-size: 12px; padding: 8px 20px; margin: 10px 0;">
+                📋 Copier l'Invoice
+            </button>
             <div style="font-size: 12px; color: #27ae60; margin-top: 15px;" id="paymentStatus">⏳ En attente du paiement...</div>
         </div>
         <button onclick="closeModal('depositModal')" style="background: transparent; border: 1px solid #666; color: #666; margin-top: 10px;">Fermer</button>
@@ -254,6 +257,7 @@ let dealerHand = [];
 let isPlaying = false;
 let canDouble = false;
 let currentPaymentHash = null;
+let currentInvoice = null;
 let paymentCheckInterval = null;
 
 // ============================================
@@ -310,6 +314,7 @@ async function generateInvoice() {
         const data = await apiCall('/api/deposit', 'POST', { amount });
         
         currentPaymentHash = data.payment_hash;
+        currentInvoice = data.payment_request;
         
         // Afficher QR code
         document.getElementById('invoiceBox').style.display = 'block';
@@ -325,6 +330,33 @@ async function generateInvoice() {
         
     } catch (error) {
         alert('Erreur: ' + error.message);
+    }
+}
+
+async function copyInvoice() {
+    if (!currentInvoice) {
+        alert('Aucune invoice à copier');
+        return;
+    }
+    
+    try {
+        await navigator.clipboard.writeText(currentInvoice);
+        
+        // Feedback visuel
+        const btn = document.getElementById('copyBtn');
+        const oldText = btn.textContent;
+        btn.textContent = '✅ Copié !';
+        btn.style.borderColor = '#27ae60';
+        btn.style.color = '#27ae60';
+        
+        setTimeout(() => {
+            btn.textContent = oldText;
+            btn.style.borderColor = '#f7931a';
+            btn.style.color = '#f7931a';
+        }, 2000);
+        
+    } catch (error) {
+        alert('Erreur copie: ' + error.message);
     }
 }
 
@@ -490,6 +522,7 @@ function renderHands() {
     const dv = visibleDealer.length ? getVal(visibleDealer) : 0;
     const ds = document.getElementById('dealerScore');
     ds.textContent = visibleDealer.length ? dv : '--';
+    ds.classList.toggle('bust', dv > 21);
 }
 
 function addBet(amount) {
@@ -569,62 +602,72 @@ function stand() {
 function dealerPlay() {
     let dv = getVal(dealerHand);
     
-    // Dealer tire jusqu'à 17
-    while (dv < 17) {
-        dealerHand.push(draw());
-        renderHands();
+    const drawInterval = setInterval(() => {
         dv = getVal(dealerHand);
-    }
-    
-    setTimeout(() => determineWinner(), 1000);
+        
+        if (dv < 17) {
+            dealerHand.push(draw());
+            renderHands();
+        } else {
+            clearInterval(drawInterval);
+            setTimeout(() => determineWinner(), 1000);
+        }
+    }, 600);
 }
 
 async function determineWinner() {
     const pv = getVal(playerHand);
     const dv = getVal(dealerHand);
     
+    console.log('DEBUG - Player:', pv, 'Dealer:', dv); // Debug
+    
     let result, icon, title, amount = 0;
     
+    // 1. Player bust
     if (pv > 21) {
-        // Player bust = perd
         result = 'loss';
         icon = '💥';
         title = 'Bust!';
         amount = 0;
-    } else if (dv > 21) {
-        // Dealer bust = player gagne
+    } 
+    // 2. Dealer bust
+    else if (dv > 21) {
         result = 'win';
         icon = '🎉';
         title = 'Dealer Bust!';
         amount = currentBet * 2;
-    } else if (pv === 21 && playerHand.length === 2) {
-        // Blackjack naturel = paie 3:2
+    } 
+    // 3. Blackjack naturel joueur (2 cartes = 21)
+    else if (pv === 21 && playerHand.length === 2) {
         if (dv === 21 && dealerHand.length === 2) {
-            // Push
+            // Double blackjack = push
             result = 'push';
             icon = '🤝';
             title = 'Push (Double BJ)';
             amount = currentBet;
         } else {
+            // Blackjack joueur seul = 3:2
             result = 'bj';
             icon = '🔥';
             title = 'BLACKJACK!';
-            amount = Math.floor(currentBet * 2.5); // 3:2 payout
+            amount = Math.floor(currentBet * 2.5);
         }
-    } else if (pv > dv) {
-        // Player gagne
+    } 
+    // 4. Comparer les scores
+    else if (pv > dv) {
         result = 'win';
         icon = '🎉';
         title = 'Victoire!';
         amount = currentBet * 2;
-    } else if (pv < dv) {
-        // Dealer gagne
+    } 
+    else if (pv < dv) {
         result = 'loss';
         icon = '😢';
         title = 'Dealer Gagne';
         amount = 0;
-    } else {
-        // Égalité = Push (remboursement)
+    } 
+    // 5. Égalité
+    else {
         result = 'push';
         icon = '🤝';
         title = 'Push (Égalité)';
