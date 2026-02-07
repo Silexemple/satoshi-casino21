@@ -49,8 +49,8 @@ export default async function handler(req) {
     });
   }
   
-  // Calculer le nouveau solde
-  let newBalance = player.balance - betAmount;
+  // ⭐ CORRECTION - Ne pas re-déduire la mise (déjà fait côté frontend)
+  let newBalance = player.balance; // ← CHANGÉ: était player.balance - betAmount
   
   if (result === 'win' || result === 'bj') {
     newBalance += betAmount * 2;
@@ -61,6 +61,16 @@ export default async function handler(req) {
       amount: betAmount,
       timestamp: Date.now(),
       description: `Victoire (${result})`
+    });
+  } else if (result === 'push') {
+    // ⭐ AJOUTÉ - Gérer le push (rendre la mise)
+    newBalance += betAmount;
+    
+    await kv.rpush(`transactions:${sessionId}`, {
+      type: 'push',
+      amount: 0,
+      timestamp: Date.now(),
+      description: 'Égalité (push)'
     });
   } else {
     // Logger défaite
