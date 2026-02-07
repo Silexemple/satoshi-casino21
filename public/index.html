@@ -3,181 +3,993 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Satoshi Casino - Lightning BLACKJACK 21</title>
+    <title>₿ BITCOIN MAXI CASINO - Sats Jack 21</title>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Inter:wght@300;400;600&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;500;700&display=swap');
         
         * { margin: 0; padding: 0; box-sizing: border-box; }
         
         body {
-            background: linear-gradient(135deg, #0a0e14 0%, #1a1f2e 100%);
-            font-family: 'Inter', sans-serif;
+            background: #000000;
+            font-family: 'Rajdhani', sans-serif;
             min-height: 100vh;
-            color: #e0e0e0;
+            color: #fff;
             overflow-x: hidden;
+            position: relative;
         }
         
-        .container { max-width: 900px; margin: 0 auto; padding: 15px; }
+        /* ⚡ THREE.JS CANVAS BACKGROUND */
+        #threejs-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+        }
+        
+        /* 🔥 PLASMA BORDER VIBRANTE */
+        .plasma-border {
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            z-index: 2;
+        }
+        
+        .plasma-border::before,
+        .plasma-border::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+        }
+        
+        .plasma-border::before {
+            background: 
+                linear-gradient(90deg, 
+                    transparent 0%, 
+                    #ff6b00 5%, 
+                    #ffff00 10%,
+                    #ff6b00 15%,
+                    transparent 20%,
+                    transparent 80%,
+                    #ff6b00 85%, 
+                    #ffff00 90%,
+                    #ff6b00 95%,
+                    transparent 100%
+                );
+            background-size: 200% 100%;
+            height: 4px;
+            top: 0;
+            animation: electricFlow 2s linear infinite;
+            box-shadow: 
+                0 0 20px #ff6b00, 
+                0 0 40px #ff8c00,
+                0 0 10px #ffff00;
+            filter: brightness(1.5);
+        }
+        
+        .plasma-border::after {
+            background: 
+                linear-gradient(90deg, 
+                    transparent 0%, 
+                    #ff6b00 5%, 
+                    #ffff00 10%,
+                    #ff6b00 15%,
+                    transparent 20%,
+                    transparent 80%,
+                    #ff6b00 85%, 
+                    #ffff00 90%,
+                    #ff6b00 95%,
+                    transparent 100%
+                );
+            background-size: 200% 100%;
+            height: 4px;
+            bottom: 0;
+            animation: electricFlow 2s linear infinite reverse;
+            box-shadow: 
+                0 0 20px #ff6b00, 
+                0 0 40px #ff8c00,
+                0 0 10px #ffff00;
+            filter: brightness(1.5);
+        }
+        
+        @keyframes electricFlow {
+            0% { background-position: 0% 0%; }
+            100% { background-position: 200% 0%; }
+        }
+        
+        .plasma-border-vertical {
+            position: fixed;
+            width: 4px;
+            height: 100%;
+            top: 0;
+            z-index: 2;
+            pointer-events: none;
+        }
+        
+        .plasma-border-left {
+            left: 0;
+            background: linear-gradient(180deg, 
+                transparent 0%, 
+                #ff6b00 5%, 
+                #ffff00 10%,
+                #ff6b00 15%,
+                transparent 20%,
+                transparent 80%,
+                #ff6b00 85%, 
+                #ffff00 90%,
+                #ff6b00 95%,
+                transparent 100%
+            );
+            background-size: 100% 200%;
+            animation: electricFlowVertical 2.5s linear infinite;
+            box-shadow: 
+                0 0 20px #ff6b00, 
+                0 0 40px #ff8c00,
+                0 0 10px #ffff00;
+            filter: brightness(1.5);
+        }
+        
+        .plasma-border-right {
+            right: 0;
+            background: linear-gradient(180deg, 
+                transparent 0%, 
+                #ff6b00 5%, 
+                #ffff00 10%,
+                #ff6b00 15%,
+                transparent 20%,
+                transparent 80%,
+                #ff6b00 85%, 
+                #ffff00 90%,
+                #ff6b00 95%,
+                transparent 100%
+            );
+            background-size: 100% 200%;
+            animation: electricFlowVertical 2.5s linear infinite reverse;
+            box-shadow: 
+                0 0 20px #ff6b00, 
+                0 0 40px #ff8c00,
+                0 0 10px #ffff00;
+            filter: brightness(1.5);
+        }
+        
+        @keyframes electricFlowVertical {
+            0% { background-position: 0% 0%; }
+            100% { background-position: 0% 200%; }
+        }
+        
+        .corner-glow {
+            position: fixed;
+            width: 100px;
+            height: 100px;
+            pointer-events: none;
+            z-index: 1;
+        }
+        
+        .corner-glow::before {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle, #ff6b00 0%, transparent 70%);
+            animation: pulse 2s ease-in-out infinite;
+        }
+        
+        .tl { top: 0; left: 0; }
+        .tr { top: 0; right: 0; }
+        .bl { bottom: 0; left: 0; }
+        .br { bottom: 0; right: 0; }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 0.3; transform: scale(1); }
+            50% { opacity: 0.8; transform: scale(1.2); }
+        }
+        
+        .container { 
+            max-width: 1200px; 
+            margin: 0 auto; 
+            padding: 20px; 
+            position: relative; 
+            z-index: 10; 
+        }
         
         .header {
-            display: flex; justify-content: space-between; align-items: center;
-            padding: 15px 0; border-bottom: 1px solid rgba(255,255,255,0.1);
-            margin-bottom: 20px;
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center;
+            padding: 25px 0;
+            margin-bottom: 30px;
+            position: relative;
         }
         
-        .brand { font-family: 'Cinzel', serif; font-size: 20px; color: #f7931a; }
+        .header::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 80%;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, #ff6b00, #ffa500, #ff6b00, transparent);
+            box-shadow: 0 0 20px #ff6b00;
+        }
+        
+        .brand-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            flex: 1;
+        }
+        
+        .brand { 
+            font-family: 'Orbitron', monospace;
+            font-size: 32px;
+            font-weight: 900;
+            background: linear-gradient(135deg, #ff6b00 0%, #ffa500 50%, #ff6b00 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            text-align: center;
+            letter-spacing: 4px;
+            text-shadow: 0 0 30px rgba(255,107,0,0.5);
+            animation: brandGlow 3s ease-in-out infinite;
+            position: relative;
+            filter: drop-shadow(0 0 20px #ff6b00);
+        }
+        
+        @keyframes brandGlow {
+            0%, 100% { 
+                filter: drop-shadow(0 0 20px #ff6b00) brightness(1);
+                transform: scale(1);
+            }
+            50% { 
+                filter: drop-shadow(0 0 40px #ffa500) brightness(1.2);
+                transform: scale(1.02);
+            }
+        }
+        
+        .brand-subtitle {
+            font-family: 'Orbitron', monospace;
+            font-size: 12px;
+            color: #ff6b00;
+            letter-spacing: 6px;
+            margin-top: 5px;
+            text-transform: uppercase;
+            opacity: 0.8;
+        }
         
         .balance-box {
-            background: rgba(247,147,26,0.1);
-            border: 1px solid rgba(247,147,26,0.3);
-            padding: 10px 20px; border-radius: 20px;
+            background: linear-gradient(135deg, rgba(255,107,0,0.1) 0%, rgba(0,0,0,0.8) 100%);
+            border: 2px solid #ff6b00;
+            padding: 15px 25px;
+            border-radius: 10px;
             text-align: right;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 
+                0 0 20px rgba(255,107,0,0.3),
+                inset 0 0 20px rgba(255,107,0,0.1);
         }
         
-        .balance-label { font-size: 11px; color: #888; text-transform: uppercase; }
-        .balance-amount { font-size: 22px; font-weight: bold; color: #f7931a; }
+        .stats-box {
+            background: linear-gradient(135deg, rgba(255,107,0,0.1) 0%, rgba(0,0,0,0.8) 100%);
+            border: 2px solid #ff6b00;
+            padding: 15px 25px;
+            border-radius: 10px;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 
+                0 0 20px rgba(255,107,0,0.3),
+                inset 0 0 20px rgba(255,107,0,0.1);
+        }
+        
+        .stats-box:hover {
+            background: linear-gradient(135deg, rgba(255,107,0,0.2) 0%, rgba(0,0,0,0.9) 100%);
+            transform: translateY(-2px);
+            box-shadow: 
+                0 0 30px rgba(255,107,0,0.5),
+                inset 0 0 20px rgba(255,107,0,0.2);
+        }
+        
+        .stats-box::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: linear-gradient(45deg, transparent 30%, rgba(255,107,0,0.1) 50%, transparent 70%);
+            animation: shimmer 3s linear infinite;
+        }
+        
+        .balance-box::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: linear-gradient(45deg, transparent 30%, rgba(255,107,0,0.1) 50%, transparent 70%);
+            animation: shimmer 3s linear infinite;
+        }
+        
+        @keyframes shimmer {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .balance-label { 
+            font-size: 10px; 
+            color: #ff6b00; 
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            font-family: 'Orbitron', monospace;
+        }
+        
+        .balance-amount { 
+            font-size: 28px; 
+            font-weight: bold; 
+            font-family: 'Orbitron', monospace;
+            background: linear-gradient(135deg, #ff6b00, #ffa500);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            position: relative;
+            z-index: 1;
+        }
+        
+        .balance-amount.updated {
+            animation: balanceUpdate 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        
+        @keyframes balanceUpdate {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.3); filter: drop-shadow(0 0 20px #ffa500); }
+        }
         
         .table {
-            background: linear-gradient(135deg, #0d5132 0%, #0a3d26 100%);
-            border-radius: 15px; padding: 25px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+            background: linear-gradient(135deg, rgba(0,0,0,0.95) 0%, rgba(20,20,20,0.95) 100%);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 
+                0 0 40px rgba(255,107,0,0.3),
+                0 20px 60px rgba(0,0,0,0.8),
+                inset 0 0 40px rgba(255,107,0,0.05);
+            position: relative;
+            border: 2px solid #ff6b00;
+            overflow: hidden;
         }
         
-        .hand-area { margin: 25px 0; text-align: center; }
+        .table::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background-image: 
+                repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,107,0,0.03) 2px, rgba(255,107,0,0.03) 4px),
+                repeating-linear-gradient(90deg, transparent, transparent 2px, rgba(255,107,0,0.03) 2px, rgba(255,107,0,0.03) 4px);
+            pointer-events: none;
+            z-index: 0;
+        }
+        
+        .table::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, #ff6b00, transparent);
+            box-shadow: 0 0 20px #ff6b00;
+            animation: scanLine 4s linear infinite;
+            z-index: 1;
+        }
+        
+        @keyframes scanLine {
+            0% { transform: translateY(0); }
+            100% { transform: translateY(600px); }
+        }
+        
+        .hand-area { 
+            margin: 30px 0; 
+            text-align: center; 
+            position: relative; 
+            z-index: 2; 
+        }
         
         .hand-label {
-            font-family: 'Cinzel', serif; color: #ffd700;
-            font-size: 12px; letter-spacing: 3px; margin-bottom: 10px;
+            font-family: 'Orbitron', monospace;
+            color: #ff6b00;
+            font-size: 14px;
+            letter-spacing: 4px;
+            margin-bottom: 15px;
+            text-shadow: 0 0 10px #ff6b00;
+            font-weight: 700;
         }
         
-        .cards { display: flex; justify-content: center; gap: 12px; min-height: 120px; flex-wrap: wrap; }
+        .cards { 
+            display: flex; 
+            justify-content: center; 
+            gap: 15px; 
+            min-height: 140px; 
+            flex-wrap: wrap;
+            perspective: 1000px;
+        }
         
         .card {
-            width: 85px; height: 119px; background: linear-gradient(135deg, #fff 0%, #f5f5f5 100%);
-            border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-            position: relative; color: #000; animation: deal 0.6s ease-out;
+            width: 90px; 
+            height: 126px;
+            background: linear-gradient(135deg, #fff 0%, #f0f0f0 100%);
+            border-radius: 10px;
+            box-shadow: 
+                0 8px 16px rgba(0,0,0,0.5),
+                0 0 20px rgba(255,107,0,0.2);
+            position: relative;
+            color: #000;
+            animation: cardDeal 0.8s cubic-bezier(0.34, 1.56, 0.64, 1);
+            transform-style: preserve-3d;
+            transition: all 0.3s ease;
+            border: 1px solid rgba(255,107,0,0.3);
         }
         
-        @keyframes deal {
-            0% { transform: translateY(-100px) rotateY(90deg) scale(0.8); opacity: 0; }
-            100% { transform: translateY(0) rotateY(0) scale(1); opacity: 1; }
+        @keyframes cardDeal {
+            0% { 
+                transform: translateY(-200px) rotateY(180deg) scale(0.5); 
+                opacity: 0;
+                filter: brightness(0);
+            }
+            60% {
+                filter: brightness(1.5);
+            }
+            100% { 
+                transform: translateY(0) rotateY(0) scale(1); 
+                opacity: 1;
+                filter: brightness(1);
+            }
+        }
+        
+        .card:hover {
+            transform: translateY(-10px) scale(1.05) rotateZ(2deg);
+            box-shadow: 
+                0 12px 24px rgba(0,0,0,0.6),
+                0 0 40px rgba(255,107,0,0.5);
         }
         
         .card.hidden {
-            background: linear-gradient(135deg, #c41e3a 0%, #8b0000 100%);
-            border: 2px solid #600;
+            background: linear-gradient(135deg, #1a0000 0%, #000 100%);
+            border: 2px solid #ff6b00;
+            box-shadow: 
+                0 8px 16px rgba(0,0,0,0.5),
+                0 0 30px rgba(255,107,0,0.5),
+                inset 0 0 20px rgba(255,107,0,0.1);
+        }
+        
+        .card.hidden::before {
+            content: '';
+            position: absolute;
+            inset: 5px;
+            border: 1px solid #ff6b00;
+            border-radius: 8px;
+            opacity: 0.3;
         }
         
         .card.hidden::after {
-            content: "₿"; position: absolute; top: 50%; left: 50%;
-            transform: translate(-50%, -50%); font-size: 40px;
-            color: rgba(255,215,0,0.4); font-family: 'Cinzel', serif;
+            content: "₿";
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 50px;
+            color: #ff6b00;
+            font-family: 'Orbitron', monospace;
+            font-weight: 900;
+            text-shadow: 
+                0 0 20px #ff6b00,
+                0 0 40px #ffa500;
+            animation: bitcoinPulse 2s ease-in-out infinite;
         }
         
-        .card-content { padding: 8px; height: 100%; display: flex; flex-direction: column; justify-content: space-between; }
-        .corner { font-size: 16px; font-weight: bold; line-height: 1; }
-        .center { font-size: 42px; text-align: center; line-height: 1; }
-        .red { color: #d40000; }
-        .black { color: #1a1a1a; }
+        @keyframes bitcoinPulse {
+            0%, 100% { 
+                transform: translate(-50%, -50%) scale(1); 
+                opacity: 0.8;
+            }
+            50% { 
+                transform: translate(-50%, -50%) scale(1.1); 
+                opacity: 1;
+            }
+        }
         
-        .score { display: inline-block; background: rgba(0,0,0,0.6); color: #ffd700; padding: 6px 16px; border-radius: 15px; margin-top: 12px; font-weight: bold; font-size: 16px; }
-        .score.bust { background: rgba(200,0,0,0.8); color: #fff; }
+        .card-content { 
+            padding: 10px; 
+            height: 100%; 
+            display: flex; 
+            flex-direction: column; 
+            justify-content: space-between;
+        }
         
-        .controls { background: rgba(0,0,0,0.3); border-radius: 12px; padding: 20px; margin-top: 20px; text-align: center; }
+        .corner { 
+            font-size: 18px; 
+            font-weight: bold; 
+            line-height: 1;
+        }
         
-        .bet-display { font-size: 36px; color: #ffd700; font-weight: bold; margin: 10px 0; }
+        .center { 
+            font-size: 48px; 
+            text-align: center; 
+            line-height: 1;
+        }
         
-        .chips { display: flex; justify-content: center; gap: 15px; margin: 15px 0; flex-wrap: wrap; }
+        .red { color: #ff0000; }
+        .black { color: #000; }
+        
+        .score { 
+            display: inline-block;
+            background: linear-gradient(135deg, rgba(0,0,0,0.9), rgba(20,20,20,0.9));
+            color: #ff6b00;
+            padding: 8px 20px;
+            border-radius: 20px;
+            margin-top: 15px;
+            font-weight: bold;
+            font-size: 18px;
+            font-family: 'Orbitron', monospace;
+            border: 2px solid #ff6b00;
+            box-shadow: 
+                0 0 20px rgba(255,107,0,0.3),
+                inset 0 0 10px rgba(255,107,0,0.1);
+        }
+        
+        .score.bust { 
+            background: linear-gradient(135deg, rgba(200,0,0,0.9), rgba(100,0,0,0.9));
+            color: #fff;
+            border-color: #ff0000;
+            animation: bustPulse 0.5s ease infinite;
+            box-shadow: 
+                0 0 30px rgba(255,0,0,0.6),
+                inset 0 0 20px rgba(255,0,0,0.2);
+        }
+        
+        @keyframes bustPulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+        
+        .controls { 
+            background: linear-gradient(135deg, rgba(0,0,0,0.8), rgba(20,20,20,0.8));
+            border-radius: 15px;
+            padding: 25px;
+            margin-top: 25px;
+            text-align: center;
+            border: 2px solid rgba(255,107,0,0.3);
+            position: relative;
+            z-index: 2;
+        }
+        
+        .bet-display { 
+            font-size: 42px;
+            font-family: 'Orbitron', monospace;
+            font-weight: 900;
+            background: linear-gradient(135deg, #ff6b00, #ffa500);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin: 15px 0;
+            text-shadow: 0 0 20px rgba(255,107,0,0.5);
+            filter: drop-shadow(0 0 10px #ff6b00);
+        }
+        
+        .chips { 
+            display: flex; 
+            justify-content: center; 
+            gap: 20px; 
+            margin: 20px 0; 
+            flex-wrap: wrap;
+        }
         
         .chip {
-            width: 60px; height: 60px; border-radius: 50%; border: 3px dashed rgba(255,255,255,0.6);
-            display: flex; align-items: center; justify-content: center; font-weight: bold;
-            cursor: pointer; transition: all 0.2s; color: #fff; font-size: 13px;
+            width: 70px;
+            height: 70px;
+            border-radius: 50%;
+            border: 3px solid #ff6b00;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+            color: #fff;
+            font-size: 16px;
+            font-family: 'Orbitron', monospace;
+            position: relative;
+            box-shadow: 
+                0 4px 12px rgba(0,0,0,0.5),
+                0 0 20px rgba(255,107,0,0.3),
+                inset 0 0 20px rgba(255,107,0,0.1);
         }
         
-        .chip:hover { transform: translateY(-5px) scale(1.1); }
-        .chip.disabled { opacity: 0.3; cursor: not-allowed; transform: none; }
-        .chip.c100 { background: radial-gradient(circle, #3498db, #2980b9); }
-        .chip.c500 { background: radial-gradient(circle, #e74c3c, #c0392b); }
-        .chip.c1000 { background: radial-gradient(circle, #f39c12, #d68910); border: 3px solid #ffd700; }
+        .chip::before {
+            content: '';
+            position: absolute;
+            inset: -5px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(255,107,0,0.3), transparent);
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        
+        .chip:hover::before {
+            opacity: 1;
+            animation: chipRipple 0.8s ease-out;
+        }
+        
+        @keyframes chipRipple {
+            0% { transform: scale(0.8); opacity: 0.8; }
+            100% { transform: scale(1.5); opacity: 0; }
+        }
+        
+        .chip:hover { 
+            transform: translateY(-8px) scale(1.15); 
+            box-shadow: 
+                0 8px 20px rgba(0,0,0,0.6),
+                0 0 40px rgba(255,107,0,0.6);
+        }
+        
+        .chip:active { transform: translateY(-4px) scale(1.05); }
+        
+        .chip.disabled { 
+            opacity: 0.3; 
+            cursor: not-allowed; 
+            transform: none;
+            filter: grayscale(1);
+        }
+        
+        .chip.c100 { 
+            background: radial-gradient(circle, #0080ff, #0040ff);
+            border-color: #00ffff;
+        }
+        
+        .chip.c500 { 
+            background: radial-gradient(circle, #ff0080, #ff0040);
+            border-color: #ff00ff;
+        }
+        
+        .chip.c1000 { 
+            background: radial-gradient(circle, #ff6b00, #ffa500);
+            border: 4px solid #ffd700;
+            box-shadow: 
+                0 4px 12px rgba(0,0,0,0.5),
+                0 0 30px rgba(255,215,0,0.5);
+        }
         
         button {
-            background: linear-gradient(135deg, #f7931a, #e67e22);
-            border: none; color: #000; padding: 12px 30px;
-            border-radius: 8px; font-weight: bold; font-size: 14px;
-            cursor: pointer; margin: 5px; text-transform: uppercase;
-            transition: all 0.2s;
+            background: linear-gradient(135deg, #ff6b00, #ffa500);
+            border: 2px solid #ff6b00;
+            color: #000;
+            padding: 14px 35px;
+            border-radius: 10px;
+            font-weight: bold;
+            font-size: 15px;
+            font-family: 'Orbitron', monospace;
+            cursor: pointer;
+            margin: 8px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 
+                0 4px 12px rgba(0,0,0,0.5),
+                0 0 20px rgba(255,107,0,0.3);
         }
         
-        button:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(247,147,26,0.4); }
-        button:disabled { opacity: 0.3; cursor: not-allowed; background: #555; color: #888; transform: none; }
+        button::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+            transition: left 0.5s;
+        }
         
-        .btn-stand { background: linear-gradient(135deg, #e74c3c, #c0392b); color: #fff; }
-        .btn-hit { background: linear-gradient(135deg, #27ae60, #229954); color: #fff; }
-        .btn-cancel { background: transparent; border: 2px solid #e74c3c; color: #e74c3c; padding: 8px 20px; font-size: 12px; }
+        button:hover::before {
+            left: 100%;
+        }
         
-        .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 1000; justify-content: center; align-items: center; }
-        .modal.active { display: flex; }
+        button:hover { 
+            transform: translateY(-3px); 
+            box-shadow: 
+                0 8px 20px rgba(0,0,0,0.6),
+                0 0 40px rgba(255,107,0,0.6);
+        }
+        
+        button:disabled { 
+            opacity: 0.3; 
+            cursor: not-allowed; 
+            background: #333; 
+            color: #666; 
+            transform: none;
+            border-color: #666;
+        }
+        
+        .btn-stand { 
+            background: linear-gradient(135deg, #ff0000, #cc0000); 
+            border-color: #ff0000;
+            color: #fff;
+        }
+        
+        .btn-hit { 
+            background: linear-gradient(135deg, #00ff00, #00cc00); 
+            border-color: #00ff00;
+            color: #000;
+        }
+        
+        .btn-cancel { 
+            background: transparent; 
+            border: 2px solid #ff0000; 
+            color: #ff0000;
+        }
+        
+        .modal { 
+            display: none; 
+            position: fixed; 
+            inset: 0; 
+            background: rgba(0,0,0,0.95); 
+            z-index: 1000; 
+            justify-content: center; 
+            align-items: center;
+            backdrop-filter: blur(10px);
+        }
+        
+        .modal.active { 
+            display: flex; 
+            animation: fadeIn 0.3s ease; 
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
         
         .modal-content {
-            background: linear-gradient(135deg, #1a1f2e, #0f1419);
-            border: 1px solid rgba(247,147,26,0.3); border-radius: 15px;
-            padding: 30px; max-width: 400px; width: 90%; text-align: center;
+            background: linear-gradient(135deg, rgba(0,0,0,0.95), rgba(20,20,20,0.95));
+            border: 3px solid #ff6b00;
+            border-radius: 20px;
+            padding: 40px;
+            max-width: 450px;
+            width: 90%;
+            text-align: center;
+            animation: modalSlide 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+            box-shadow: 
+                0 0 60px rgba(255,107,0,0.5),
+                inset 0 0 40px rgba(255,107,0,0.05);
+            max-height: 80vh;
+            overflow-y: auto;
         }
         
-        .modal-title { font-family: 'Cinzel', serif; color: #f7931a; font-size: 20px; margin-bottom: 20px; }
+        @keyframes modalSlide {
+            from { 
+                transform: translateY(100px) scale(0.8); 
+                opacity: 0; 
+            }
+            to { 
+                transform: translateY(0) scale(1); 
+                opacity: 1; 
+            }
+        }
+        
+        .modal-title { 
+            font-family: 'Orbitron', monospace;
+            background: linear-gradient(135deg, #ff6b00, #ffa500);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            font-size: 24px;
+            margin-bottom: 25px;
+            font-weight: 900;
+            letter-spacing: 3px;
+        }
         
         input {
-            background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.2);
-            color: #fff; padding: 12px; border-radius: 8px; width: 100%;
-            margin: 10px 0; font-size: 14px;
+            background: rgba(0,0,0,0.8);
+            border: 2px solid #ff6b00;
+            color: #fff;
+            padding: 15px;
+            border-radius: 10px;
+            width: 100%;
+            margin: 12px 0;
+            font-size: 15px;
+            font-family: 'Rajdhani', sans-serif;
+            transition: all 0.3s ease;
+        }
+        
+        input:focus {
+            outline: none;
+            border-color: #ffa500;
+            background: rgba(0,0,0,0.95);
+            box-shadow: 0 0 20px rgba(255,107,0,0.3);
         }
         
         .qr-box {
-            background: #fff; padding: 15px; border-radius: 10px;
-            margin: 15px 0; display: inline-block;
+            background: #fff;
+            padding: 20px;
+            border-radius: 15px;
+            margin: 20px 0;
+            display: inline-block;
+            box-shadow: 0 0 30px rgba(255,107,0,0.3);
         }
         
         .split-hands {
             display: flex;
             justify-content: center;
-            gap: 30px;
-            margin: 20px 0;
+            gap: 35px;
+            margin: 25px 0;
         }
         
         .split-hand {
             flex: 1;
-            max-width: 400px;
+            max-width: 450px;
         }
         
         .split-hand.active {
-            border: 2px solid #f7931a;
+            border: 3px solid #ff6b00;
+            border-radius: 15px;
+            padding: 15px;
+            box-shadow: 
+                0 0 40px rgba(255,107,0,0.5),
+                inset 0 0 20px rgba(255,107,0,0.1);
+        }
+        
+        .sync-loader {
+            display: inline-block;
+            width: 24px;
+            height: 24px;
+            border: 3px solid rgba(255,107,0,0.3);
+            border-top-color: #ff6b00;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-left: 12px;
+            vertical-align: middle;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        
+        .sync-loader.active {
+            opacity: 1;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        /* 📊 STATS MODAL */
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 15px;
+            margin: 10px 0;
+            background: rgba(255,107,0,0.1);
+            border: 1px solid rgba(255,107,0,0.3);
+            border-radius: 8px;
+        }
+        
+        .stat-label {
+            font-family: 'Rajdhani', sans-serif;
+            color: #ff6b00;
+            font-size: 14px;
+        }
+        
+        .stat-value {
+            font-family: 'Orbitron', monospace;
+            color: #ffa500;
+            font-weight: bold;
+            font-size: 16px;
+        }
+        
+        /* 🏆 ACHIEVEMENT NOTIFICATION */
+        .achievement-toast {
+            position: fixed;
+            top: 100px;
+            right: 20px;
+            background: linear-gradient(135deg, rgba(0,0,0,0.95), rgba(20,20,20,0.95));
+            border: 2px solid #ffd700;
             border-radius: 10px;
-            padding: 10px;
+            padding: 20px;
+            min-width: 300px;
+            z-index: 2000;
+            transform: translateX(400px);
+            transition: transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+            box-shadow: 0 0 40px rgba(255,215,0,0.5);
+        }
+        
+        .achievement-toast.show {
+            transform: translateX(0);
+        }
+        
+        .achievement-icon {
+            font-size: 40px;
+            margin-bottom: 10px;
+        }
+        
+        .achievement-title {
+            font-family: 'Orbitron', monospace;
+            color: #ffd700;
+            font-size: 16px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .achievement-desc {
+            font-family: 'Rajdhani', sans-serif;
+            color: #ff6b00;
+            font-size: 12px;
+        }
+        
+        /* RESPONSIVE */
+        @media (max-width: 768px) {
+            .brand { font-size: 20px; }
+            .brand-subtitle { font-size: 9px; letter-spacing: 3px; }
+            .balance-amount { font-size: 20px; }
+            .balance-label { font-size: 9px; }
+            .header { flex-direction: column; gap: 15px; }
+            .balance-box, .stats-box { width: 100%; text-align: center; }
+            .card { width: 70px; height: 98px; }
+            .corner { font-size: 14px; }
+            .center { font-size: 36px; }
         }
     </style>
 </head>
 <body>
 
+<canvas id="threejs-canvas"></canvas>
+
+<div class="plasma-border"></div>
+<div class="plasma-border-vertical plasma-border-left"></div>
+<div class="plasma-border-vertical plasma-border-right"></div>
+
+<div class="corner-glow tl"></div>
+<div class="corner-glow tr"></div>
+<div class="corner-glow bl"></div>
+<div class="corner-glow br"></div>
+
+<!-- 🏆 ACHIEVEMENT TOAST -->
+<div class="achievement-toast" id="achievementToast">
+    <div class="achievement-icon" id="achIcon">🏆</div>
+    <div class="achievement-title" id="achTitle">Achievement Unlocked!</div>
+    <div class="achievement-desc" id="achDesc">Description</div>
+</div>
+
 <div class="container">
     <div class="header">
-        <div class="brand">⚡ LIGHTNING BLACKJACK 21</div>
         <div class="balance-box">
-            <div class="balance-label">Balance</div>
-            <div class="balance-amount" id="balance">0</div>
+            <div class="balance-label">⚡ BALANCE</div>
+            <div class="balance-amount" id="balance">0<span class="sync-loader" id="syncLoader"></span></div>
+        </div>
+        
+        <div class="brand-container">
+            <div class="brand">₿ SATS JACK 21</div>
+            <div class="brand-subtitle">BITCOIN MAXI CASINO</div>
+        </div>
+        
+        <div class="stats-box" onclick="showStatsModal()">
+            <div class="balance-label">📊 STATS</div>
+            <div class="balance-amount" id="statsWinRate">0%</div>
         </div>
     </div>
     
     <div class="table">
         <div class="hand-area">
-            <div class="hand-label">DEALER</div>
+            <div class="hand-label">⚡ DEALER</div>
             <div class="cards" id="dealerCards"></div>
             <div class="score" id="dealerScore">--</div>
         </div>
         
         <div class="controls" id="gameControls">
             <div id="betPanel">
-                <div class="hand-label">Mise (Max 2500)</div>
+                <div class="hand-label">MISE (MAX 2500)</div>
                 <div class="bet-display" id="currentBet">0</div>
                 
                 <div class="chips">
@@ -186,28 +998,28 @@
                     <div class="chip c1000" onclick="addBet(1000)" id="chip1000">1K</div>
                 </div>
                 
-                <div style="margin-top: 10px;">
+                <div style="margin-top: 15px;">
                     <button onclick="deal()" id="dealBtn" disabled>DISTRIBUER</button>
                     <button class="btn-cancel" onclick="cancelBet()" id="cancelBtn" disabled>Annuler</button>
                 </div>
                 
-                <div style="margin-top: 10px;">
-                    <button onclick="showDepositModal()" style="background: transparent; border: 1px solid #f7931a; color: #f7931a; font-size: 12px;">+ Déposer</button>
-                    <button onclick="showWithdrawModal()" style="background: transparent; border: 1px solid #27ae60; color: #27ae60; font-size: 12px;" id="withdrawBtn" disabled>Casher</button>
+                <div style="margin-top: 15px;">
+                    <button onclick="showDepositModal()" style="background: linear-gradient(135deg, #00ff00, #00cc00); border-color: #00ff00; color: #000;">+ DÉPOSER</button>
+                    <button onclick="showWithdrawModal()" style="background: linear-gradient(135deg, #0080ff, #0060ff); border-color: #0080ff; color: #fff;" id="withdrawBtn" disabled>CASHER</button>
                 </div>
             </div>
             
             <div id="actionPanel" style="display: none;">
-                <button class="btn-hit" onclick="hit()">Carte</button>
-                <button class="btn-stand" onclick="stand()">Rester</button>
-                <button onclick="double()" id="doubleBtn" style="background: #9b59b6; color: #fff; font-size: 12px;">Doubler</button>
-                <button onclick="split()" id="splitBtn" style="background: #e67e22; color: #fff; font-size: 12px;">Split</button>
+                <button class="btn-hit" onclick="hit()">CARTE</button>
+                <button class="btn-stand" onclick="stand()">RESTER</button>
+                <button onclick="double()" id="doubleBtn" style="background: linear-gradient(135deg, #9b59b6, #8e44ad); border-color: #9b59b6; color: #fff;">DOUBLER</button>
+                <button onclick="split()" id="splitBtn" style="background: linear-gradient(135deg, #e67e22, #d35400); border-color: #e67e22; color: #fff;">SPLIT</button>
             </div>
         </div>
         
         <div id="playerArea">
             <div class="hand-area">
-                <div class="hand-label">VOUS</div>
+                <div class="hand-label">⚡ VOUS</div>
                 <div class="cards" id="playerCards"></div>
                 <div class="score" id="playerScore">--</div>
             </div>
@@ -215,63 +1027,417 @@
     </div>
 </div>
 
-<!-- Deposit Modal -->
+<!-- MODALS -->
 <div class="modal" id="depositModal">
     <div class="modal-content">
-        <div class="modal-title">⚡ Déposer des Sats</div>
+        <div class="modal-title">⚡ DÉPOSER DES SATS</div>
         <input type="number" id="depositAmount" placeholder="Montant (100-10000 sats)" min="100" max="10000" value="1000">
-        <button onclick="generateInvoice()">Générer Invoice</button>
+        <button onclick="generateInvoice()">GÉNÉRER INVOICE</button>
         <div id="invoiceBox" style="display:none; margin-top: 20px;">
             <div class="qr-box" id="qrcode"></div>
-            <div style="font-size: 11px; color: #888; margin-top: 10px;">Scannez avec votre wallet Lightning</div>
-            <button onclick="copyInvoice()" id="copyBtn" style="background: transparent; border: 1px solid #f7931a; color: #f7931a; font-size: 12px; padding: 8px 20px; margin: 10px 0;">
-                📋 Copier l'Invoice
+            <div style="font-size: 12px; color: #888; margin-top: 10px;">Scannez avec votre wallet Lightning</div>
+            <button onclick="copyInvoice()" id="copyBtn" style="background: transparent; border: 2px solid #ff6b00; color: #ff6b00;">
+                📋 COPIER L'INVOICE
             </button>
-            <div style="font-size: 12px; color: #27ae60; margin-top: 15px;" id="paymentStatus">⏳ En attente du paiement...</div>
+            <div style="font-size: 13px; color: #00ff00; margin-top: 15px;" id="paymentStatus">⏳ En attente du paiement...</div>
         </div>
-        <button onclick="closeModal('depositModal')" style="background: transparent; border: 1px solid #666; color: #666; margin-top: 10px;">Fermer</button>
+        <button onclick="closeModal('depositModal')" style="background: transparent; border: 2px solid #666; color: #666; margin-top: 10px;">FERMER</button>
     </div>
 </div>
 
-<!-- Withdraw Modal -->
 <div class="modal" id="withdrawModal">
     <div class="modal-content">
-        <div class="modal-title">💰 Retrait Lightning</div>
+        <div class="modal-title">💰 RETRAIT LIGHTNING</div>
         <div style="margin: 20px 0;">
             <div style="font-size: 14px; color: #888;">Solde disponible</div>
-            <div style="font-size: 32px; color: #f7931a; font-weight: bold; margin: 10px 0;" id="withdrawBalance">0</div>
+            <div style="font-size: 36px; font-family: 'Orbitron', monospace; background: linear-gradient(135deg, #ff6b00, #ffa500); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; margin: 10px 0;" id="withdrawBalance">0</div>
         </div>
         <input type="text" id="withdrawInvoice" placeholder="Collez votre invoice Lightning (lnbc...)">
-        <button onclick="processWithdraw()" id="withdrawSubmitBtn">Envoyer Paiement</button>
-        <button onclick="closeModal('withdrawModal')" style="background: transparent; border: 1px solid #666; color: #666; margin-top: 10px;">Annuler</button>
+        <button onclick="processWithdraw()" id="withdrawSubmitBtn">ENVOYER PAIEMENT</button>
+        <button onclick="closeModal('withdrawModal')" style="background: transparent; border: 2px solid #666; color: #666; margin-top: 10px;">ANNULER</button>
     </div>
 </div>
 
-<!-- Result Modal -->
 <div class="modal" id="resultModal">
     <div class="modal-content">
-        <div style="font-size: 60px; margin-bottom: 20px;" id="resIcon">🎰</div>
-        <div class="modal-title" id="resTitle">Blackjack!</div>
-        <div style="font-size: 24px; margin: 20px 0; font-weight: bold;" id="resAmount">+100 sats</div>
-        <button onclick="resetRound()">Nouvelle Partie</button>
+        <div style="font-size: 80px; margin-bottom: 20px;" id="resIcon">🎰</div>
+        <div class="modal-title" id="resTitle">BLACKJACK!</div>
+        <div style="font-size: 32px; margin: 20px 0; font-family: 'Orbitron', monospace; font-weight: bold; background: linear-gradient(135deg, #ff6b00, #ffa500); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;" id="resAmount">+100 sats</div>
+        <button onclick="resetRound()">NOUVELLE PARTIE</button>
+    </div>
+</div>
+
+<!-- 📊 STATS MODAL -->
+<div class="modal" id="statsModal">
+    <div class="modal-content">
+        <div class="modal-title">📊 STATISTIQUES</div>
+        
+        <div class="stat-row">
+            <div class="stat-label">Parties jouées</div>
+            <div class="stat-value" id="statGames">0</div>
+        </div>
+        
+        <div class="stat-row">
+            <div class="stat-label">Victoires</div>
+            <div class="stat-value" id="statWins">0</div>
+        </div>
+        
+        <div class="stat-row">
+            <div class="stat-label">Défaites</div>
+            <div class="stat-value" id="statLosses">0</div>
+        </div>
+        
+        <div class="stat-row">
+            <div class="stat-label">Blackjacks</div>
+            <div class="stat-value" id="statBJs">0</div>
+        </div>
+        
+        <div class="stat-row">
+            <div class="stat-label">Win Rate</div>
+            <div class="stat-value" id="statWinRate">0%</div>
+        </div>
+        
+        <div class="stat-row">
+            <div class="stat-label">Plus gros gain</div>
+            <div class="stat-value" id="statBigWin">0 sats</div>
+        </div>
+        
+        <div class="stat-row">
+            <div class="stat-label">Série actuelle</div>
+            <div class="stat-value" id="statStreak">0</div>
+        </div>
+        
+        <div style="margin-top: 20px;">
+            <div class="modal-title" style="font-size: 18px; margin-bottom: 15px;">🏆 ACHIEVEMENTS</div>
+            <div id="achievementsList"></div>
+        </div>
+        
+        <button onclick="resetStats()" style="background: linear-gradient(135deg, #ff0000, #cc0000); border-color: #ff0000; color: #fff; margin-top: 15px;">RESET STATS</button>
+        <button onclick="closeModal('statsModal')" style="background: transparent; border: 2px solid #666; color: #666; margin-top: 10px;">FERMER</button>
     </div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
 <script>
 // ============================================
-// CONFIGURATION
+// THREE.JS BACKGROUND
 // ============================================
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+const renderer = new THREE.WebGLRenderer({ 
+    canvas: document.getElementById('threejs-canvas'),
+    alpha: true,
+    antialias: true
+});
+
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(window.devicePixelRatio);
+camera.position.z = 50;
+
+const particlesGeometry = new THREE.BufferGeometry();
+const particlesCount = 300;
+const posArray = new Float32Array(particlesCount * 3);
+
+for(let i = 0; i < particlesCount * 3; i++) {
+    posArray[i] = (Math.random() - 0.5) * 100;
+}
+
+particlesGeometry.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
+
+const particlesMaterial = new THREE.PointsMaterial({
+    size: 0.3,
+    color: 0xff6b00,
+    transparent: true,
+    opacity: 0.8,
+    blending: THREE.AdditiveBlending
+});
+
+const particlesMesh = new THREE.Points(particlesGeometry, particlesMaterial);
+scene.add(particlesMesh);
+
+const bitcoinGroup = new THREE.Group();
+const bitcoinGeometry = new THREE.SphereGeometry(0.5, 8, 8);
+const bitcoinMaterial = new THREE.MeshBasicMaterial({ 
+    color: 0xff6b00,
+    wireframe: true
+});
+
+for(let i = 0; i < 20; i++) {
+    const bitcoin = new THREE.Mesh(bitcoinGeometry, bitcoinMaterial);
+    bitcoin.position.x = (Math.random() - 0.5) * 80;
+    bitcoin.position.y = (Math.random() - 0.5) * 80;
+    bitcoin.position.z = (Math.random() - 0.5) * 80;
+    bitcoin.rotation.x = Math.random() * Math.PI;
+    bitcoin.rotation.y = Math.random() * Math.PI;
+    bitcoinGroup.add(bitcoin);
+}
+
+scene.add(bitcoinGroup);
+
+const lightningGeometry = new THREE.BufferGeometry();
+const lightningCount = 50;
+const lightningPosArray = new Float32Array(lightningCount * 3);
+
+for(let i = 0; i < lightningCount * 3; i++) {
+    lightningPosArray[i] = (Math.random() - 0.5) * 120;
+}
+
+lightningGeometry.setAttribute('position', new THREE.BufferAttribute(lightningPosArray, 3));
+
+const lightningMaterial = new THREE.PointsMaterial({
+    size: 0.5,
+    color: 0xffa500,
+    transparent: true,
+    opacity: 0.6,
+    blending: THREE.AdditiveBlending
+});
+
+const lightningMesh = new THREE.Points(lightningGeometry, lightningMaterial);
+scene.add(lightningMesh);
+
+let mouseX = 0;
+let mouseY = 0;
+
+document.addEventListener('mousemove', (e) => {
+    mouseX = (e.clientX / window.innerWidth) * 2 - 1;
+    mouseY = -(e.clientY / window.innerHeight) * 2 + 1;
+});
+
+function animateThreeJS() {
+    requestAnimationFrame(animateThreeJS);
+    
+    particlesMesh.rotation.y += 0.001;
+    particlesMesh.rotation.x += 0.0005;
+    
+    bitcoinGroup.rotation.y += 0.002;
+    bitcoinGroup.rotation.x += 0.001;
+    
+    bitcoinGroup.children.forEach((bitcoin) => {
+        bitcoin.rotation.x += 0.01;
+        bitcoin.rotation.y += 0.01;
+    });
+    
+    lightningMesh.rotation.x += 0.003;
+    lightningMesh.rotation.z += 0.002;
+    
+    camera.position.x += (mouseX * 5 - camera.position.x) * 0.05;
+    camera.position.y += (mouseY * 5 - camera.position.y) * 0.05;
+    camera.lookAt(scene.position);
+    
+    renderer.render(scene, camera);
+}
+
+animateThreeJS();
+
+window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+// ============================================
+// 🎵 SOUND EFFECTS
+// ============================================
+
+const sounds = {
+    bet: new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTcI='),
+    win: new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTcI'),
+    lose: new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTcI'),
+    card: new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTcI'),
+    blackjack: new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTcI')
+};
+
+// Volume control
+Object.values(sounds).forEach(sound => {
+    sound.volume = 0.3;
+});
+
+function playSound(soundName) {
+    try {
+        const sound = sounds[soundName];
+        if (sound) {
+            sound.currentTime = 0;
+            sound.play().catch(e => console.log('Sound play failed:', e));
+        }
+    } catch (e) {
+        console.log('Sound error:', e);
+    }
+}
+
+// ============================================
+// 📊 STATS & ACHIEVEMENTS SYSTEM
+// ============================================
+
+let stats = {
+    totalGames: 0,
+    wins: 0,
+    losses: 0,
+    blackjacks: 0,
+    biggestWin: 0,
+    currentStreak: 0,
+    bestStreak: 0
+};
+
+const achievements = [
+    { id: 'first_game', name: '🎰 Premier Jeu', desc: 'Jouer votre première partie', unlocked: false },
+    { id: 'first_win', name: '🎉 Première Victoire', desc: 'Gagner une partie', unlocked: false },
+    { id: 'first_bj', name: '⚡ Premier Blackjack', desc: 'Obtenir un Blackjack', unlocked: false },
+    { id: 'high_roller', name: '💰 High Roller', desc: 'Miser 2500 sats', unlocked: false },
+    { id: 'streak_3', name: '🔥 Série de 3', desc: 'Gagner 3 parties d\'affilée', unlocked: false },
+    { id: 'streak_5', name: '🔥🔥 Série de 5', desc: 'Gagner 5 parties d\'affilée', unlocked: false },
+    { id: 'big_win', name: '💎 Gros Gain', desc: 'Gagner +1000 sats en une partie', unlocked: false },
+    { id: 'veteran', name: '🏆 Vétéran', desc: 'Jouer 50 parties', unlocked: false }
+];
+
+function loadStats() {
+    const saved = localStorage.getItem('btc_casino_stats');
+    if (saved) {
+        stats = JSON.parse(saved);
+    }
+    
+    const savedAch = localStorage.getItem('btc_casino_achievements');
+    if (savedAch) {
+        const savedAchievements = JSON.parse(savedAch);
+        savedAchievements.forEach(savedAch => {
+            const ach = achievements.find(a => a.id === savedAch.id);
+            if (ach) ach.unlocked = savedAch.unlocked;
+        });
+    }
+}
+
+function saveStats() {
+    localStorage.setItem('btc_casino_stats', JSON.stringify(stats));
+    localStorage.setItem('btc_casino_achievements', JSON.stringify(achievements));
+}
+
+function updateStats(result, netGain) {
+    stats.totalGames++;
+    
+    if (result === 'win' || result === 'bj') {
+        stats.wins++;
+        stats.currentStreak++;
+        
+        if (stats.currentStreak > stats.bestStreak) {
+            stats.bestStreak = stats.currentStreak;
+        }
+        
+        if (netGain > stats.biggestWin) {
+            stats.biggestWin = netGain;
+        }
+        
+        if (result === 'bj') {
+            stats.blackjacks++;
+            checkAchievement('first_bj');
+        }
+        
+        checkAchievement('first_win');
+        
+        if (stats.currentStreak >= 3) checkAchievement('streak_3');
+        if (stats.currentStreak >= 5) checkAchievement('streak_5');
+        if (netGain >= 1000) checkAchievement('big_win');
+        
+    } else if (result === 'loss' || result === 'bust') {
+        stats.losses++;
+        stats.currentStreak = 0;
+    }
+    
+    checkAchievement('first_game');
+    if (stats.totalGames >= 50) checkAchievement('veteran');
+    
+    saveStats();
+}
+
+function checkAchievement(achievementId) {
+    const ach = achievements.find(a => a.id === achievementId);
+    if (ach && !ach.unlocked) {
+        ach.unlocked = true;
+        showAchievementToast(ach);
+        playSound('win');
+        saveStats();
+    }
+}
+
+function showAchievementToast(achievement) {
+    const toast = document.getElementById('achievementToast');
+    document.getElementById('achIcon').textContent = achievement.name.split(' ')[0];
+    document.getElementById('achTitle').textContent = achievement.name;
+    document.getElementById('achDesc').textContent = achievement.desc;
+    
+    toast.classList.add('show');
+    
+    setTimeout(() => {
+        toast.classList.remove('show');
+    }, 4000);
+    
+    // Vibration mobile
+    if (navigator.vibrate) {
+        navigator.vibrate([100, 50, 100]);
+    }
+}
+
+function showStatsModal() {
+    document.getElementById('statGames').textContent = stats.totalGames;
+    document.getElementById('statWins').textContent = stats.wins;
+    document.getElementById('statLosses').textContent = stats.losses;
+    document.getElementById('statBJs').textContent = stats.blackjacks;
+    
+    const winRate = stats.totalGames > 0 ? ((stats.wins / stats.totalGames) * 100).toFixed(1) : 0;
+    document.getElementById('statWinRate').textContent = winRate + '%';
+    
+    document.getElementById('statBigWin').textContent = stats.biggestWin + ' sats';
+    document.getElementById('statStreak').textContent = stats.currentStreak + ' (Best: ' + stats.bestStreak + ')';
+    
+    // Achievements list
+    const achList = document.getElementById('achievementsList');
+    achList.innerHTML = '';
+    
+    achievements.forEach(ach => {
+        const achEl = document.createElement('div');
+        achEl.className = 'stat-row';
+        achEl.style.opacity = ach.unlocked ? '1' : '0.3';
+        achEl.innerHTML = `
+            <div class="stat-label">${ach.name}</div>
+            <div class="stat-value">${ach.unlocked ? '✅' : '🔒'}</div>
+        `;
+        achList.appendChild(achEl);
+    });
+    
+    document.getElementById('statsModal').classList.add('active');
+}
+
+function resetStats() {
+    if (confirm('Êtes-vous sûr de vouloir réinitialiser vos statistiques ?')) {
+        stats = {
+            totalGames: 0,
+            wins: 0,
+            losses: 0,
+            blackjacks: 0,
+            biggestWin: 0,
+            currentStreak: 0,
+            bestStreak: 0
+        };
+        
+        achievements.forEach(ach => ach.unlocked = false);
+        
+        saveStats();
+        showStatsModal();
+    }
+}
+
+// ============================================
+// GAME LOGIC
+// ============================================
+
 const API_BASE = '';
 const MAX_BET = 2500;
 const MIN_BET = 100;
 
-// ============================================
-// GAME STATE
-// ============================================
 let balance = 0;
 let currentBet = 0;
-let initialBet = 0; // Pour le double down
+let initialBet = 0;
 let deck = [];
 let playerHand = [];
 let dealerHand = [];
@@ -281,15 +1447,25 @@ let canSplit = false;
 let currentPaymentHash = null;
 let currentInvoice = null;
 let paymentCheckInterval = null;
-
-// Split state
 let isSplit = false;
-let splitHands = []; // [{cards: [], bet: 0, finished: false}]
+let splitHands = [];
 let currentSplitHand = 0;
 
-// ============================================
-// API CALLS
-// ============================================
+function animateBalanceUpdate() {
+    const balanceEl = document.getElementById('balance');
+    balanceEl.classList.add('updated');
+    setTimeout(() => {
+        balanceEl.classList.remove('updated');
+    }, 600);
+}
+
+function showSyncLoader() {
+    document.getElementById('syncLoader').classList.add('active');
+}
+
+function hideSyncLoader() {
+    document.getElementById('syncLoader').classList.remove('active');
+}
 
 async function apiCall(endpoint, method = 'GET', body = null) {
     const options = {
@@ -343,7 +1519,6 @@ async function generateInvoice() {
         currentPaymentHash = data.payment_hash;
         currentInvoice = data.payment_request;
         
-        // Afficher QR code
         document.getElementById('invoiceBox').style.display = 'block';
         document.getElementById('qrcode').innerHTML = '';
         new QRCode(document.getElementById('qrcode'), {
@@ -352,7 +1527,6 @@ async function generateInvoice() {
             height: 200
         });
         
-        // Démarrer vérification
         startPaymentCheck();
         
     } catch (error) {
@@ -369,17 +1543,16 @@ async function copyInvoice() {
     try {
         await navigator.clipboard.writeText(currentInvoice);
         
-        // Feedback visuel
         const btn = document.getElementById('copyBtn');
         const oldText = btn.textContent;
-        btn.textContent = '✅ Copié !';
-        btn.style.borderColor = '#27ae60';
-        btn.style.color = '#27ae60';
+        btn.textContent = '✅ COPIÉ !';
+        btn.style.borderColor = '#00ff00';
+        btn.style.color = '#00ff00';
         
         setTimeout(() => {
             btn.textContent = oldText;
-            btn.style.borderColor = '#f7931a';
-            btn.style.color = '#f7931a';
+            btn.style.borderColor = '#ff6b00';
+            btn.style.color = '#ff6b00';
         }, 2000);
         
     } catch (error) {
@@ -398,6 +1571,8 @@ function startPaymentCheck() {
                 clearInterval(paymentCheckInterval);
                 balance = data.new_balance;
                 updateDisplay();
+                animateBalanceUpdate();
+                playSound('win');
                 
                 document.getElementById('paymentStatus').innerHTML = '✅ Paiement reçu !';
                 setTimeout(() => {
@@ -425,13 +1600,14 @@ async function processWithdraw() {
     
     const btn = document.getElementById('withdrawSubmitBtn');
     btn.disabled = true;
-    btn.textContent = 'Traitement...';
+    btn.textContent = 'TRAITEMENT...';
     
     try {
         const data = await apiCall('/api/withdraw', 'POST', { invoice });
         
         balance = 0;
         updateDisplay();
+        animateBalanceUpdate();
         
         alert(`✅ Paiement envoyé ! ${data.amount} sats`);
         closeModal('withdrawModal');
@@ -440,7 +1616,7 @@ async function processWithdraw() {
         alert('Erreur: ' + error.message);
     } finally {
         btn.disabled = false;
-        btn.textContent = 'Envoyer Paiement';
+        btn.textContent = 'ENVOYER PAIEMENT';
     }
 }
 
@@ -461,15 +1637,14 @@ function closeModal(id) {
     if (paymentCheckInterval) clearInterval(paymentCheckInterval);
 }
 
-// ============================================
-// UI UPDATES
-// ============================================
-
 function updateDisplay() {
     document.getElementById('balance').textContent = balance;
     document.getElementById('currentBet').textContent = currentBet;
     
-    // Update chip availability
+    // Update stats display in header
+    const winRate = stats.totalGames > 0 ? ((stats.wins / stats.totalGames) * 100).toFixed(0) : 0;
+    document.getElementById('statsWinRate').textContent = winRate + '%';
+    
     ['chip100', 'chip500', 'chip1000'].forEach(id => {
         const chip = document.getElementById(id);
         const val = parseInt(id.replace('chip', ''));
@@ -482,10 +1657,6 @@ function updateDisplay() {
     document.getElementById('cancelBtn').disabled = currentBet === 0;
     document.getElementById('withdrawBtn').disabled = balance === 0;
 }
-
-// ============================================
-// BLACKJACK GAME LOGIC - CORRECT RULES
-// ============================================
 
 const suits = ['♠','♥','♦','♣'];
 const values = ['A','2','3','4','5','6','7','8','9','10','J','Q','K'];
@@ -594,7 +1765,6 @@ function renderSplitHands() {
         `;
     });
     
-    // Dealer cards
     const dc = document.getElementById('dealerCards');
     dc.innerHTML = '';
     dealerHand.forEach(c => {
@@ -619,6 +1789,12 @@ function addBet(amount) {
     
     currentBet += amount;
     updateDisplay();
+    playSound('bet');
+    
+    // Check high roller achievement
+    if (currentBet === 2500) {
+        checkAchievement('high_roller');
+    }
 }
 
 function cancelBet() {
@@ -641,47 +1817,38 @@ function deal() {
     createDeck();
     shuffle();
     
-    // Distribution initiale
     playerHand = [draw(), draw()];
     dealerHand = [draw(), {hidden: true, ...draw()}];
     
+    playSound('card');
     renderHands();
     
-    // Vérifier blackjack dealer immédiatement si carte visible est As ou 10
     const dealerUpCard = dealerHand[0];
     const dealerUpValue = dealerUpCard.num;
     
     if (dealerUpValue === 11 || dealerUpValue === 10) {
-        // Peek at hole card
         const dealerHoleCard = dealerHand[1];
         if (isBlackjack([dealerUpCard, dealerHoleCard])) {
-            // Dealer a blackjack - révéler immédiatement
             dealerHand = dealerHand.map(c => ({...c, hidden: false}));
             renderHands();
             
             if (isBlackjack(playerHand)) {
-                // Double blackjack = push
                 setTimeout(() => endRound('push', currentBet), 1000);
             } else {
-                // Dealer gagne
                 setTimeout(() => endRound('dealer_bj', 0), 1000);
             }
             return;
         }
     }
     
-    // Vérifier blackjack joueur
     if (isBlackjack(playerHand)) {
-        // Joueur a blackjack - dealer n'en a pas (déjà vérifié)
         setTimeout(() => endRound('player_bj', Math.floor(currentBet * 2.5)), 1000);
         return;
     }
     
-    // Activer les boutons
     document.getElementById('betPanel').style.display = 'none';
     document.getElementById('actionPanel').style.display = 'block';
     
-    // Vérifier double et split
     const pv = getVal(playerHand);
     canDouble = (pv >= 9 && pv <= 11) && balance >= currentBet;
     canSplit = isPair(playerHand) && balance >= currentBet;
@@ -691,17 +1858,17 @@ function deal() {
 }
 
 function hit() {
+    playSound('card');
+    
     if (isSplit) {
         splitHands[currentSplitHand].cards.push(draw());
         renderSplitHands();
         
         const handVal = getVal(splitHands[currentSplitHand].cards);
         if (handVal > 21) {
-            // Bust on this hand
             splitHands[currentSplitHand].finished = true;
             nextSplitHand();
         } else if (handVal === 21) {
-            // 21 - auto stand
             splitHands[currentSplitHand].finished = true;
             nextSplitHand();
         }
@@ -732,6 +1899,7 @@ function double() {
     
     playerHand.push(draw());
     renderHands();
+    playSound('card');
     
     setTimeout(() => stand(), 800);
 }
@@ -739,11 +1907,9 @@ function double() {
 function split() {
     if (!canSplit || balance < currentBet) return;
     
-    // Déduire la mise pour la 2ème main
     balance -= currentBet;
     updateDisplay();
     
-    // Créer 2 mains
     isSplit = true;
     splitHands = [
         {cards: [playerHand[0], draw()], bet: currentBet, finished: false},
@@ -752,12 +1918,11 @@ function split() {
     currentSplitHand = 0;
     
     renderSplitHands();
+    playSound('card');
     
-    // Désactiver double et split
     document.getElementById('doubleBtn').disabled = true;
     document.getElementById('splitBtn').disabled = true;
     
-    // Vérifier si la première main est déjà à 21
     if (getVal(splitHands[0].cards) === 21) {
         splitHands[0].finished = true;
         nextSplitHand();
@@ -768,12 +1933,10 @@ function nextSplitHand() {
     currentSplitHand++;
     
     if (currentSplitHand >= splitHands.length) {
-        // Toutes les mains jouées - dealer joue
         setTimeout(() => stand(), 800);
     } else {
         renderSplitHands();
         
-        // Vérifier si cette main est déjà à 21
         if (getVal(splitHands[currentSplitHand].cards) === 21) {
             splitHands[currentSplitHand].finished = true;
             nextSplitHand();
@@ -782,10 +1945,8 @@ function nextSplitHand() {
 }
 
 function stand() {
-    // Cacher les boutons d'action
     document.getElementById('actionPanel').style.display = 'none';
     
-    // Révéler carte cachée dealer
     dealerHand = dealerHand.map(c => ({...c, hidden: false}));
     renderHands();
     
@@ -800,6 +1961,7 @@ function dealerPlay() {
         
         if (dv < 17) {
             dealerHand.push(draw());
+            playSound('card');
             if (isSplit) {
                 renderSplitHands();
             } else {
@@ -812,159 +1974,247 @@ function dealerPlay() {
     }, 600);
 }
 
+// ✅ FIX - Calcul correct du gain net
 async function determineWinner() {
     const dv = getVal(dealerHand);
     
     if (isSplit) {
-        // Évaluer chaque main
         let totalWin = 0;
         
         for (let hand of splitHands) {
             const pv = getVal(hand.cards);
-            let result, amount = 0;
+            let amount = 0;
             
             if (pv > 21) {
-                result = 'loss';
                 amount = 0;
             } else if (dv > 21) {
-                result = 'win';
                 amount = hand.bet * 2;
             } else if (pv > dv) {
-                result = 'win';
                 amount = hand.bet * 2;
             } else if (pv < dv) {
-                result = 'loss';
                 amount = 0;
             } else {
-                result = 'push';
                 amount = hand.bet;
             }
             
             totalWin += amount;
         }
         
-        balance += totalWin;
-        updateDisplay();
+        // ✅ Sauvegarder balance AVANT sync
+        const balanceBeforeGame = balance;
         
-        // Afficher résultat
+        showSyncLoader();
+        try {
+            const response = await apiCall('/api/game', 'POST', {
+                bet_amount: currentBet * 2,
+                result: totalWin > (currentBet * 2) ? 'win' : (totalWin < (currentBet * 2) ? 'loss' : 'push')
+            });
+            
+            balance = response.new_balance;
+            updateDisplay();
+            animateBalanceUpdate();
+            
+            // ✅ Calcul correct du gain net
+            const netGain = balance - balanceBeforeGame;
+            
+            // Update stats
+            const result = totalWin > (currentBet * 2) ? 'win' : (totalWin < (currentBet * 2) ? 'loss' : 'push');
+            updateStats(result, netGain);
+            
+        } catch (error) {
+            console.error('Erreur save game:', error);
+            balance += totalWin;
+            updateDisplay();
+        } finally {
+            hideSyncLoader();
+        }
+        
         let icon, title;
         const netResult = totalWin - (currentBet * 2);
         
         if (netResult > 0) {
             icon = '🎉';
-            title = 'Victoire Split!';
+            title = 'VICTOIRE SPLIT!';
+            playSound('win');
         } else if (netResult < 0) {
             icon = '😢';
-            title = 'Perdu';
+            title = 'PERDU';
+            playSound('lose');
         } else {
             icon = '🤝';
-            title = 'Push';
+            title = 'PUSH';
         }
         
         showResult(icon, title, `${netResult >= 0 ? '+' : ''}${netResult} sats`);
         
-        // Enregistrer
-        try {
-            await apiCall('/api/game', 'POST', {
-                bet_amount: currentBet * 2,
-                result: netResult > 0 ? 'win' : (netResult < 0 ? 'loss' : 'push')
-            });
-        } catch (error) {
-            console.error('Erreur save game:', error);
-        }
-        
     } else {
-        // Main simple
         const pv = getVal(playerHand);
         
-        console.log('DEBUG - Player:', pv, 'Dealer:', dv);
-        
-        let result, icon, title, amount = 0;
+        let result, icon, title;
         
         if (pv > 21) {
-            result = 'loss';
+            result = 'bust';
             icon = '💥';
-            title = 'Bust!';
-            amount = 0;
+            title = 'BUST!';
         } else if (dv > 21) {
             result = 'win';
             icon = '🎉';
-            title = 'Dealer Bust!';
-            amount = currentBet * 2;
+            title = 'DEALER BUST!';
         } else if (isBlackjack(playerHand)) {
-            // Blackjack naturel (déjà géré normalement, mais par sécurité)
             result = 'bj';
             icon = '🔥';
             title = 'BLACKJACK!';
-            amount = Math.floor(currentBet * 2.5);
         } else if (pv > dv) {
             result = 'win';
             icon = '🎉';
-            title = 'Victoire!';
-            amount = currentBet * 2;
+            title = 'VICTOIRE!';
         } else if (pv < dv) {
             result = 'loss';
             icon = '😢';
-            title = 'Dealer Gagne';
-            amount = 0;
+            title = 'DEALER GAGNE';
         } else {
             result = 'push';
             icon = '🤝';
-            title = 'Push (Égalité)';
-            amount = currentBet;
+            title = 'PUSH (ÉGALITÉ)';
         }
+        
+        // ✅ Sauvegarder balance AVANT sync
+        const balanceBeforeGame = balance;
+        
+        showSyncLoader();
+        try {
+            const response = await apiCall('/api/game', 'POST', {
+                bet_amount: initialBet,
+                result: result
+            });
+            
+            balance = response.new_balance;
+            updateDisplay();
+            animateBalanceUpdate();
+            
+            // ✅ Calcul correct du gain net
+            const netGain = balance - balanceBeforeGame;
+            
+            // Update stats
+            updateStats(result, netGain);
+            
+            // Sons et confettis
+            if (result === 'bj') {
+                playSound('blackjack');
+                confetti({
+                    particleCount: 150,
+                    spread: 70,
+                    origin: { y: 0.6 },
+                    colors: ['#ff6b00', '#ffa500', '#ffd700']
+                });
+            } else if (result === 'win') {
+                playSound('win');
+                confetti({
+                    particleCount: 100,
+                    spread: 60,
+                    origin: { y: 0.6 },
+                    colors: ['#ff6b00', '#ffa500']
+                });
+            } else if (result === 'loss' || result === 'bust') {
+                playSound('lose');
+            }
+            
+            showResult(icon, title, `${netGain >= 0 ? '+' : ''}${netGain} sats`);
+            
+        } catch (error) {
+            console.error('Erreur save game:', error);
+            
+            let amount = 0;
+            if (result === 'win') amount = initialBet * 2;
+            else if (result === 'bj') amount = Math.floor(initialBet * 2.5);
+            else if (result === 'push') amount = initialBet;
+            
+            balance += amount;
+            updateDisplay();
+            
+            const netGain = amount - initialBet;
+            showResult(icon, title, `${netGain >= 0 ? '+' : ''}${netGain} sats`);
+        } finally {
+            hideSyncLoader();
+        }
+    }
+}
+
+// ✅ FIX - Calcul correct du gain net
+async function endRound(type, amount) {
+    let icon, title, result;
+    
+    switch(type) {
+        case 'player_bj':
+            icon = '🔥';
+            title = 'BLACKJACK!';
+            result = 'bj';
+            break;
+        case 'dealer_bj':
+            icon = '😢';
+            title = 'DEALER BLACKJACK';
+            result = 'loss';
+            break;
+        case 'push':
+            icon = '🤝';
+            title = 'PUSH (DOUBLE BJ)';
+            result = 'push';
+            break;
+        case 'bust':
+            icon = '💥';
+            title = 'BUST!';
+            result = 'bust';
+            break;
+    }
+    
+    // ✅ Sauvegarder balance AVANT sync
+    const balanceBeforeGame = balance;
+    
+    showSyncLoader();
+    try {
+        const response = await apiCall('/api/game', 'POST', {
+            bet_amount: initialBet,
+            result: result
+        });
+        
+        balance = response.new_balance;
+        updateDisplay();
+        animateBalanceUpdate();
+        
+        // ✅ Calcul correct du gain net
+        const netGain = balance - balanceBeforeGame;
+        
+        // Update stats
+        updateStats(result, netGain);
+        
+        // Sons et confettis
+        if (result === 'bj') {
+            playSound('blackjack');
+            confetti({
+                particleCount: 150,
+                spread: 70,
+                origin: { y: 0.6 },
+                colors: ['#ff6b00', '#ffa500', '#ffd700']
+            });
+        } else if (result === 'push') {
+            // Push - pas de son spécial
+        } else {
+            playSound('lose');
+        }
+        
+        showResult(icon, title, `${netGain >= 0 ? '+' : ''}${netGain} sats`);
+        
+    } catch (error) {
+        console.error('Erreur save game:', error);
         
         balance += amount;
         updateDisplay();
         
         const netGain = amount - initialBet;
         showResult(icon, title, `${netGain >= 0 ? '+' : ''}${netGain} sats`);
-        
-        // Enregistrer
-        try {
-            await apiCall('/api/game', 'POST', {
-                bet_amount: initialBet,
-                result: result
-            });
-        } catch (error) {
-            console.error('Erreur save game:', error);
-        }
+    } finally {
+        hideSyncLoader();
     }
-}
-
-function endRound(type, amount) {
-    let icon, title;
-    
-    switch(type) {
-        case 'player_bj':
-            icon = '🔥';
-            title = 'BLACKJACK!';
-            break;
-        case 'dealer_bj':
-            icon = '😢';
-            title = 'Dealer Blackjack';
-            break;
-        case 'push':
-            icon = '🤝';
-            title = 'Push (Double BJ)';
-            break;
-        case 'bust':
-            icon = '💥';
-            title = 'Bust!';
-            break;
-    }
-    
-    balance += amount;
-    updateDisplay();
-    
-    const netGain = amount - initialBet;
-    showResult(icon, title, `${netGain >= 0 ? '+' : ''}${netGain} sats`);
-    
-    // Enregistrer
-    apiCall('/api/game', 'POST', {
-        bet_amount: initialBet,
-        result: type === 'player_bj' ? 'bj' : (type === 'push' ? 'push' : 'loss')
-    }).catch(error => console.error('Erreur save game:', error));
 }
 
 function showResult(icon, title, amountText) {
@@ -972,6 +2222,11 @@ function showResult(icon, title, amountText) {
     document.getElementById('resTitle').textContent = title;
     document.getElementById('resAmount').textContent = amountText;
     document.getElementById('resultModal').classList.add('active');
+    
+    // Vibration mobile
+    if (navigator.vibrate && amountText.includes('+')) {
+        navigator.vibrate([200, 100, 200]);
+    }
 }
 
 function resetRound() {
@@ -988,7 +2243,7 @@ function resetRound() {
     
     document.getElementById('playerArea').innerHTML = `
         <div class="hand-area">
-            <div class="hand-label">VOUS</div>
+            <div class="hand-label">⚡ VOUS</div>
             <div class="cards" id="playerCards"></div>
             <div class="score" id="playerScore">--</div>
         </div>
@@ -1008,6 +2263,7 @@ function resetRound() {
 // ============================================
 
 window.onload = () => {
+    loadStats();
     initSession();
 };
 </script>
