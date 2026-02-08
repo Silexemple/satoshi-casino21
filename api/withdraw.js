@@ -43,7 +43,7 @@ export default async function handler(req) {
   const currentBalance = player.balance;
   
   try {
-    // Payer l'invoice via LNbits - UTILISER FETCH au lieu d'axios
+    // Payer l'invoice via LNbits
     const lnbitsUrl = process.env.LNBITS_URL || 'https://legend.lnbits.com';
     const adminKey = process.env.LNBITS_ADMIN_KEY;
     
@@ -96,7 +96,8 @@ export default async function handler(req) {
       JSON.stringify({ 
         success: true, 
         amount: amountPaid,
-        payment_hash: payment.payment_hash
+        payment_hash: payment.payment_hash,
+        new_balance: player.balance  // ✅ AJOUTÉ !
       }),
       {
         status: 200,
