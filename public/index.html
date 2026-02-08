@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>₿ BITCOIN MAXI CASINO - Sats Jack 21</title>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400 ;700;900&family=Rajdhani:wght@300;500;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;500;700&display=swap');
         
         * { margin: 0; padding: 0; box-sizing: border-box; }
         
@@ -18,7 +18,6 @@
             position: relative;
         }
         
-        /* ⚡ THREE.JS CANVAS BACKGROUND */
         #threejs-canvas {
             position: fixed;
             top: 0;
@@ -28,7 +27,6 @@
             z-index: 0;
         }
         
-        /* 🔥 PLASMA BORDER VIBRANTE */
         .plasma-border {
             position: fixed;
             inset: 0;
@@ -865,7 +863,6 @@
             to { transform: rotate(360deg); }
         }
         
-        /* 📊 STATS MODAL */
         .stat-row {
             display: flex;
             justify-content: space-between;
@@ -889,7 +886,6 @@
             font-size: 16px;
         }
         
-        /* 🏆 ACHIEVEMENT NOTIFICATION */
         .achievement-toast {
             position: fixed;
             top: 100px;
@@ -928,7 +924,6 @@
             font-size: 12px;
         }
         
-        /* RESPONSIVE */
         @media (max-width: 768px) {
             .brand { font-size: 20px; }
             .brand-subtitle { font-size: 9px; letter-spacing: 3px; }
@@ -955,7 +950,6 @@
 <div class="corner-glow bl"></div>
 <div class="corner-glow br"></div>
 
-<!-- 🏆 ACHIEVEMENT TOAST -->
 <div class="achievement-toast" id="achievementToast">
     <div class="achievement-icon" id="achIcon">🏆</div>
     <div class="achievement-title" id="achTitle">Achievement Unlocked!</div>
@@ -1027,7 +1021,6 @@
     </div>
 </div>
 
-<!-- MODALS -->
 <div class="modal" id="depositModal">
     <div class="modal-content">
         <div class="modal-title">⚡ DÉPOSER DES SATS</div>
@@ -1050,7 +1043,7 @@
         <div class="modal-title">💰 RETRAIT LIGHTNING</div>
         <div style="margin: 20px 0;">
             <div style="font-size: 14px; color: #888;">Solde disponible</div>
-            <div style="font-size: 36px; font-family: 'Orbitron', monospace; background: linear-gradient(135deg, #ff6b00, #ffa500); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; margin: 10px 0;" id="withdrawBalance">0</div>
+            <div style="font-size: 36px; font-family: 'Orbitron'; background: linear-gradient(135deg, #ff6b00, #ffa500); -webkit-background-clip: text; -webkit-text-fill-color: transparent;" id="withdrawBalance">0</div>
         </div>
         <input type="text" id="withdrawInvoice" placeholder="Collez votre invoice Lightning (lnbc...)">
         <button onclick="processWithdraw()" id="withdrawSubmitBtn">ENVOYER PAIEMENT</button>
@@ -1062,12 +1055,11 @@
     <div class="modal-content">
         <div style="font-size: 80px; margin-bottom: 20px;" id="resIcon">🎰</div>
         <div class="modal-title" id="resTitle">RÉSULTAT</div>
-        <div style="font-size: 32px; margin: 20px 0; font-family: 'Orbitron', monospace; font-weight: bold; background: linear-gradient(135deg, #ff6b00, #ffa500); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;" id="resAmount">+0 sats</div>
+        <div style="font-size: 32px; margin: 20px 0; font-family: 'Orbitron'; font-weight: bold; background: linear-gradient(135deg, #ff6b00, #ffa500); -webkit-background-clip: text; -webkit-text-fill-color: transparent;" id="resAmount">+0 sats</div>
         <button onclick="resetRound()">NOUVELLE PARTIE</button>
     </div>
 </div>
 
-<!-- 📊 STATS MODAL -->
 <div class="modal" id="statsModal">
     <div class="modal-content">
         <div class="modal-title">📊 STATISTIQUES</div>
@@ -1117,9 +1109,9 @@
     </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js "></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js "></script>
-<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js "></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
 <script>
 // ============================================
 // THREE.JS BACKGROUND
@@ -1437,7 +1429,7 @@ const MIN_BET = 100;
 let balance = 0;
 let currentBet = 0;
 let initialBet = 0;
-let totalBet = 0;              // ✅ AJOUTÉ: Mise totale (avec double/split)
+let totalBet = 0;
 let deck = [];
 let playerHand = [];
 let dealerHand = [];
@@ -1450,7 +1442,7 @@ let paymentCheckInterval = null;
 let isSplit = false;
 let splitHands = [];
 let currentSplitHand = 0;
-let balanceAtStart = 0;        // ✅ AJOUTÉ: Snapshot solde début partie
+let balanceAtStart = 0;
 
 function animateBalanceUpdate() {
     const balanceEl = document.getElementById('balance');
@@ -1811,7 +1803,7 @@ function cancelBet() {
 }
 
 // ============================================
-// ✅ FONCTIONS CORRIGÉES - LOGIQUE DE JEU
+// ✅ FONCTIONS CORRIGÉES - L'API GÈRE TOUT
 // ============================================
 
 function deal() {
@@ -1824,11 +1816,9 @@ function deal() {
         return;
     }
     
-    // ✅ SNAPSHOT: Capture solde AVANT déduction
+    // ✅ SNAPSHOT: Solde avant partie (pas de déduction locale)
     balanceAtStart = balance;
     
-    // ✅ Déduction de la mise
-    balance -= currentBet;
     initialBet = currentBet;
     totalBet = currentBet;
     
@@ -1845,7 +1835,7 @@ function deal() {
     
     playSound('card');
     renderHands();
-    updateDisplay();
+    updateDisplay(); // Affiche le vrai solde (pas déduit)
     
     // Vérification Blackjack dealer
     const dealerUpCard = dealerHand[0];
@@ -1858,11 +1848,9 @@ function deal() {
             renderHands();
             
             if (isBlackjack(playerHand)) {
-                // ✅ PUSH: Rend la mise
-                sendGameResult('push', initialBet);
+                sendGameResult('push', initialBet); // API rend la mise
             } else {
-                // ✅ DÉFAITE: Mise déjà perdue
-                sendGameResult('loss', initialBet);
+                sendGameResult('loss', initialBet); // API déduit la mise
             }
             return;
         }
@@ -1923,8 +1911,7 @@ function hit() {
 function double() {
     if (!canDouble || balance < currentBet) return;
     
-    // ✅ Déduire la mise supplémentaire
-    balance -= currentBet;
+    // ✅ PAS DE DÉDUCTION LOCALE - l'API gère tout
     totalBet += currentBet;
     currentBet *= 2;
     updateDisplay();
@@ -1944,8 +1931,7 @@ function double() {
 function split() {
     if (!canSplit || balance < currentBet) return;
     
-    // ✅ Déduire la deuxième mise
-    balance -= currentBet;
+    // ✅ PAS DE DÉDUCTION LOCALE - l'API gère tout
     totalBet += currentBet;
     updateDisplay();
     
@@ -2062,9 +2048,11 @@ function resolveSplitHands(dealerValue) {
     sendGameResult(globalResult, totalBet, {isSplit: true, wins, losses, pushes});
 }
 
-// ✅ NOUVELLE FONCTION: Envoie résultat à l'API et gère la réponse
+// ✅ NOUVELLE FONCTION: Envoie à l'API qui gère TOUT (déduction + gains)
 async function sendGameResult(result, betAmount, extraData = {}) {
     showSyncLoader();
+    
+    const balanceBeforeAPI = balance; // Solde réel avant appel API
     
     try {
         const response = await apiCall('/api/game', 'POST', {
@@ -2072,7 +2060,7 @@ async function sendGameResult(result, betAmount, extraData = {}) {
             result: result
         });
         
-        // ✅ Source de vérité: le serveur
+        // ✅ L'API a déduit la mise et ajouté les gains si nécessaire
         balance = response.new_balance;
         
     } catch (error) {
@@ -2086,8 +2074,8 @@ async function sendGameResult(result, betAmount, extraData = {}) {
     updateDisplay();
     animateBalanceUpdate();
     
-    // Calcul du gain net pour affichage et stats
-    const netGain = balance - balanceAtStart;
+    // Calcul du gain net: nouveau solde - ancien solde
+    const netGain = balance - balanceBeforeAPI;
     updateStats(result, netGain);
     
     // Déterminer l'affichage
@@ -2198,10 +2186,6 @@ function resetRound() {
     
     updateDisplay();
 }
-
-// ============================================
-// INIT
-// ============================================
 
 window.onload = () => {
     loadStats();
