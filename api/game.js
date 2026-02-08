@@ -49,11 +49,11 @@ export default async function handler(req) {
     });
   }
   
-  // ⭐ CORRECTION - Ne pas re-déduire la mise (déjà fait côté frontend)
-  let newBalance = player.balance;
+  // ✅ DÉDUIRE LA MISE D'ABORD
+  let newBalance = player.balance - betAmount;
   
   if (result === 'win') {
-    // Victoire normale - rendu mise + gain (total = mise x2)
+    // Victoire : rend mise + gain (total = mise x2)
     newBalance += betAmount * 2;
     
     await kv.rpush(`transactions:${sessionId}`, {
@@ -64,7 +64,7 @@ export default async function handler(req) {
     });
     
   } else if (result === 'bj') {
-    // Blackjack - paie 3:2 (mise x2.5)
+    // Blackjack : paie 3:2 (mise x2.5)
     newBalance += Math.floor(betAmount * 2.5);
     
     await kv.rpush(`transactions:${sessionId}`, {
@@ -75,7 +75,7 @@ export default async function handler(req) {
     });
     
   } else if (result === 'push') {
-    // Égalité - rendre la mise
+    // Égalité : rendre la mise
     newBalance += betAmount;
     
     await kv.rpush(`transactions:${sessionId}`, {
@@ -86,7 +86,7 @@ export default async function handler(req) {
     });
     
   } else if (result === 'loss' || result === 'bust') {
-    // Défaite - ne rien ajouter (mise déjà perdue)
+    // Défaite : garder la mise déduite (ne rien ajouter)
     await kv.rpush(`transactions:${sessionId}`, {
       type: 'loss',
       amount: -betAmount,
