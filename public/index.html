@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>₿ BITCOIN MAXI CASINO - Sats Jack 21</title>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;500;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400 ;700;900&family=Rajdhani:wght@300;500;700&display=swap');
         
         * { margin: 0; padding: 0; box-sizing: border-box; }
         
@@ -1061,8 +1061,8 @@
 <div class="modal" id="resultModal">
     <div class="modal-content">
         <div style="font-size: 80px; margin-bottom: 20px;" id="resIcon">🎰</div>
-        <div class="modal-title" id="resTitle">BLACKJACK!</div>
-        <div style="font-size: 32px; margin: 20px 0; font-family: 'Orbitron', monospace; font-weight: bold; background: linear-gradient(135deg, #ff6b00, #ffa500); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;" id="resAmount">+100 sats</div>
+        <div class="modal-title" id="resTitle">RÉSULTAT</div>
+        <div style="font-size: 32px; margin: 20px 0; font-family: 'Orbitron', monospace; font-weight: bold; background: linear-gradient(135deg, #ff6b00, #ffa500); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;" id="resAmount">+0 sats</div>
         <button onclick="resetRound()">NOUVELLE PARTIE</button>
     </div>
 </div>
@@ -1117,9 +1117,9 @@
     </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js "></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js "></script>
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js "></script>
 <script>
 // ============================================
 // THREE.JS BACKGROUND
@@ -1250,7 +1250,6 @@ const sounds = {
     blackjack: new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTcI')
 };
 
-// Volume control
 Object.values(sounds).forEach(sound => {
     sound.volume = 0.3;
 });
@@ -1374,7 +1373,6 @@ function showAchievementToast(achievement) {
         toast.classList.remove('show');
     }, 4000);
     
-    // Vibration mobile
     if (navigator.vibrate) {
         navigator.vibrate([100, 50, 100]);
     }
@@ -1392,7 +1390,6 @@ function showStatsModal() {
     document.getElementById('statBigWin').textContent = stats.biggestWin + ' sats';
     document.getElementById('statStreak').textContent = stats.currentStreak + ' (Best: ' + stats.bestStreak + ')';
     
-    // Achievements list
     const achList = document.getElementById('achievementsList');
     achList.innerHTML = '';
     
@@ -1430,7 +1427,7 @@ function resetStats() {
 }
 
 // ============================================
-// GAME LOGIC
+// GAME LOGIC - VERSION CORRIGÉE
 // ============================================
 
 const API_BASE = '';
@@ -1440,6 +1437,7 @@ const MIN_BET = 100;
 let balance = 0;
 let currentBet = 0;
 let initialBet = 0;
+let totalBet = 0;              // ✅ AJOUTÉ: Mise totale (avec double/split)
 let deck = [];
 let playerHand = [];
 let dealerHand = [];
@@ -1452,6 +1450,7 @@ let paymentCheckInterval = null;
 let isSplit = false;
 let splitHands = [];
 let currentSplitHand = 0;
+let balanceAtStart = 0;        // ✅ AJOUTÉ: Snapshot solde début partie
 
 function animateBalanceUpdate() {
     const balanceEl = document.getElementById('balance');
@@ -1615,7 +1614,7 @@ async function processWithdraw() {
     try {
         const data = await apiCall('/api/withdraw', 'POST', { invoice });
         
-        balance = data.new_balance || 0;  // ✅ Utiliser le solde du backend
+        balance = data.new_balance || 0;
         updateDisplay();
         animateBalanceUpdate();
         
@@ -1648,10 +1647,9 @@ function closeModal(id) {
 }
 
 function updateDisplay() {
-    document.getElementById('balance').textContent = balance;
+    document.getElementById('balance').childNodes[0].nodeValue = balance;
     document.getElementById('currentBet').textContent = currentBet;
     
-    // Update stats display in header
     const winRate = stats.totalGames > 0 ? ((stats.wins / stats.totalGames) * 100).toFixed(0) : 0;
     document.getElementById('statsWinRate').textContent = winRate + '%';
     
@@ -1660,12 +1658,12 @@ function updateDisplay() {
         const val = parseInt(id.replace('chip', ''));
         const wouldExceed = currentBet + val > MAX_BET;
         const insufficientBalance = balance < val;
-        chip.classList.toggle('disabled', wouldExceed || insufficientBalance);
+        chip.classList.toggle('disabled', wouldExceed || insufficientBalance || isPlaying);
     });
     
-    document.getElementById('dealBtn').disabled = currentBet === 0 || currentBet < MIN_BET;
-    document.getElementById('cancelBtn').disabled = currentBet === 0;
-    document.getElementById('withdrawBtn').disabled = balance === 0;
+    document.getElementById('dealBtn').disabled = currentBet === 0 || currentBet < MIN_BET || isPlaying;
+    document.getElementById('cancelBtn').disabled = currentBet === 0 || isPlaying;
+    document.getElementById('withdrawBtn').disabled = balance === 0 || isPlaying;
 }
 
 const suits = ['♠','♥','♦','♣'];
@@ -1801,7 +1799,6 @@ function addBet(amount) {
     updateDisplay();
     playSound('bet');
     
-    // Check high roller achievement
     if (currentBet === 2500) {
         checkAchievement('high_roller');
     }
@@ -1813,16 +1810,32 @@ function cancelBet() {
     updateDisplay();
 }
 
+// ============================================
+// ✅ FONCTIONS CORRIGÉES - LOGIQUE DE JEU
+// ============================================
+
 function deal() {
-    if (currentBet === 0 || currentBet < MIN_BET || balance < currentBet) return;
+    if (currentBet === 0 || currentBet < MIN_BET) {
+        alert(`Mise minimum: ${MIN_BET} sats`);
+        return;
+    }
+    if (balance < currentBet) {
+        alert('Solde insuffisant');
+        return;
+    }
     
-    isPlaying = true;
+    // ✅ SNAPSHOT: Capture solde AVANT déduction
+    balanceAtStart = balance;
+    
+    // ✅ Déduction de la mise
     balance -= currentBet;
     initialBet = currentBet;
+    totalBet = currentBet;
+    
+    isPlaying = true;
     isSplit = false;
     splitHands = [];
     currentSplitHand = 0;
-    updateDisplay();
     
     createDeck();
     shuffle();
@@ -1832,30 +1845,36 @@ function deal() {
     
     playSound('card');
     renderHands();
+    updateDisplay();
     
+    // Vérification Blackjack dealer
     const dealerUpCard = dealerHand[0];
-    const dealerUpValue = dealerUpCard.num;
-    
-    if (dealerUpValue === 11 || dealerUpValue === 10) {
-        const dealerHoleCard = dealerHand[1];
-        if (isBlackjack([dealerUpCard, dealerHoleCard])) {
+    if (dealerUpCard.num === 11 || dealerUpCard.num === 10) {
+        const holeCardClean = {...dealerHand[1]};
+        delete holeCardClean.hidden;
+        
+        if (isBlackjack([dealerUpCard, holeCardClean])) {
             dealerHand = dealerHand.map(c => ({...c, hidden: false}));
             renderHands();
             
             if (isBlackjack(playerHand)) {
-                setTimeout(() => endRound('push', currentBet), 1000);
+                // ✅ PUSH: Rend la mise
+                sendGameResult('push', initialBet);
             } else {
-                setTimeout(() => endRound('dealer_bj', 0), 1000);
+                // ✅ DÉFAITE: Mise déjà perdue
+                sendGameResult('loss', initialBet);
             }
             return;
         }
     }
     
+    // Blackjack joueur
     if (isBlackjack(playerHand)) {
-        setTimeout(() => endRound('player_bj', Math.floor(currentBet * 2.5)), 1000);
+        sendGameResult('bj', initialBet);
         return;
     }
     
+    // Suite normale
     document.getElementById('betPanel').style.display = 'none';
     document.getElementById('actionPanel').style.display = 'block';
     
@@ -1876,6 +1895,7 @@ function hit() {
         
         const handVal = getVal(splitHands[currentSplitHand].cards);
         if (handVal > 21) {
+            splitHands[currentSplitHand].result = 'bust';
             splitHands[currentSplitHand].finished = true;
             nextSplitHand();
         } else if (handVal === 21) {
@@ -1893,7 +1913,7 @@ function hit() {
         
         const pv = getVal(playerHand);
         if (pv > 21) {
-            setTimeout(() => endRound('bust', 0), 800);
+            sendGameResult('bust', initialBet);
         } else if (pv === 21) {
             setTimeout(() => stand(), 500);
         }
@@ -1903,7 +1923,9 @@ function hit() {
 function double() {
     if (!canDouble || balance < currentBet) return;
     
+    // ✅ Déduire la mise supplémentaire
     balance -= currentBet;
+    totalBet += currentBet;
     currentBet *= 2;
     updateDisplay();
     
@@ -1911,19 +1933,26 @@ function double() {
     renderHands();
     playSound('card');
     
-    setTimeout(() => stand(), 800);
+    const pv = getVal(playerHand);
+    if (pv > 21) {
+        sendGameResult('bust', totalBet);
+    } else {
+        setTimeout(() => stand(), 800);
+    }
 }
 
 function split() {
     if (!canSplit || balance < currentBet) return;
     
+    // ✅ Déduire la deuxième mise
     balance -= currentBet;
+    totalBet += currentBet;
     updateDisplay();
     
     isSplit = true;
     splitHands = [
-        {cards: [playerHand[0], draw()], bet: currentBet, finished: false},
-        {cards: [playerHand[1], draw()], bet: currentBet, finished: false}
+        {cards: [playerHand[0], draw()], bet: initialBet, finished: false, result: null},
+        {cards: [playerHand[1], draw()], bet: initialBet, finished: false, result: null}
     ];
     currentSplitHand = 0;
     
@@ -1941,12 +1970,10 @@ function split() {
 
 function nextSplitHand() {
     currentSplitHand++;
-    
     if (currentSplitHand >= splitHands.length) {
         setTimeout(() => stand(), 800);
     } else {
         renderSplitHands();
-        
         if (getVal(splitHands[currentSplitHand].cards) === 21) {
             splitHands[currentSplitHand].finished = true;
             nextSplitHand();
@@ -1971,12 +1998,7 @@ function dealerPlay() {
         
         if (dv < 17) {
             dealerHand.push(draw());
-            playSound('card');
-            if (isSplit) {
-                renderSplitHands();
-            } else {
-                renderHands();
-            }
+            renderHands();
         } else {
             clearInterval(drawInterval);
             setTimeout(() => determineWinner(), 1000);
@@ -1984,270 +2006,155 @@ function dealerPlay() {
     }, 600);
 }
 
-// ✅ FIX - Calcul correct du gain net
-async function determineWinner() {
+function determineWinner() {
     const dv = getVal(dealerHand);
     
     if (isSplit) {
-        let totalWin = 0;
-        
-        for (let hand of splitHands) {
-            const pv = getVal(hand.cards);
-            let amount = 0;
-            
-            if (pv > 21) {
-                amount = 0;
-            } else if (dv > 21) {
-                amount = hand.bet * 2;
-            } else if (pv > dv) {
-                amount = hand.bet * 2;
-            } else if (pv < dv) {
-                amount = 0;
-            } else {
-                amount = hand.bet;
-            }
-            
-            totalWin += amount;
-        }
-        
-        // ✅ Sauvegarder balance AVANT sync
-        const balanceBeforeGame = balance;
-        
-        showSyncLoader();
-        try {
-            const response = await apiCall('/api/game', 'POST', {
-                bet_amount: currentBet * 2,
-                result: totalWin > (currentBet * 2) ? 'win' : (totalWin < (currentBet * 2) ? 'loss' : 'push')
-            });
-            
-            balance = response.new_balance;
-            updateDisplay();
-            animateBalanceUpdate();
-            
-            // ✅ Calcul correct du gain net
-            const netGain = balance - balanceBeforeGame;
-            
-            // Update stats
-            const result = totalWin > (currentBet * 2) ? 'win' : (totalWin < (currentBet * 2) ? 'loss' : 'push');
-            updateStats(result, netGain);
-            
-        } catch (error) {
-            console.error('Erreur save game:', error);
-            balance += totalWin;
-            updateDisplay();
-        } finally {
-            hideSyncLoader();
-        }
-        
-        let icon, title;
-        const netResult = totalWin - (currentBet * 2);
-        
-        if (netResult > 0) {
-            icon = '🎉';
-            title = 'VICTOIRE SPLIT!';
-            playSound('win');
-        } else if (netResult < 0) {
-            icon = '😢';
-            title = 'PERDU';
-            playSound('lose');
-        } else {
-            icon = '🤝';
-            title = 'PUSH';
-        }
-        
-        showResult(icon, title, `${netResult >= 0 ? '+' : ''}${netResult} sats`);
-        
+        resolveSplitHands(dv);
     } else {
-        const pv = getVal(playerHand);
-        
-        let result, icon, title;
-        
-        if (pv > 21) {
-            result = 'bust';
-            icon = '💥';
-            title = 'BUST!';
-        } else if (dv > 21) {
-            result = 'win';
-            icon = '🎉';
-            title = 'DEALER BUST!';
-        } else if (isBlackjack(playerHand)) {
-            result = 'bj';
-            icon = '🔥';
-            title = 'BLACKJACK!';
-        } else if (pv > dv) {
-            result = 'win';
-            icon = '🎉';
-            title = 'VICTOIRE!';
-        } else if (pv < dv) {
-            result = 'loss';
-            icon = '😢';
-            title = 'DEALER GAGNE';
-        } else {
-            result = 'push';
-            icon = '🤝';
-            title = 'PUSH (ÉGALITÉ)';
-        }
-        
-        // ✅ Stocker le solde ACTUEL (après déduction mise)
-        const balanceBeforeAPI = balance;
-        
-        showSyncLoader();
-        try {
-            const response = await apiCall('/api/game', 'POST', {
-                bet_amount: initialBet,
-                result: result
-            });
-            
-            balance = response.new_balance;
-            updateDisplay();
-            animateBalanceUpdate();
-            
-            // ✅ Gain net = différence après - avant (en tenant compte de la mise déjà déduite)
-            const netGain = balance - (balanceBeforeAPI + initialBet);
-            
-            // Update stats
-            updateStats(result, netGain);
-            
-            // Sons et confettis
-            if (result === 'bj') {
-                playSound('blackjack');
-                if (typeof confetti !== 'undefined') {
-                    confetti({
-                        particleCount: 150,
-                        spread: 70,
-                        origin: { y: 0.6 },
-                        colors: ['#ff6b00', '#ffa500', '#ffd700']
-                    });
-                }
-            } else if (result === 'win') {
-                playSound('win');
-                if (typeof confetti !== 'undefined') {
-                    confetti({
-                        particleCount: 100,
-                        spread: 60,
-                        origin: { y: 0.6 },
-                        colors: ['#ff6b00', '#ffa500']
-                    });
-                }
-            } else if (result === 'loss' || result === 'bust') {
-                playSound('lose');
-            }
-            
-            showResult(icon, title, `${netGain >= 0 ? '+' : ''}${netGain} sats`);
-            
-        } catch (error) {
-            console.error('Erreur save game:', error);
-            
-            // Fallback: calculer localement
-            let amount = 0;
-            if (result === 'win') {
-                amount = initialBet * 2;
-            } else if (result === 'bj') {
-                amount = Math.floor(initialBet * 2.5);
-            } else if (result === 'push') {
-                amount = initialBet;
-            } else if (result === 'loss' || result === 'bust') {
-                amount = 0; // Mise déjà perdue
-            }
-            
-            balance += amount;
-            updateDisplay();
-            
-            const netGain = balance - (balanceBeforeAPI + initialBet);
-            showResult(icon, title, `${netGain >= 0 ? '+' : ''}${netGain} sats`);
-        } finally {
-            hideSyncLoader();
-        }
+        resolveSingleHand(playerHand, dv, initialBet);
     }
 }
 
-// ✅ FIX - Calcul correct du gain net
-async function endRound(type, amount) {
-    let icon, title, result;
+function resolveSingleHand(hand, dealerValue, bet) {
+    const pv = getVal(hand);
+    let result;
     
-    switch(type) {
-        case 'player_bj':
-            icon = '🔥';
-            title = 'BLACKJACK!';
-            result = 'bj';
-            break;
-        case 'dealer_bj':
-            icon = '😢';
-            title = 'DEALER BLACKJACK';
-            result = 'loss';
-            break;
-        case 'push':
-            icon = '🤝';
-            title = 'PUSH (DOUBLE BJ)';
-            result = 'push';
-            break;
-        case 'bust':
-            icon = '💥';
-            title = 'BUST!';
-            result = 'bust';
-            break;
+    if (pv > 21) {
+        result = 'bust';
+    } else if (dealerValue > 21) {
+        result = 'win';
+    } else if (pv > dealerValue) {
+        result = 'win';
+    } else if (pv < dealerValue) {
+        result = 'loss';
+    } else {
+        result = 'push';
     }
     
-    // ✅ Stocker le solde ACTUEL (après déduction mise)
-    const balanceBeforeAPI = balance;
+    sendGameResult(result, bet);
+}
+
+function resolveSplitHands(dealerValue) {
+    let wins = 0, losses = 0, pushes = 0;
     
+    splitHands.forEach(hand => {
+        const pv = getVal(hand.cards);
+        
+        if (hand.result === 'bust' || pv > 21) {
+            losses++;
+        } else if (dealerValue > 21) {
+            wins++;
+        } else if (pv > dealerValue) {
+            wins++;
+        } else if (pv < dealerValue) {
+            losses++;
+        } else {
+            pushes++;
+        }
+    });
+    
+    let globalResult;
+    if (wins > losses) globalResult = 'win';
+    else if (losses > wins) globalResult = 'loss';
+    else globalResult = 'push';
+    
+    sendGameResult(globalResult, totalBet, {isSplit: true, wins, losses, pushes});
+}
+
+// ✅ NOUVELLE FONCTION: Envoie résultat à l'API et gère la réponse
+async function sendGameResult(result, betAmount, extraData = {}) {
     showSyncLoader();
+    
     try {
         const response = await apiCall('/api/game', 'POST', {
-            bet_amount: initialBet,
+            bet_amount: betAmount,
             result: result
         });
         
+        // ✅ Source de vérité: le serveur
         balance = response.new_balance;
-        updateDisplay();
-        animateBalanceUpdate();
-        
-        // ✅ Gain net = différence après - avant (en tenant compte de la mise déjà déduite)
-        const netGain = balance - (balanceBeforeAPI + initialBet);
-        
-        // Update stats
-        updateStats(result, netGain);
-        
-        // Sons et confettis
-        if (result === 'bj') {
-            playSound('blackjack');
-            if (typeof confetti !== 'undefined') {
-                confetti({
-                    particleCount: 150,
-                    spread: 70,
-                    origin: { y: 0.6 },
-                    colors: ['#ff6b00', '#ffa500', '#ffd700']
-                });
-            }
-        } else if (result === 'push') {
-            // Push - pas de son spécial
-        } else {
-            playSound('lose');
-        }
-        
-        showResult(icon, title, `${netGain >= 0 ? '+' : ''}${netGain} sats`);
         
     } catch (error) {
-        console.error('Erreur save game:', error);
-        
-        // Fallback: calculer localement
-        let amount = 0;
-        if (result === 'bj') {
-            amount = Math.floor(initialBet * 2.5);
-        } else if (result === 'push') {
-            amount = initialBet;
-        } else if (result === 'loss' || result === 'dealer_bj' || result === 'bust') {
-            amount = 0; // Mise déjà perdue
-        }
-        
-        balance += amount;
-        updateDisplay();
-        
-        const netGain = balance - (balanceBeforeAPI + initialBet);
-        showResult(icon, title, `${netGain >= 0 ? '+' : ''}${netGain} sats`);
-    } finally {
+        console.error('Erreur API:', error);
+        alert('Erreur de synchronisation. Rafraîchissez la page.');
         hideSyncLoader();
+        return;
     }
+    
+    hideSyncLoader();
+    updateDisplay();
+    animateBalanceUpdate();
+    
+    // Calcul du gain net pour affichage et stats
+    const netGain = balance - balanceAtStart;
+    updateStats(result, netGain);
+    
+    // Déterminer l'affichage
+    let icon, title;
+    
+    if (extraData.isSplit) {
+        if (netGain > 0) {
+            icon = '🎉';
+            title = `VICTOIRE SPLIT! (${extraData.wins}V/${extraData.losses}D/${extraData.pushes}P)`;
+        } else if (netGain < 0) {
+            icon = '😢';
+            title = `DÉFAITE SPLIT (${extraData.wins}V/${extraData.losses}D/${extraData.pushes}P)`;
+        } else {
+            icon = '🤝';
+            title = `PUSH SPLIT (${extraData.wins}V/${extraData.losses}D/${extraData.pushes}P)`;
+        }
+    } else {
+        switch(result) {
+            case 'bj':
+                icon = '🔥';
+                title = 'BLACKJACK!';
+                break;
+            case 'win':
+                icon = '🎉';
+                title = 'VICTOIRE!';
+                break;
+            case 'push':
+                icon = '🤝';
+                title = 'PUSH';
+                break;
+            case 'bust':
+                icon = '💥';
+                title = 'BUST!';
+                break;
+            case 'loss':
+                icon = '😢';
+                title = 'DEALER GAGNE';
+                break;
+        }
+    }
+    
+    // Effets visuels
+    if (result === 'bj') {
+        playSound('blackjack');
+        if (typeof confetti !== 'undefined') {
+            confetti({
+                particleCount: 150,
+                spread: 70,
+                origin: { y: 0.6 },
+                colors: ['#ff6b00', '#ffa500', '#ffd700']
+            });
+        }
+    } else if (netGain > 0) {
+        playSound('win');
+        if (typeof confetti !== 'undefined') {
+            confetti({
+                particleCount: 100,
+                spread: 60,
+                origin: { y: 0.6 },
+                colors: ['#ff6b00', '#ffa500']
+            });
+        }
+    } else if (netGain < 0) {
+        playSound('lose');
+    }
+    
+    showResult(icon, title, `${netGain >= 0 ? '+' : ''}${netGain} sats`);
 }
 
 function showResult(icon, title, amountText) {
@@ -2256,7 +2163,6 @@ function showResult(icon, title, amountText) {
     document.getElementById('resAmount').textContent = amountText;
     document.getElementById('resultModal').classList.add('active');
     
-    // Vibration mobile
     if (navigator.vibrate && amountText.includes('+')) {
         navigator.vibrate([200, 100, 200]);
     }
@@ -2268,6 +2174,8 @@ function resetRound() {
     isPlaying = false;
     currentBet = 0;
     initialBet = 0;
+    totalBet = 0;
+    balanceAtStart = 0;
     playerHand = [];
     dealerHand = [];
     isSplit = false;
