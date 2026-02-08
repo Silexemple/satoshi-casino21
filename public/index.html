@@ -1258,12 +1258,14 @@ Object.values(sounds).forEach(sound => {
 function playSound(soundName) {
     try {
         const sound = sounds[soundName];
-        if (sound) {
+        if (sound && sound.readyState >= 2) {
             sound.currentTime = 0;
-            sound.play().catch(e => console.log('Sound play failed:', e));
+            sound.play().catch(e => {
+                console.log('Sound play failed (muted):', e.message);
+            });
         }
     } catch (e) {
-        console.log('Sound error:', e);
+        console.log('Sound error (ignored):', e.message);
     }
 }
 
@@ -1453,18 +1455,26 @@ let currentSplitHand = 0;
 
 function animateBalanceUpdate() {
     const balanceEl = document.getElementById('balance');
-    balanceEl.classList.add('updated');
-    setTimeout(() => {
-        balanceEl.classList.remove('updated');
-    }, 600);
+    if (balanceEl) {
+        balanceEl.classList.add('updated');
+        setTimeout(() => {
+            balanceEl.classList.remove('updated');
+        }, 600);
+    }
 }
 
 function showSyncLoader() {
-    document.getElementById('syncLoader').classList.add('active');
+    const loader = document.getElementById('syncLoader');
+    if (loader) {
+        loader.classList.add('active');
+    }
 }
 
 function hideSyncLoader() {
-    document.getElementById('syncLoader').classList.remove('active');
+    const loader = document.getElementById('syncLoader');
+    if (loader) {
+        loader.classList.remove('active');
+    }
 }
 
 async function apiCall(endpoint, method = 'GET', body = null) {
@@ -2101,20 +2111,24 @@ async function determineWinner() {
             // Sons et confettis
             if (result === 'bj') {
                 playSound('blackjack');
-                confetti({
-                    particleCount: 150,
-                    spread: 70,
-                    origin: { y: 0.6 },
-                    colors: ['#ff6b00', '#ffa500', '#ffd700']
-                });
+                if (typeof confetti !== 'undefined') {
+                    confetti({
+                        particleCount: 150,
+                        spread: 70,
+                        origin: { y: 0.6 },
+                        colors: ['#ff6b00', '#ffa500', '#ffd700']
+                    });
+                }
             } else if (result === 'win') {
                 playSound('win');
-                confetti({
-                    particleCount: 100,
-                    spread: 60,
-                    origin: { y: 0.6 },
-                    colors: ['#ff6b00', '#ffa500']
-                });
+                if (typeof confetti !== 'undefined') {
+                    confetti({
+                        particleCount: 100,
+                        spread: 60,
+                        origin: { y: 0.6 },
+                        colors: ['#ff6b00', '#ffa500']
+                    });
+                }
             } else if (result === 'loss' || result === 'bust') {
                 playSound('lose');
             }
@@ -2190,12 +2204,14 @@ async function endRound(type, amount) {
         // Sons et confettis
         if (result === 'bj') {
             playSound('blackjack');
-            confetti({
-                particleCount: 150,
-                spread: 70,
-                origin: { y: 0.6 },
-                colors: ['#ff6b00', '#ffa500', '#ffd700']
-            });
+            if (typeof confetti !== 'undefined') {
+                confetti({
+                    particleCount: 150,
+                    spread: 70,
+                    origin: { y: 0.6 },
+                    colors: ['#ff6b00', '#ffa500', '#ffd700']
+                });
+            }
         } else if (result === 'push') {
             // Push - pas de son spécial
         } else {
