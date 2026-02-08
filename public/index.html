@@ -1615,7 +1615,7 @@ async function processWithdraw() {
     try {
         const data = await apiCall('/api/withdraw', 'POST', { invoice });
         
-        balance = 0;
+        balance = data.new_balance || 0;  // ✅ Utiliser le solde du backend
         updateDisplay();
         animateBalanceUpdate();
         
@@ -2088,8 +2088,8 @@ async function determineWinner() {
             title = 'PUSH (ÉGALITÉ)';
         }
         
-        // ✅ Sauvegarder balance AVANT sync
-        const balanceBeforeGame = balance;
+        // ✅ Stocker le solde ACTUEL (après déduction mise)
+        const balanceBeforeAPI = balance;
         
         showSyncLoader();
         try {
@@ -2102,8 +2102,8 @@ async function determineWinner() {
             updateDisplay();
             animateBalanceUpdate();
             
-            // ✅ Calcul correct du gain net
-            const netGain = balance - balanceBeforeGame;
+            // ✅ Gain net = différence après - avant (en tenant compte de la mise déjà déduite)
+            const netGain = balance - (balanceBeforeAPI + initialBet);
             
             // Update stats
             updateStats(result, netGain);
@@ -2138,15 +2138,22 @@ async function determineWinner() {
         } catch (error) {
             console.error('Erreur save game:', error);
             
+            // Fallback: calculer localement
             let amount = 0;
-            if (result === 'win') amount = initialBet * 2;
-            else if (result === 'bj') amount = Math.floor(initialBet * 2.5);
-            else if (result === 'push') amount = initialBet;
+            if (result === 'win') {
+                amount = initialBet * 2;
+            } else if (result === 'bj') {
+                amount = Math.floor(initialBet * 2.5);
+            } else if (result === 'push') {
+                amount = initialBet;
+            } else if (result === 'loss' || result === 'bust') {
+                amount = 0; // Mise déjà perdue
+            }
             
             balance += amount;
             updateDisplay();
             
-            const netGain = amount - initialBet;
+            const netGain = balance - (balanceBeforeAPI + initialBet);
             showResult(icon, title, `${netGain >= 0 ? '+' : ''}${netGain} sats`);
         } finally {
             hideSyncLoader();
@@ -2181,8 +2188,8 @@ async function endRound(type, amount) {
             break;
     }
     
-    // ✅ Sauvegarder balance AVANT sync
-    const balanceBeforeGame = balance;
+    // ✅ Stocker le solde ACTUEL (après déduction mise)
+    const balanceBeforeAPI = balance;
     
     showSyncLoader();
     try {
@@ -2195,8 +2202,8 @@ async function endRound(type, amount) {
         updateDisplay();
         animateBalanceUpdate();
         
-        // ✅ Calcul correct du gain net
-        const netGain = balance - balanceBeforeGame;
+        // ✅ Gain net = différence après - avant (en tenant compte de la mise déjà déduite)
+        const netGain = balance - (balanceBeforeAPI + initialBet);
         
         // Update stats
         updateStats(result, netGain);
@@ -2223,10 +2230,20 @@ async function endRound(type, amount) {
     } catch (error) {
         console.error('Erreur save game:', error);
         
+        // Fallback: calculer localement
+        let amount = 0;
+        if (result === 'bj') {
+            amount = Math.floor(initialBet * 2.5);
+        } else if (result === 'push') {
+            amount = initialBet;
+        } else if (result === 'loss' || result === 'dealer_bj' || result === 'bust') {
+            amount = 0; // Mise déjà perdue
+        }
+        
         balance += amount;
         updateDisplay();
         
-        const netGain = amount - initialBet;
+        const netGain = balance - (balanceBeforeAPI + initialBet);
         showResult(icon, title, `${netGain >= 0 ? '+' : ''}${netGain} sats`);
     } finally {
         hideSyncLoader();
