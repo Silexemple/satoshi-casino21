@@ -9,7 +9,6 @@
   },
   "dependencies": {
     "@vercel/kv": "^1.0.1",
-    "axios": "^1.6.5",
     "cookie": "^0.6.0",
     "nanoid": "^5.0.4"
   },

@@ -10,24 +10,21 @@ export default async function handler(req) {
   const cookies = cookie.parse(req.headers.get('cookie') || '');
   let sessionId = cookies.session_id;
   
-  // Créer ou récupérer la session
-  if (!sessionId || !(await kv.exists(`player:${sessionId}`))) {
+  // Récupérer ou créer la session (1 seul appel KV au lieu de 3)
+  let player = sessionId ? await kv.get(`player:${sessionId}`) : null;
+
+  if (!player) {
     sessionId = nanoid(32);
-    
-    // Créer le joueur dans KV
-    await kv.set(`player:${sessionId}`, {
+    player = {
       balance: 0,
       created_at: Date.now(),
       last_activity: Date.now()
-    });
+    };
+    await kv.set(`player:${sessionId}`, player);
   } else {
-    // Mettre à jour last_activity
-    const player = await kv.get(`player:${sessionId}`);
     player.last_activity = Date.now();
     await kv.set(`player:${sessionId}`, player);
   }
-  
-  const player = await kv.get(`player:${sessionId}`);
   
   return new Response(
     JSON.stringify({

@@ -334,18 +334,14 @@ export default async function handler(req) {
     let statusCode = 500;
 
     if (error.name === 'AbortError') {
-      errorMessage = 'Timeout - LNbits ne répond pas (30s)';
+      errorMessage = 'Timeout - LNbits ne répond pas';
       statusCode = 504;
-    } else if (error.message) {
-      errorMessage = error.message;
-      // Détecter les erreurs spécifiques LNbits
-      if (error.message.includes('insufficient balance')) {
-        statusCode = 400;
-        errorMessage = 'Solde LNbits insuffisant pour ce paiement';
-      } else if (error.message.includes('self-payment')) {
-        statusCode = 400;
-        errorMessage = 'Auto-paiement non autorisé';
-      }
+    } else if (error.message?.includes('insufficient balance')) {
+      statusCode = 400;
+      errorMessage = 'Solde LNbits insuffisant pour ce paiement';
+    } else if (error.message?.includes('self-payment')) {
+      statusCode = 400;
+      errorMessage = 'Auto-paiement non autorisé';
     }
 
     return new Response(
