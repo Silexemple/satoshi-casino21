@@ -1,5 +1,5 @@
 import { kv } from '@vercel/kv';
-import cookie from 'cookie';
+import { json, getSessionId } from './_helpers.js';
 
 export const config = {
   runtime: 'edge',
@@ -47,25 +47,35 @@ function cardForClient(card) {
   return { suit: card.suit, value: card.value, num: card.num };
 }
 
-function json(status, data) {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: { 'Content-Type': 'application/json' }
-  });
-}
-
 // --- Handler ---
 
 export default async function handler(req) {
+  const sessionId = getSessionId(req);
+  if (!sessionId) {
+    return json(401, { error: 'Session invalide' });
+  }
+
+  // GET: reprendre une partie en cours
+  if (req.method === 'GET') {
+    const gs = await kv.get(`game_state:${sessionId}`);
+    const player = await kv.get(`player:${sessionId}`);
+    if (!player) return json(404, { error: 'Joueur non trouvé' });
+    if (!gs || gs.status !== 'playing') {
+      return json(200, { status: 'idle', balance: player.balance });
+    }
+    return json(200, playingResponse(gs, player));
+  }
+
   if (req.method !== 'POST') {
     return new Response('Method not allowed', { status: 405 });
   }
 
-  const cookies = cookie.parse(req.headers.get('cookie') || '');
-  const sessionId = cookies.session_id;
-
-  if (!sessionId) {
-    return json(401, { error: 'Session invalide' });
+  // Rate limit: max 60 actions/min par session
+  const rlKey = `ratelimit:game:${sessionId}`;
+  const rlCount = await kv.incr(rlKey);
+  if (rlCount === 1) await kv.expire(rlKey, 60);
+  if (rlCount > 60) {
+    return json(429, { error: 'Trop de requêtes, attendez un instant' });
   }
 
   // Lock pour éviter les race conditions

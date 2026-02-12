@@ -1,5 +1,4 @@
 import { kv } from '@vercel/kv';
-import { nanoid } from 'nanoid';
 import cookie from 'cookie';
 
 export const config = {
@@ -14,16 +13,16 @@ export default async function handler(req) {
   let player = sessionId ? await kv.get(`player:${sessionId}`) : null;
 
   if (!player) {
-    sessionId = nanoid(32);
+    sessionId = crypto.randomUUID();
     player = {
       balance: 0,
       created_at: Date.now(),
       last_activity: Date.now()
     };
-    await kv.set(`player:${sessionId}`, player);
+    await kv.set(`player:${sessionId}`, player, { ex: 2592000 }); // 30 jours TTL
   } else {
     player.last_activity = Date.now();
-    await kv.set(`player:${sessionId}`, player);
+    await kv.set(`player:${sessionId}`, player, { ex: 2592000 }); // renouveler TTL
   }
   
   return new Response(

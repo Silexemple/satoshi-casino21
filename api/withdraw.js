@@ -204,8 +204,11 @@ export default async function handler(req) {
         });
       }
 
-      // Calculer le nouveau solde AVANT le paiement
+      // DEBIT-FIRST: débiter le solde AVANT le paiement LNbits
       const newBalance = currentBalance - amountSat;
+      player.balance = newBalance;
+      player.last_activity = Date.now();
+      await kv.set(`player:${sessionId}`, player);
 
       // Logger la tentative (pour audit)
       const attemptId = `withdraw:${sessionId}:${Date.now()}`;
@@ -214,15 +217,9 @@ export default async function handler(req) {
         amount: amountSat,
         status: 'pending',
         timestamp: Date.now()
-      }, { ex: 3600 }); // 1h TTL
+      }, { ex: 3600 });
 
       // Appel LNbits avec timeout
-      console.log('Tentative paiement LNbits:', {
-        url: `${lnbitsUrl}/api/v1/payments`,
-        amount: amountSat,
-        invoice: invoice.substring(0, 30) + '...'
-      });
-
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 30000);
 
@@ -240,48 +237,60 @@ export default async function handler(req) {
           }),
           signal: controller.signal
         });
+      } catch (fetchError) {
+        // REFUND: rembourser si l'appel réseau échoue
+        player.balance = currentBalance;
+        await kv.set(`player:${sessionId}`, player);
+        await kv.set(`attempt:${attemptId}`, {
+          invoice: invoice.substring(0, 50),
+          amount: amountSat,
+          status: 'refunded',
+          error: fetchError.name,
+          timestamp: Date.now()
+        }, { ex: 3600 });
+        throw fetchError;
       } finally {
         clearTimeout(timeoutId);
       }
 
       // Lire la réponse
       const responseText = await response.text();
-      console.log('LNbits response:', response.status, responseText.substring(0, 200));
 
-      // Traiter la réponse
       let payment;
       try {
         payment = JSON.parse(responseText);
       } catch (e) {
-        throw new Error(`Réponse LNbits invalide: ${responseText.substring(0, 100)}`);
+        // REFUND: réponse illisible = paiement échoué
+        player.balance = currentBalance;
+        await kv.set(`player:${sessionId}`, player);
+        throw new Error('Réponse LNbits invalide');
       }
 
       // Vérifier le succès du paiement
       if (!response.ok) {
-        const errorDetail = payment.detail || payment.message || responseText;
-        
-        // Mettre à jour le statut de la tentative
+        // REFUND: paiement refusé par LNbits
+        player.balance = currentBalance;
+        await kv.set(`player:${sessionId}`, player);
+
         await kv.set(`attempt:${attemptId}`, {
           invoice: invoice.substring(0, 50),
           amount: amountSat,
           status: 'failed',
-          error: errorDetail,
+          error: payment.detail || payment.message || 'unknown',
           timestamp: Date.now()
         }, { ex: 3600 });
 
-        throw new Error(`LNbits erreur ${response.status}: ${errorDetail}`);
+        throw new Error(`LNbits erreur ${response.status}`);
       }
 
       if (!payment.payment_hash) {
+        player.balance = currentBalance;
+        await kv.set(`player:${sessionId}`, player);
         throw new Error('Réponse LNbits invalide: payment_hash manquant');
       }
 
-      // ✅ Paiement réussi - mettre à jour le solde
-      player.balance = newBalance;
-      player.last_activity = Date.now();
+      // Paiement réussi - finaliser
       player.total_withdrawn = (player.total_withdrawn || 0) + amountSat;
-      
-      await kv.set(`player:${sessionId}`, player);
       
       // Marquer comme traité pour idempotence (7 jours)
       await kv.set(processedKey, {

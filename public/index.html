@@ -1000,6 +1000,7 @@
                 <div style="margin-top: 15px;">
                     <button onclick="showDepositModal()" style="background: linear-gradient(135deg, #00ff00, #00cc00); border-color: #00ff00; color: #000;">+ DÉPOSER</button>
                     <button onclick="showWithdrawModal()" style="background: linear-gradient(135deg, #0080ff, #0060ff); border-color: #0080ff; color: #fff;" id="withdrawBtn" disabled>CASHER</button>
+                    <button onclick="showTransactionsModal()" style="background: transparent; border: 2px solid #ff6b00; color: #ff6b00;">HISTORIQUE</button>
                 </div>
             </div>
             
@@ -1024,7 +1025,7 @@
 <div class="modal" id="depositModal">
     <div class="modal-content">
         <div class="modal-title">⚡ DÉPOSER DES SATS</div>
-        <input type="number" id="depositAmount" placeholder="Montant (100-10000 sats)" min="100" max="10000" value="1000">
+        <input type="number" id="depositAmount" placeholder="Montant (100-100000 sats)" min="100" max="100000" value="1000">
         <button onclick="generateInvoice()">GÉNÉRER INVOICE</button>
         <div id="invoiceBox" style="display:none; margin-top: 20px;">
             <div class="qr-box" id="qrcode"></div>
@@ -1045,7 +1046,8 @@
             <div style="font-size: 14px; color: #888;">Solde disponible</div>
             <div style="font-size: 36px; font-family: 'Orbitron'; background: linear-gradient(135deg, #ff6b00, #ffa500); -webkit-background-clip: text; -webkit-text-fill-color: transparent;" id="withdrawBalance">0</div>
         </div>
-        <input type="text" id="withdrawInvoice" placeholder="Collez votre invoice Lightning (lnbc...)">
+        <input type="text" id="withdrawInvoice" placeholder="Collez votre invoice Lightning (lnbc...)" oninput="decodeWithdrawInvoice()">
+        <div id="withdrawDecodedAmount" style="font-size: 18px; color: #ffa500; font-family: 'Orbitron'; margin: 10px 0; display: none;"></div>
         <button onclick="processWithdraw()" id="withdrawSubmitBtn">ENVOYER PAIEMENT</button>
         <button onclick="closeModal('withdrawModal')" style="background: transparent; border: 2px solid #666; color: #666; margin-top: 10px;">ANNULER</button>
     </div>
@@ -1109,28 +1111,38 @@
     </div>
 </div>
 
+<div class="modal" id="transactionsModal">
+    <div class="modal-content">
+        <div class="modal-title">HISTORIQUE</div>
+        <div id="transactionsList" style="max-height: 400px; overflow-y: auto;"></div>
+        <button onclick="closeModal('transactionsModal')" style="background: transparent; border: 2px solid #666; color: #666; margin-top: 10px;">FERMER</button>
+    </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
 <script>
 // ============================================
-// THREE.JS BACKGROUND
+// THREE.JS BACKGROUND (réduit sur mobile)
 // ============================================
+
+const isMobile = window.innerWidth < 768;
 
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-const renderer = new THREE.WebGLRenderer({ 
+const renderer = new THREE.WebGLRenderer({
     canvas: document.getElementById('threejs-canvas'),
     alpha: true,
-    antialias: true
+    antialias: !isMobile
 });
 
 renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setPixelRatio(window.devicePixelRatio);
+renderer.setPixelRatio(isMobile ? 1 : window.devicePixelRatio);
 camera.position.z = 50;
 
 const particlesGeometry = new THREE.BufferGeometry();
-const particlesCount = 300;
+const particlesCount = isMobile ? 80 : 300;
 const posArray = new Float32Array(particlesCount * 3);
 
 for(let i = 0; i < particlesCount * 3; i++) {
@@ -1157,7 +1169,7 @@ const bitcoinMaterial = new THREE.MeshBasicMaterial({
     wireframe: true
 });
 
-for(let i = 0; i < 20; i++) {
+for(let i = 0; i < (isMobile ? 5 : 20); i++) {
     const bitcoin = new THREE.Mesh(bitcoinGeometry, bitcoinMaterial);
     bitcoin.position.x = (Math.random() - 0.5) * 80;
     bitcoin.position.y = (Math.random() - 0.5) * 80;
@@ -1170,7 +1182,7 @@ for(let i = 0; i < 20; i++) {
 scene.add(bitcoinGroup);
 
 const lightningGeometry = new THREE.BufferGeometry();
-const lightningCount = 50;
+const lightningCount = isMobile ? 15 : 50;
 const lightningPosArray = new Float32Array(lightningCount * 3);
 
 for(let i = 0; i < lightningCount * 3; i++) {
@@ -1496,13 +1508,13 @@ async function initSession() {
 async function generateInvoice() {
     const amount = parseInt(document.getElementById('depositAmount').value);
     
-    if (!amount || amount < 100 || amount > 10000) {
-        alert('Montant invalide (100-10000 sats)');
+    if (!amount || amount < 100 || amount > 100000) {
+        alert('Montant invalide (100-100000 sats)');
         return;
     }
-    
-    if (balance + amount > 10000) {
-        alert('Balance max 10000 sats');
+
+    if (balance + amount > 1000000) {
+        alert('Balance max 1 000 000 sats');
         return;
     }
     
@@ -1937,9 +1949,99 @@ function resetRound() {
     updateDisplay();
 }
 
+// ============================================
+// DECODE INVOICE AMOUNT (client-side preview)
+// ============================================
+
+function decodeWithdrawInvoice() {
+    const invoice = document.getElementById('withdrawInvoice').value.trim();
+    const el = document.getElementById('withdrawDecodedAmount');
+    if (!invoice || !invoice.startsWith('lnbc')) {
+        el.style.display = 'none';
+        return;
+    }
+    try {
+        const match = invoice.match(/^lnbc(\d+)([munp])?1/);
+        if (!match) { el.style.display = 'none'; return; }
+        const [, amountStr, unit] = match;
+        const amount = BigInt(amountStr);
+        const multipliers = { '': 100000000000n, 'm': 100000000n, 'u': 100000n, 'n': 100n, 'p': 1n };
+        const msat = amount * (multipliers[unit] || multipliers['']);
+        const sats = Number(msat / 1000n);
+        if (sats > 0) {
+            el.textContent = `Montant: ${sats} sats`;
+            el.style.display = 'block';
+            el.style.color = sats > balance ? '#ff0000' : '#ffa500';
+        } else {
+            el.style.display = 'none';
+        }
+    } catch (e) {
+        el.style.display = 'none';
+    }
+}
+
+// ============================================
+// TRANSACTIONS HISTORY
+// ============================================
+
+async function showTransactionsModal() {
+    const list = document.getElementById('transactionsList');
+    list.innerHTML = '<div style="color: #888; padding: 20px;">Chargement...</div>';
+    document.getElementById('transactionsModal').classList.add('active');
+
+    try {
+        const data = await apiCall('/api/transactions');
+        if (!data.transactions || data.transactions.length === 0) {
+            list.innerHTML = '<div style="color: #888; padding: 20px;">Aucune transaction</div>';
+            return;
+        }
+        list.innerHTML = '';
+        data.transactions.forEach(tx => {
+            const date = new Date(tx.timestamp).toLocaleString('fr-FR');
+            const isPositive = tx.type === 'deposit' || tx.type === 'win' || tx.type === 'bj';
+            const color = isPositive ? '#00ff00' : (tx.type === 'push' ? '#ffa500' : '#ff0000');
+            const sign = (tx.type === 'deposit' || tx.amount > 0) ? '+' : '';
+            list.innerHTML += `
+                <div class="stat-row">
+                    <div>
+                        <div class="stat-label">${tx.description || tx.type}</div>
+                        <div style="font-size: 11px; color: #666;">${date}</div>
+                    </div>
+                    <div class="stat-value" style="color: ${color};">${sign}${tx.amount} sats</div>
+                </div>
+            `;
+        });
+    } catch (error) {
+        list.innerHTML = '<div style="color: #ff0000; padding: 20px;">Erreur chargement</div>';
+    }
+}
+
+// ============================================
+// RESUME GAME ON LOAD
+// ============================================
+
+async function checkExistingGame() {
+    try {
+        const data = await apiCall('/api/game');
+        if (data.status === 'playing') {
+            gameState = data;
+            balance = data.balance;
+            isPlaying = true;
+            renderGameState(data);
+            document.getElementById('betPanel').style.display = 'none';
+            document.getElementById('actionPanel').style.display = 'block';
+            document.getElementById('doubleBtn').disabled = !data.canDouble;
+            document.getElementById('splitBtn').disabled = !data.canSplit;
+            updateDisplay();
+        }
+    } catch (e) {
+        // Pas de partie en cours, c'est normal
+    }
+}
+
 window.onload = () => {
     loadStats();
-    initSession();
+    initSession().then(() => checkExistingGame());
 };
 </script>
 

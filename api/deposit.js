@@ -1,5 +1,5 @@
 import { kv } from '@vercel/kv';
-import cookie from 'cookie';
+import { json, getSessionId } from './_helpers.js';
 
 export const config = {
   runtime: 'edge',
@@ -7,42 +7,31 @@ export const config = {
 
 export default async function handler(req) {
   if (req.method !== 'POST') {
-    return new Response('Method not allowed', { status: 405 });
+    return json(405, { error: 'Method not allowed' });
   }
 
-  const cookies = cookie.parse(req.headers.get('cookie') || '');
-  const sessionId = cookies.session_id;
-
+  const sessionId = getSessionId(req);
   if (!sessionId) {
-    return new Response(JSON.stringify({ error: 'Session invalide' }), {
-      status: 401,
-      headers: { 'Content-Type': 'application/json' }
-    });
+    return json(401, { error: 'Session invalide' });
   }
 
   const body = await req.json();
   const amount = parseInt(body.amount);
 
-  if (!amount || amount < 100 || amount > 10000) {
-    return new Response(JSON.stringify({ error: 'Montant invalide (100-10000 sats)' }), {
-      status: 400,
-      headers: { 'Content-Type': 'application/json' }
-    });
+  const MAX_DEPOSIT = 100000;
+  const MAX_BALANCE = 1000000;
+
+  if (!amount || amount < 100 || amount > MAX_DEPOSIT) {
+    return json(400, { error: `Montant invalide (100-${MAX_DEPOSIT} sats)` });
   }
 
   const player = await kv.get(`player:${sessionId}`);
   if (!player) {
-    return new Response(JSON.stringify({ error: 'Joueur non trouvé' }), {
-      status: 404,
-      headers: { 'Content-Type': 'application/json' }
-    });
+    return json(404, { error: 'Joueur non trouvé' });
   }
 
-  if (player.balance + amount > 10000) {
-    return new Response(JSON.stringify({ error: 'Balance max atteinte (10000 sats)' }), {
-      status: 400,
-      headers: { 'Content-Type': 'application/json' }
-    });
+  if (player.balance + amount > MAX_BALANCE) {
+    return json(400, { error: `Balance max atteinte (${MAX_BALANCE} sats)` });
   }
 
   try {
@@ -73,22 +62,13 @@ export default async function handler(req) {
       created_at: Date.now()
     }, { ex: 7200 });
 
-    return new Response(
-      JSON.stringify({
-        payment_hash: invoice.payment_hash,
-        payment_request: invoice.payment_request
-      }),
-      {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' }
-      }
-    );
+    return json(200, {
+      payment_hash: invoice.payment_hash,
+      payment_request: invoice.payment_request
+    });
 
   } catch (error) {
     console.error('Erreur création invoice:', error);
-    return new Response(JSON.stringify({ error: 'Erreur création invoice' }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' }
-    });
+    return json(500, { error: 'Erreur création invoice' });
   }
 }

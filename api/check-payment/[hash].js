@@ -1,19 +1,14 @@
 import { kv } from '@vercel/kv';
-import cookie from 'cookie';
+import { json, getSessionId } from '../_helpers.js';
 
 export const config = {
   runtime: 'edge',
 };
 
 export default async function handler(req) {
-  const cookies = cookie.parse(req.headers.get('cookie') || '');
-  const sessionId = cookies.session_id;
-
+  const sessionId = getSessionId(req);
   if (!sessionId) {
-    return new Response(JSON.stringify({ error: 'Session invalide' }), {
-      status: 401,
-      headers: { 'Content-Type': 'application/json' }
-    });
+    return json(401, { error: 'Session invalide' });
   }
 
   const url = new URL(req.url);
@@ -21,20 +16,12 @@ export default async function handler(req) {
   const paymentHash = pathParts[pathParts.length - 1];
 
   if (!paymentHash) {
-    return new Response(JSON.stringify({ error: 'Payment hash manquant' }), {
-      status: 400,
-      headers: { 'Content-Type': 'application/json' }
-    });
+    return json(400, { error: 'Payment hash manquant' });
   }
 
-  // Vérifier que l'invoice appartient à ce joueur
   const invoice = await kv.get(`invoice:${paymentHash}`);
-
   if (!invoice || invoice.session_id !== sessionId) {
-    return new Response(JSON.stringify({ error: 'Invoice non trouvée' }), {
-      status: 404,
-      headers: { 'Content-Type': 'application/json' }
-    });
+    return json(404, { error: 'Invoice non trouvée' });
   }
 
   try {
@@ -42,31 +29,19 @@ export default async function handler(req) {
     const lockKey = `lock:payment:${paymentHash}`;
     const lockAcquired = await kv.set(lockKey, '1', { nx: true, ex: 10 });
     if (!lockAcquired) {
-      return new Response(JSON.stringify({ paid: false, status: 'processing' }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' }
-      });
+      return json(200, { paid: false, status: 'processing' });
     }
 
     try {
-      // Re-vérifier l'invoice après le lock (peut avoir été supprimée)
       const freshInvoice = await kv.get(`invoice:${paymentHash}`);
       if (!freshInvoice) {
         await kv.del(lockKey);
-        return new Response(JSON.stringify({ paid: true }), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' }
-        });
+        return json(200, { paid: true });
       }
 
-      // Vérifier le statut sur LNbits
       const response = await fetch(
         `${process.env.LNBITS_URL}/api/v1/payments/${paymentHash}`,
-        {
-          headers: {
-            'X-Api-Key': process.env.LNBITS_INVOICE_KEY
-          }
-        }
+        { headers: { 'X-Api-Key': process.env.LNBITS_INVOICE_KEY } }
       );
 
       if (!response.ok) {
@@ -91,17 +66,10 @@ export default async function handler(req) {
           description: `Dépôt Lightning ${paymentHash.substring(0, 8)}`
         });
 
-        // Supprimer l'invoice APRÈS avoir crédité
         await kv.del(`invoice:${paymentHash}`);
         await kv.del(lockKey);
 
-        return new Response(
-          JSON.stringify({ paid: true, new_balance: newBalance }),
-          {
-            status: 200,
-            headers: { 'Content-Type': 'application/json' }
-          }
-        );
+        return json(200, { paid: true, new_balance: newBalance });
       }
 
       await kv.del(lockKey);
@@ -110,19 +78,10 @@ export default async function handler(req) {
       throw innerError;
     }
 
-    return new Response(
-      JSON.stringify({ paid: false }),
-      {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' }
-      }
-    );
+    return json(200, { paid: false });
 
   } catch (error) {
     console.error('Erreur vérification invoice:', error);
-    return new Response(JSON.stringify({ error: 'Erreur vérification' }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' }
-    });
+    return json(500, { error: 'Erreur vérification' });
   }
 }
