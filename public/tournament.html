@@ -27,6 +27,7 @@
         .st-reg { background: rgba(0,255,0,0.15); color: #0f0; border: 1px solid rgba(0,255,0,0.4); }
         .st-run { background: rgba(255,107,0,0.15); color: #ff6b00; border: 1px solid rgba(255,107,0,0.4); }
         .st-fin { background: rgba(155,89,182,0.15); color: #9b59b6; border: 1px solid rgba(155,89,182,0.4); }
+        .countdown { font-family: 'Orbitron'; color: #ffa500; font-size: 16px; margin-top: 8px; }
 
         button { background: linear-gradient(135deg, #9b59b6, #8e44ad); border: 2px solid #9b59b6; color: #fff; padding: 12px 25px; border-radius: 8px; font-weight: bold; font-size: 14px; font-family: 'Orbitron'; cursor: pointer; margin: 5px; transition: all 0.3s; }
         button:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 4px 15px rgba(155,89,182,0.5); }
@@ -41,6 +42,7 @@
         .game-area { background: linear-gradient(135deg, rgba(0,0,0,0.95), rgba(30,10,30,0.95)); border: 2px solid #9b59b6; border-radius: 15px; padding: 25px; }
         .chips-display { font-family: 'Orbitron'; font-size: 28px; color: #ffd700; text-align: center; margin: 10px 0; }
         .round-info { font-family: 'Orbitron'; font-size: 14px; color: #9b59b6; text-align: center; letter-spacing: 2px; }
+        .bet-info { font-family: 'Orbitron'; font-size: 12px; color: #888; text-align: center; margin: 5px 0; }
         .area-label { font-family: 'Orbitron'; color: #9b59b6; font-size: 14px; letter-spacing: 3px; margin-bottom: 10px; text-align: center; }
         .cards { display: flex; justify-content: center; gap: 8px; min-height: 100px; flex-wrap: wrap; margin: 10px 0; }
         .card { width: 70px; height: 98px; background: linear-gradient(135deg, #fff, #f0f0f0); border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.5); animation: cardDeal 0.5s cubic-bezier(0.34, 1.56, 0.64, 1); border: 1px solid rgba(155,89,182,0.3); }
@@ -56,14 +58,14 @@
         .score-badge.bust { color: #ff0000; border-color: #ff0000; }
 
         .leaderboard { margin: 20px 0; }
-        .lb-row { display: flex; justify-content: space-between; padding: 12px 15px; margin: 5px 0; background: rgba(155,89,182,0.1); border: 1px solid rgba(155,89,182,0.2); border-radius: 8px; }
+        .lb-row { display: flex; justify-content: space-between; align-items: center; padding: 12px 15px; margin: 5px 0; background: rgba(155,89,182,0.1); border: 1px solid rgba(155,89,182,0.2); border-radius: 8px; }
         .lb-row.top1 { border-color: #ffd700; background: rgba(255,215,0,0.1); }
         .lb-row.top2 { border-color: #c0c0c0; background: rgba(192,192,192,0.05); }
         .lb-row.top3 { border-color: #cd7f32; background: rgba(205,127,50,0.05); }
-        .lb-rank { font-family: 'Orbitron'; font-weight: bold; color: #9b59b6; }
-        .lb-name { color: #fff; }
+        .lb-rank { font-family: 'Orbitron'; font-weight: bold; color: #9b59b6; min-width: 60px; }
+        .lb-name { color: #fff; flex: 1; }
         .lb-chips { font-family: 'Orbitron'; color: #ffd700; }
-        .lb-prize { font-family: 'Orbitron'; color: #00ff00; font-size: 12px; }
+        .lb-prize { font-family: 'Orbitron'; color: #00ff00; font-size: 12px; margin-left: 10px; }
 
         .controls { text-align: center; margin-top: 20px; }
         .result-banner { font-family: 'Orbitron'; font-size: 24px; text-align: center; margin: 15px 0; padding: 15px; border-radius: 10px; }
@@ -71,6 +73,10 @@
         .result-banner.loss { color: #ff0000; border: 2px solid #ff0000; background: rgba(255,0,0,0.05); }
         .result-banner.push { color: #ffa500; border: 2px solid #ffa500; background: rgba(255,165,0,0.05); }
         .result-banner.bj { color: #ffd700; border: 2px solid #ffd700; background: rgba(255,215,0,0.05); }
+
+        .waiting-msg { text-align: center; padding: 20px; color: #888; font-family: 'Orbitron'; font-size: 14px; }
+        .waiting-msg .spinner { display: inline-block; width: 20px; height: 20px; border: 2px solid #9b59b6; border-top-color: transparent; border-radius: 50%; animation: spin 1s linear infinite; margin-right: 10px; vertical-align: middle; }
+        @keyframes spin { to { transform: rotate(360deg); } }
 
         @media (max-width: 768px) { .brand { font-size: 16px; } .header { flex-direction: column; gap: 10px; } .card { width: 55px; height: 77px; } .corner { font-size: 11px; } .center { font-size: 28px; } }
     </style>
@@ -92,6 +98,7 @@
         <div class="game-area">
             <div class="round-info" id="roundInfo">ROUND 1/10</div>
             <div class="chips-display" id="chipsDisplay">1000 jetons</div>
+            <div class="bet-info" id="betInfo"></div>
 
             <div style="margin: 20px 0;">
                 <div class="area-label">DEALER</div>
@@ -126,35 +133,65 @@ const API_BASE = '';
 let balance = 0;
 let currentTournamentId = null;
 let currentChips = 0;
+let lobbyInterval = null;
+let countdownInterval = null;
+let waitingPollInterval = null;
 
 async function apiCall(endpoint, method = 'GET', body = null) {
     const options = { method, credentials: 'include', headers: { 'Content-Type': 'application/json' } };
     if (body) options.body = JSON.stringify(body);
     const response = await fetch(API_BASE + endpoint, options);
-    if (!response.ok) { const err = await response.json(); throw new Error(err.error || 'Erreur'); }
-    return response.json();
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Erreur');
+    return data;
 }
 
 async function init() {
-    const data = await apiCall('/api/session');
-    balance = data.balance;
-    document.getElementById('balance').textContent = balance;
+    try {
+        const data = await apiCall('/api/session');
+        balance = data.balance;
+        document.getElementById('balance').textContent = balance;
+    } catch (e) {
+        console.error('Session error:', e);
+    }
     // Ensure tournaments exist
     await apiCall('/api/tournament/create', 'POST', {}).catch(() => {});
     await loadLobby();
+    startLobbyPolling();
 }
 
+function startLobbyPolling() {
+    stopLobbyPolling();
+    lobbyInterval = setInterval(loadLobby, 5000);
+}
+
+function stopLobbyPolling() {
+    if (lobbyInterval) { clearInterval(lobbyInterval); lobbyInterval = null; }
+    if (countdownInterval) { clearInterval(countdownInterval); countdownInterval = null; }
+}
+
+let tournamentCache = [];
+
 async function loadLobby() {
-    const data = await apiCall('/api/tournament/list');
+    try {
+        const data = await apiCall('/api/tournament/list');
+        tournamentCache = data.tournaments;
+        renderLobby();
+    } catch (e) {
+        console.error('Lobby error:', e);
+    }
+}
+
+function renderLobby() {
     const lobby = document.getElementById('lobby');
     lobby.innerHTML = '';
 
-    if (data.tournaments.length === 0) {
+    if (tournamentCache.length === 0) {
         lobby.innerHTML = '<div style="text-align:center;color:#888;padding:40px;">Aucun tournoi disponible. Revenez bientot!</div>';
         return;
     }
 
-    data.tournaments.forEach(t => {
+    tournamentCache.forEach(t => {
         const stClass = t.status === 'registering' ? 'st-reg' : (t.status === 'running' ? 'st-run' : 'st-fin');
         const stLabel = { registering: 'INSCRIPTIONS', running: 'EN COURS', finished: 'TERMINE', cancelled: 'ANNULE' }[t.status] || t.status;
 
@@ -162,13 +199,16 @@ async function loadLobby() {
         if (t.status === 'registering' && !t.isRegistered) {
             actionBtn = `<button onclick="register('${t.id}')">S'INSCRIRE (${t.buyIn} sats)</button>`;
         } else if (t.isRegistered && t.status === 'running') {
-            actionBtn = `<button class="btn-play" onclick="enterTournament('${t.id}')">JOUER</button>`;
+            actionBtn = `<button class="btn-play" onclick="enterTournament('${t.id}', ${t.totalRounds})">JOUER</button>`;
         } else if (t.isRegistered && t.status === 'registering') {
-            actionBtn = `<div style="color:#0f0; font-family:'Orbitron'; font-size:12px; margin-top:10px;">INSCRIT</div>`;
+            actionBtn = `<div style="color:#0f0; font-family:'Orbitron'; font-size:12px; margin-top:10px;">INSCRIT - EN ATTENTE</div>`;
         }
 
-        const countdown = t.startTime && t.status === 'registering'
-            ? `<div class="tourney-info">Debut dans ${Math.max(0, Math.ceil((t.startTime - Date.now()) / 1000))}s</div>` : '';
+        let countdownHTML = '';
+        if (t.startTime && t.status === 'registering') {
+            const secs = Math.max(0, Math.ceil((t.startTime - Date.now()) / 1000));
+            countdownHTML = `<div class="countdown" data-start="${t.startTime}">${formatCountdown(secs)}</div>`;
+        }
 
         const card = document.createElement('div');
         card.className = 'tourney-card';
@@ -177,13 +217,36 @@ async function loadLobby() {
             <div class="tourney-info">Buy-in: ${t.buyIn} sats</div>
             <div class="tourney-info">Jetons: ${t.startingChips}</div>
             <div class="tourney-info">${t.totalRounds} rounds</div>
-            <div class="tourney-info">${t.playerCount}/${t.maxPlayers} joueurs</div>
+            <div class="tourney-info">${t.playerCount}/${t.maxPlayers} joueurs (min ${t.minPlayers})</div>
             <div class="tourney-prize">${t.prizePool} sats</div>
-            ${countdown}
+            ${countdownHTML}
             <div class="tourney-status ${stClass}">${stLabel}</div>
             <div style="margin-top:15px;">${actionBtn}</div>
         `;
         lobby.appendChild(card);
+    });
+
+    // Start countdown timer
+    if (countdownInterval) clearInterval(countdownInterval);
+    countdownInterval = setInterval(updateCountdowns, 1000);
+}
+
+function formatCountdown(secs) {
+    if (secs <= 0) return 'DEMARRAGE...';
+    const m = Math.floor(secs / 60);
+    const s = secs % 60;
+    return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
+function updateCountdowns() {
+    document.querySelectorAll('.countdown[data-start]').forEach(el => {
+        const start = parseInt(el.dataset.start);
+        const secs = Math.max(0, Math.ceil((start - Date.now()) / 1000));
+        el.textContent = formatCountdown(secs);
+        if (secs <= 0) {
+            // Tournament should be starting, refresh lobby
+            loadLobby();
+        }
     });
 }
 
@@ -192,24 +255,30 @@ async function register(id) {
         const data = await apiCall('/api/tournament/register', 'POST', { tournamentId: id });
         balance = data.balance;
         document.getElementById('balance').textContent = balance;
-        alert(`Inscrit! ${data.chips} jetons. Debut dans ${Math.ceil((data.startTime - Date.now()) / 1000)}s`);
         await loadLobby();
     } catch (e) { alert('Erreur: ' + e.message); }
 }
 
-async function enterTournament(id) {
+let currentTotalRounds = 0;
+
+async function enterTournament(id, totalRounds) {
     currentTournamentId = id;
+    currentTotalRounds = totalRounds;
+    stopLobbyPolling();
     document.getElementById('lobby').classList.add('hidden');
     document.getElementById('gameView').classList.add('active');
     document.getElementById('leaderboard').style.display = 'none';
+    document.getElementById('resultBanner').innerHTML = '';
     showDealButton();
 }
 
 function backToLobby() {
     currentTournamentId = null;
+    stopWaitingPoll();
     document.getElementById('lobby').classList.remove('hidden');
     document.getElementById('gameView').classList.remove('active');
     loadLobby();
+    startLobbyPolling();
 }
 
 function renderCardHTML(card) {
@@ -225,6 +294,7 @@ function showDealButton() {
     document.getElementById('dealerScore').innerHTML = '';
     document.getElementById('playerScore').innerHTML = '';
     document.getElementById('resultBanner').innerHTML = '';
+    document.getElementById('betInfo').textContent = '';
 }
 
 async function tDeal() {
@@ -249,8 +319,23 @@ async function tStand() {
 }
 
 function renderTournamentGame(data) {
-    document.getElementById('roundInfo').textContent = `ROUND ${data.roundsPlayed}/${data.totalRounds}`;
+    // Handle busted response (different format)
+    if (data.status === 'busted' && data.message) {
+        document.getElementById('chipsDisplay').textContent = `${data.chips} jetons`;
+        document.getElementById('resultBanner').innerHTML = `<div class="result-banner loss">ELIMINE - ${data.message}</div>`;
+        if (data.tournamentStatus === 'finished' && data.leaderboard) {
+            showLeaderboard(data);
+        } else {
+            document.getElementById('controls').innerHTML = '<button onclick="backToLobby()">RETOUR</button>';
+        }
+        return;
+    }
+
+    // Round display: show current round (roundsPlayed + 1 during play, roundsPlayed after finish)
+    const currentRound = data.status === 'playing' ? data.roundsPlayed + 1 : data.roundsPlayed;
+    document.getElementById('roundInfo').textContent = `ROUND ${currentRound}/${data.totalRounds}`;
     document.getElementById('chipsDisplay').textContent = `${data.chips} jetons`;
+    document.getElementById('betInfo').textContent = `Mise: ${data.bet} jetons`;
     currentChips = data.chips;
 
     // Player hand
@@ -268,7 +353,7 @@ function renderTournamentGame(data) {
 
         // Result
         const rb = document.getElementById('resultBanner');
-        const labels = { win: 'VICTOIRE!', loss: 'DEFAITE', bust: 'BUST!', push: 'PUSH', bj: 'BLACKJACK!' };
+        const labels = { win: 'VICTOIRE! +' + data.bet, loss: 'DEFAITE -' + data.bet, bust: 'BUST! -' + data.bet, push: 'PUSH', bj: 'BLACKJACK! +' + Math.floor(data.bet * 1.5) };
         const cls = { win: 'win', loss: 'loss', bust: 'loss', push: 'push', bj: 'bj' };
         rb.innerHTML = `<div class="result-banner ${cls[data.result] || ''}">${labels[data.result] || data.result}</div>`;
 
@@ -278,17 +363,23 @@ function renderTournamentGame(data) {
         } else if (data.busted) {
             document.getElementById('controls').innerHTML = '<div style="color:#ff0000; font-family:Orbitron; font-size:18px; margin:15px;">ELIMINE!</div><button onclick="backToLobby()">RETOUR</button>';
         } else if (data.roundsPlayed >= data.totalRounds) {
-            document.getElementById('controls').innerHTML = '<div style="color:#ffd700; font-family:Orbitron; font-size:16px; margin:15px;">TOUS VOS ROUNDS TERMINES!</div><div style="color:#888;">En attente des autres joueurs...</div><button onclick="backToLobby()">RETOUR</button>';
-        } else {
             document.getElementById('controls').innerHTML = `
-                <div style="color:#888;margin-bottom:10px;">Mise auto: ${Math.max(10, Math.floor(data.chips * 10 / 100))} jetons</div>
+                <div class="waiting-msg"><span class="spinner"></span>TOUS VOS ROUNDS TERMINES</div>
+                <div style="color:#888; margin: 10px 0;">En attente des autres joueurs...</div>
+                <button onclick="backToLobby()">RETOUR</button>
+            `;
+            startWaitingPoll();
+        } else {
+            const nextBet = Math.max(10, Math.floor(data.chips * 10 / 100));
+            document.getElementById('controls').innerHTML = `
+                <div style="color:#888;margin-bottom:10px;">Prochaine mise: ${nextBet} jetons</div>
                 <button class="btn-play" onclick="tDeal()">ROUND SUIVANT</button>
             `;
         }
     } else {
         // Playing
         dc.innerHTML = renderCardHTML(data.dealerUpCard) + '<div class="card hidden"></div>';
-        document.getElementById('dealerScore').innerHTML = `<span class="score-badge">${data.dealerUpCard.num || '?'}</span>`;
+        document.getElementById('dealerScore').innerHTML = `<span class="score-badge">${data.dealerUpCard.num}</span>`;
         document.getElementById('resultBanner').innerHTML = '';
 
         document.getElementById('controls').innerHTML = `
@@ -298,7 +389,32 @@ function renderTournamentGame(data) {
     }
 }
 
+function startWaitingPoll() {
+    stopWaitingPoll();
+    waitingPollInterval = setInterval(async () => {
+        if (!currentTournamentId) return;
+        try {
+            const data = await apiCall('/api/tournament/play', 'POST', {
+                tournamentId: currentTournamentId, action: 'status'
+            });
+            if (data.tournamentStatus === 'finished' && data.leaderboard) {
+                stopWaitingPoll();
+                showLeaderboard(data);
+                // Refresh balance
+                const session = await apiCall('/api/session');
+                balance = session.balance;
+                document.getElementById('balance').textContent = balance;
+            }
+        } catch (e) { console.error('Status poll error:', e); }
+    }, 3000);
+}
+
+function stopWaitingPoll() {
+    if (waitingPollInterval) { clearInterval(waitingPollInterval); waitingPollInterval = null; }
+}
+
 function showLeaderboard(data) {
+    stopWaitingPoll();
     const lb = document.getElementById('leaderboard');
     lb.style.display = 'block';
     const rows = document.getElementById('lbRows');

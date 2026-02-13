@@ -21,6 +21,27 @@ export default async function handler(req) {
 
   if (!tournamentId) return json(400, { error: 'ID tournoi manquant' });
 
+  // Status check - no lock needed, read-only
+  if (action === 'status') {
+    const tKey = `tournament:${tournamentId}`;
+    const tournament = await kv.get(tKey);
+    if (!tournament) return json(404, { error: 'Tournoi non trouve' });
+
+    const pIdx = tournament.players.findIndex(p => p.sessionId === sessionId);
+    const tPlayer = pIdx >= 0 ? tournament.players[pIdx] : null;
+
+    return json(200, {
+      tournamentStatus: tournament.status,
+      chips: tPlayer ? tPlayer.chips : 0,
+      roundsPlayed: tPlayer ? tPlayer.roundsPlayed : 0,
+      totalRounds: tournament.totalRounds,
+      busted: tPlayer ? tPlayer.busted : false,
+      leaderboard: tournament.status === 'finished' ? tournament.leaderboard : null,
+      myRank: tPlayer ? tPlayer.rank : null,
+      myPrize: tPlayer ? (tPlayer.prize || 0) : 0
+    });
+  }
+
   const lockKey = `lock:tplay:${tournamentId}:${sessionId}`;
   const locked = await kv.set(lockKey, '1', { nx: true, ex: 10 });
   if (!locked) return json(429, { error: 'Action en cours' });
@@ -46,7 +67,9 @@ export default async function handler(req) {
     // ===================== DEAL =====================
     if (action === 'deal') {
       if (tPlayer.roundsPlayed >= tournament.totalRounds) {
-        return json(400, { error: 'Tous vos rounds sont termines' });
+        await checkTournamentEnd(tournament);
+        await kv.set(tKey, tournament, { ex: 86400 });
+        return json(400, { error: 'Tous vos rounds sont termines', tournamentStatus: tournament.status });
       }
 
       const existing = await kv.get(gsKey);
@@ -57,8 +80,14 @@ export default async function handler(req) {
       const bet = Math.max(10, Math.floor(tPlayer.chips * BET_PERCENT / 100));
       if (tPlayer.chips < bet) {
         tPlayer.busted = true;
+        await checkTournamentEnd(tournament);
         await kv.set(tKey, tournament, { ex: 86400 });
-        return json(200, { status: 'busted', chips: tPlayer.chips, message: 'Plus assez de jetons!' });
+        return json(200, {
+          status: 'busted', chips: tPlayer.chips, message: 'Plus assez de jetons!',
+          tournamentStatus: tournament.status,
+          leaderboard: tournament.status === 'finished' ? tournament.leaderboard : null,
+          myRank: tPlayer.rank, myPrize: tPlayer.prize || 0
+        });
       }
 
       const deck = createAndShuffleDeck();
@@ -84,6 +113,8 @@ export default async function handler(req) {
           gs.status = 'finished'; gs.result = 'loss';
         }
         tPlayer.roundsPlayed++;
+        if (tPlayer.chips <= 0) tPlayer.busted = true;
+        await checkTournamentEnd(tournament);
         await kv.set(tKey, tournament, { ex: 86400 });
         await kv.set(gsKey, gs, { ex: 3600 });
         return json(200, tournamentGameResponse(gs, tPlayer, tournament));
@@ -96,6 +127,7 @@ export default async function handler(req) {
         tPlayer.totalWon += payout - bet;
         gs.status = 'finished'; gs.result = 'bj';
         tPlayer.roundsPlayed++;
+        await checkTournamentEnd(tournament);
         await kv.set(tKey, tournament, { ex: 86400 });
         await kv.set(gsKey, gs, { ex: 3600 });
         return json(200, tournamentGameResponse(gs, tPlayer, tournament));
@@ -119,6 +151,7 @@ export default async function handler(req) {
         gs.status = 'finished'; gs.result = 'bust';
         tPlayer.totalLost += gs.bet;
         tPlayer.roundsPlayed++;
+        if (tPlayer.chips <= 0) tPlayer.busted = true;
         await checkTournamentEnd(tournament);
         await kv.set(tKey, tournament, { ex: 86400 });
         await kv.set(gsKey, gs, { ex: 3600 });
@@ -135,7 +168,7 @@ export default async function handler(req) {
       return finishDealerPlay(gs, tPlayer, tournament, tKey, gsKey);
     }
 
-    return json(400, { error: 'Action invalide (deal, hit, stand)' });
+    return json(400, { error: 'Action invalide (deal, hit, stand, status)' });
   } finally {
     await kv.del(lockKey);
   }
@@ -199,15 +232,22 @@ async function finishTournament(tournament) {
     roundsPlayed: p.roundsPlayed
   }));
 
-  // Distribute prizes: 60% first, 30% second, 10% third
+  // Distribute prizes based on player count
   const prizePool = tournament.players.length * tournament.buyIn;
-  const prizes = [
-    Math.floor(prizePool * 0.6),
-    Math.floor(prizePool * 0.3),
-    prizePool - Math.floor(prizePool * 0.6) - Math.floor(prizePool * 0.3)
-  ];
+  let prizes;
 
-  for (let i = 0; i < Math.min(3, ranked.length); i++) {
+  if (ranked.length === 1) {
+    prizes = [prizePool];
+  } else if (ranked.length === 2) {
+    prizes = [Math.floor(prizePool * 0.7), prizePool - Math.floor(prizePool * 0.7)];
+  } else {
+    // 60% first, 30% second, 10% third
+    const p1 = Math.floor(prizePool * 0.6);
+    const p2 = Math.floor(prizePool * 0.3);
+    prizes = [p1, p2, prizePool - p1 - p2];
+  }
+
+  for (let i = 0; i < Math.min(prizes.length, ranked.length); i++) {
     const p = ranked[i];
     if (prizes[i] > 0) {
       const pk = `player:${p.sessionId}`;
@@ -240,7 +280,7 @@ function tournamentGameResponse(gs, tPlayer, tournament) {
     chips: tPlayer.chips,
     roundsPlayed: tPlayer.roundsPlayed,
     totalRounds: tournament.totalRounds,
-    busted: tPlayer.busted,
+    busted: tPlayer.busted || false,
     tournamentStatus: tournament.status
   };
 

@@ -17,8 +17,8 @@ export default async function handler(req) {
     const t = await kv.get(`tournament:${id}`);
     if (!t) continue;
 
-    // Auto-close expired tournaments
-    if (t.status === 'registering' && Date.now() > t.startTime) {
+    // Auto-close expired tournaments (only if startTime is set = someone registered)
+    if (t.status === 'registering' && t.startTime && Date.now() > t.startTime) {
       if (t.players.length >= t.minPlayers) {
         t.status = 'running';
         t.currentRound = 1;
