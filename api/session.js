@@ -12,6 +12,18 @@ export default async function handler(req) {
   let player = sessionId ? await kv.get(`player:${sessionId}`) : null;
 
   if (!player) {
+    // Rate limit: max 5 nouvelles sessions par IP par minute
+    const ip = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown';
+    const rlKey = `ratelimit:session:${ip}`;
+    const rlCount = await kv.incr(rlKey);
+    if (rlCount === 1) await kv.expire(rlKey, 60);
+    if (rlCount > 5) {
+      return new Response(JSON.stringify({ error: 'Trop de sessions creees, attendez' }), {
+        status: 429,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
     sessionId = crypto.randomUUID();
     player = {
       balance: 0,

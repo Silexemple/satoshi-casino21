@@ -1,6 +1,6 @@
 import { kv } from '@vercel/kv';
 import { json, getSessionId } from '../_helpers.js';
-import { handScore, cardForClient, isBlackjack, createAndShuffleDeck } from '../_game-helpers.js';
+import { handScore, cardForClient, isBlackjack, createAndShuffleDeck, drawCard } from '../_game-helpers.js';
 
 export const config = { runtime: 'edge' };
 
@@ -136,13 +136,13 @@ function advanceToNextPlayer(table) {
 }
 
 function startDealing(table) {
-  table.deck = createAndShuffleDeck();
+  table.deck = createAndShuffleDeck(6); // Shoe de 6 decks (312 cartes)
   table.status = 'dealing';
 
   // Distribuer 2 cartes à chaque joueur qui a misé
   for (const seat of table.seats) {
     if (seat && seat.bet > 0) {
-      const cards = [table.deck.pop(), table.deck.pop()];
+      const cards = [drawCard(table.deck), drawCard(table.deck)];
       seat.hands = [{ cards, bet: seat.bet, finished: false, result: null }];
       seat.currentHandIdx = 0;
       seat.finished = false;
@@ -150,7 +150,7 @@ function startDealing(table) {
   }
 
   // Dealer: 2 cartes
-  table.dealerHand = [table.deck.pop(), table.deck.pop()];
+  table.dealerHand = [drawCard(table.deck), drawCard(table.deck)];
 
   // Check dealer blackjack
   if (table.dealerHand[0].num >= 10 && isBlackjack(table.dealerHand)) {
@@ -209,7 +209,7 @@ function dealerPlay(table) {
   table.status = 'dealer_turn';
   // Dealer tire jusqu'à 17+
   while (handScore(table.dealerHand) < 17) {
-    table.dealerHand.push(table.deck.pop());
+    table.dealerHand.push(drawCard(table.deck));
   }
 }
 

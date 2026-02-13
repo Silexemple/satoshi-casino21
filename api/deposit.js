@@ -15,6 +15,14 @@ export default async function handler(req) {
     return json(401, { error: 'Session invalide' });
   }
 
+  // Rate limit: max 3 invoices par minute par session
+  const rlKey = `ratelimit:deposit:${sessionId}`;
+  const rlCount = await kv.incr(rlKey);
+  if (rlCount === 1) await kv.expire(rlKey, 60);
+  if (rlCount > 3) {
+    return json(429, { error: 'Trop de demandes de depot, attendez un instant' });
+  }
+
   const body = await req.json();
   const amount = parseInt(body.amount);
 

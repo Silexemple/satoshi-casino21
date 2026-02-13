@@ -1,6 +1,6 @@
 import { kv } from '@vercel/kv';
 import { json, getSessionId } from '../../_helpers.js';
-import { handScore, isPair } from '../../_game-helpers.js';
+import { handScore, isPair, drawCard } from '../../_game-helpers.js';
 import { checkTimeouts, advanceToNextPlayer, creditPlayers, tableStateForClient } from '../[id].js';
 
 export const config = { runtime: 'edge' };
@@ -58,7 +58,7 @@ export default async function handler(req) {
 
     // ===================== HIT =====================
     if (action === 'hit') {
-      hand.cards.push(table.deck.pop());
+      hand.cards.push(drawCard(table.deck));
       const score = handScore(hand.cards);
 
       if (score > 21) {
@@ -101,7 +101,7 @@ export default async function handler(req) {
       await kv.set(playerKey, player, { ex: 2592000 });
 
       hand.bet *= 2;
-      hand.cards.push(table.deck.pop());
+      hand.cards.push(drawCard(table.deck));
       hand.finished = true;
 
       if (handScore(hand.cards) > 21) {
@@ -136,14 +136,14 @@ export default async function handler(req) {
       const card2 = hand.cards[1];
 
       seat.hands[seat.currentHandIdx] = {
-        cards: [card1, table.deck.pop()],
+        cards: [card1, drawCard(table.deck)],
         bet: originalBet,
         finished: false,
         result: null
       };
 
       seat.hands.splice(seat.currentHandIdx + 1, 0, {
-        cards: [card2, table.deck.pop()],
+        cards: [card2, drawCard(table.deck)],
         bet: originalBet,
         finished: false,
         result: null

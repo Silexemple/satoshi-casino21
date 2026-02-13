@@ -3,12 +3,14 @@
 export const SUITS = ['♠', '♥', '♦', '♣'];
 export const RANKS = ['A','2','3','4','5','6','7','8','9','10','J','Q','K'];
 
-export function createAndShuffleDeck() {
+export function createAndShuffleDeck(numDecks = 1) {
   const deck = [];
-  for (const suit of SUITS) {
-    for (const rank of RANKS) {
-      const num = rank === 'A' ? 11 : (isNaN(rank) ? 10 : parseInt(rank));
-      deck.push({ suit, value: rank, num });
+  for (let d = 0; d < numDecks; d++) {
+    for (const suit of SUITS) {
+      for (const rank of RANKS) {
+        const num = rank === 'A' ? 11 : (isNaN(rank) ? 10 : parseInt(rank));
+        deck.push({ suit, value: rank, num });
+      }
     }
   }
   const arr = new Uint32Array(deck.length);
@@ -18,6 +20,15 @@ export function createAndShuffleDeck() {
     [deck[i], deck[j]] = [deck[j], deck[i]];
   }
   return deck;
+}
+
+// Tire une carte du deck, reshuffle un deck frais si vide (securite)
+export function drawCard(deck) {
+  if (deck.length === 0) {
+    const fresh = createAndShuffleDeck();
+    deck.push(...fresh);
+  }
+  return deck.pop();
 }
 
 export function handScore(hand) {

@@ -1,6 +1,6 @@
 import { kv } from '@vercel/kv';
 import { json, getSessionId } from './_helpers.js';
-import { createAndShuffleDeck, handScore, isBlackjack, isPair, cardForClient } from './_game-helpers.js';
+import { createAndShuffleDeck, handScore, isBlackjack, isPair, cardForClient, drawCard } from './_game-helpers.js';
 
 export const config = {
   runtime: 'edge',
@@ -89,8 +89,8 @@ export default async function handler(req) {
       }
 
       const deck = createAndShuffleDeck();
-      const pHand = [deck.pop(), deck.pop()];
-      const dHand = [deck.pop(), deck.pop()];
+      const pHand = [drawCard(deck), drawCard(deck)];
+      const dHand = [drawCard(deck), drawCard(deck)];
 
       player.balance -= bet;
 
@@ -302,7 +302,7 @@ export default async function handler(req) {
     const hand = gs.playerHands[gs.currentHandIdx];
 
     if (action === 'hit') {
-      hand.cards.push(gs.deck.pop());
+      hand.cards.push(drawCard(gs.deck));
       const score = handScore(hand.cards);
 
       if (score > 21) {
@@ -339,7 +339,7 @@ export default async function handler(req) {
       player.balance -= hand.bet;
       gs.totalBet += hand.bet;
       hand.bet *= 2;
-      hand.cards.push(gs.deck.pop());
+      hand.cards.push(drawCard(gs.deck));
       hand.finished = true;
 
       if (handScore(hand.cards) > 21) {
@@ -367,14 +367,14 @@ export default async function handler(req) {
       const card2 = hand.cards[1];
 
       gs.playerHands[gs.currentHandIdx] = {
-        cards: [card1, gs.deck.pop()],
+        cards: [card1, drawCard(gs.deck)],
         bet: gs.bet,
         finished: false,
         result: null
       };
 
       gs.playerHands.splice(gs.currentHandIdx + 1, 0, {
-        cards: [card2, gs.deck.pop()],
+        cards: [card2, drawCard(gs.deck)],
         bet: gs.bet,
         finished: false,
         result: null
@@ -421,7 +421,7 @@ async function advanceOrFinish(gs, player, playerKey, gameKey, sessionId) {
 
   // Toutes les mains finies -> dealer joue
   while (handScore(gs.dealerHand) < 17) {
-    gs.dealerHand.push(gs.deck.pop());
+    gs.dealerHand.push(drawCard(gs.deck));
   }
 
   const dScore = handScore(gs.dealerHand);

@@ -52,9 +52,19 @@ export default async function handler(req) {
       const status = await response.json();
 
       if (status.paid) {
-        const player = await kv.get(`player:${sessionId}`);
-        const newBalance = player.balance + freshInvoice.amount;
+        let player = await kv.get(`player:${sessionId}`);
 
+        // Si le player a expire, recreer un profil minimal pour ne pas perdre le depot
+        if (!player) {
+          player = {
+            balance: 0,
+            nickname: null,
+            created_at: Date.now(),
+            last_activity: Date.now()
+          };
+        }
+
+        const newBalance = player.balance + freshInvoice.amount;
         player.balance = newBalance;
         player.last_activity = Date.now();
         await kv.set(`player:${sessionId}`, player, { ex: 2592000 });

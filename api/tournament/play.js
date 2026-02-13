@@ -1,6 +1,6 @@
 import { kv } from '@vercel/kv';
 import { json, getSessionId } from '../_helpers.js';
-import { createAndShuffleDeck, handScore, isBlackjack, cardForClient } from '../_game-helpers.js';
+import { createAndShuffleDeck, handScore, isBlackjack, cardForClient, drawCard } from '../_game-helpers.js';
 
 export const config = { runtime: 'edge' };
 
@@ -91,8 +91,8 @@ export default async function handler(req) {
       }
 
       const deck = createAndShuffleDeck();
-      const pHand = [deck.pop(), deck.pop()];
-      const dHand = [deck.pop(), deck.pop()];
+      const pHand = [drawCard(deck), drawCard(deck)];
+      const dHand = [drawCard(deck), drawCard(deck)];
 
       tPlayer.chips -= bet;
 
@@ -145,7 +145,7 @@ export default async function handler(req) {
     }
 
     if (action === 'hit') {
-      gs.playerHand.push(gs.deck.pop());
+      gs.playerHand.push(drawCard(gs.deck));
       const score = handScore(gs.playerHand);
       if (score > 21) {
         gs.status = 'finished'; gs.result = 'bust';
@@ -177,7 +177,7 @@ export default async function handler(req) {
 async function finishDealerPlay(gs, tPlayer, tournament, tKey, gsKey) {
   // Dealer plays
   while (handScore(gs.dealerHand) < 17) {
-    gs.dealerHand.push(gs.deck.pop());
+    gs.dealerHand.push(drawCard(gs.deck));
   }
 
   const pScore = handScore(gs.playerHand);
