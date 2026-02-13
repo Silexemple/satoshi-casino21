@@ -28,6 +28,7 @@ export default async function handler(req) {
     player = {
       balance: 0,
       nickname: null,
+      avatar: null,
       created_at: Date.now(),
       last_activity: Date.now()
     };
@@ -36,6 +37,7 @@ export default async function handler(req) {
     player.last_activity = Date.now();
     // Ensure nickname field exists for older sessions
     if (!player.nickname) player.nickname = null;
+    if (!player.avatar) player.avatar = null;
     await kv.set(`player:${sessionId}`, player, { ex: 2592000 });
   }
 
@@ -49,9 +51,15 @@ export default async function handler(req) {
         const sanitized = nick.replace(/[^a-zA-Z0-9 _\-]/g, '').trim();
         if (sanitized.length >= 2 && sanitized.length <= 16) {
           player.nickname = sanitized;
-          await kv.set(`player:${sessionId}`, player, { ex: 2592000 });
         }
       }
+      if (body.avatar !== undefined) {
+        const validAvatars = ['💀','👑','♠️','💎','🔥','🚀','🎯','🐺','⚡','🦅','🎰','🃏'];
+        if (validAvatars.includes(body.avatar)) {
+          player.avatar = body.avatar;
+        }
+      }
+      await kv.set(`player:${sessionId}`, player, { ex: 2592000 });
     } catch(e) {
       // Ignore parse errors for backward compat with GET-like calls
     }
@@ -61,7 +69,8 @@ export default async function handler(req) {
     JSON.stringify({
       session_id: sessionId,
       balance: player.balance,
-      nickname: player.nickname
+      nickname: player.nickname,
+      avatar: player.avatar
     }),
     {
       status: 200,

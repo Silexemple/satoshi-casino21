@@ -274,6 +274,7 @@ function tableStateForClient(table, sessionId) {
       seatIdx: idx,
       empty: false,
       playerName: seat.playerName || `Joueur ${idx + 1}`,
+      avatar: seat.avatar || null,
       isMe,
       bet: seat.bet || 0,
       finished: seat.finished,

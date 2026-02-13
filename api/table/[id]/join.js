@@ -46,11 +46,12 @@ export default async function handler(req) {
     const player = await kv.get(`player:${sessionId}`);
     if (!player) return json(404, { error: 'Joueur non trouvé' });
 
-    // Asseoir le joueur (utiliser nickname si défini)
+    // Asseoir le joueur (utiliser nickname et avatar si définis)
     table.seats[seatIdx] = {
       seatIdx,
       sessionId,
       playerName: player.nickname || `Joueur ${seatIdx + 1}`,
+      avatar: player.avatar || null,
       bet: 0,
       hands: [],
       currentHandIdx: 0,

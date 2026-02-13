@@ -234,6 +234,7 @@
             0% { transform: translateY(-80px) scale(0.5); opacity: 0; }
             100% { transform: translateY(0) scale(1); opacity: 1; }
         }
+        .card { animation-fill-mode: forwards; }
         .card-content {
             padding: 3px 4px; height: 100%;
             display: flex; flex-direction: column; justify-content: space-between;
@@ -406,6 +407,45 @@
         .toast.bj { background: rgba(20,15,0,0.95); border: 2px solid #ffd700; color: #ffd700; box-shadow: 0 0 50px rgba(255,215,0,0.5); }
         .toast.push { background: rgba(20,10,0,0.95); border: 2px solid #ffa500; color: #ffa500; box-shadow: 0 0 30px rgba(255,165,0,0.3); }
 
+        /* AVATAR POPUP */
+        .profile-popup {
+            display: none; position: fixed; top: 38px; left: 10px; z-index: 100;
+            background: rgba(0,0,0,0.95); border: 1px solid #ff6b00; border-radius: 10px;
+            padding: 12px; width: 240px;
+        }
+        .profile-popup.open { display: block; }
+        .profile-popup label { font-size: 11px; color: #888; font-family: 'Orbitron'; display: block; margin-bottom: 4px; }
+        .profile-popup input {
+            width: 100%; background: rgba(255,255,255,0.05); border: 1px solid #ff6b00;
+            color: #fff; padding: 6px 8px; border-radius: 6px; font-size: 13px;
+            font-family: 'Rajdhani'; margin-bottom: 8px;
+        }
+        .avatar-grid { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+        .avatar-option {
+            width: 34px; height: 34px; display: flex; align-items: center; justify-content: center;
+            font-size: 20px; border-radius: 8px; cursor: pointer;
+            border: 2px solid rgba(255,255,255,0.1); transition: all 0.2s;
+        }
+        .avatar-option:hover { border-color: #ff6b00; background: rgba(255,107,0,0.1); }
+        .avatar-option.selected { border-color: #ffd700; background: rgba(255,215,0,0.15); box-shadow: 0 0 8px rgba(255,215,0,0.4); }
+        .profile-save {
+            width: 100%; padding: 6px; background: linear-gradient(135deg, #ff6b00, #ffa500);
+            border: none; border-radius: 6px; color: #000; font-family: 'Orbitron';
+            font-size: 11px; cursor: pointer; font-weight: 700;
+        }
+
+        /* SEAT AVATAR */
+        .seat-avatar { font-size: 18px; margin-bottom: 1px; }
+
+        /* BOUTON TOURNOI */
+        .topbar-tournoi {
+            background: linear-gradient(135deg, #9b59b6, #8e44ad); border: 1px solid #9b59b6;
+            color: #fff; padding: 4px 10px; border-radius: 4px; font-family: 'Orbitron';
+            cursor: pointer; font-size: 9px; letter-spacing: 1px; text-decoration: none;
+            transition: all 0.2s;
+        }
+        .topbar-tournoi:hover { background: rgba(155,89,182,0.4); box-shadow: 0 0 10px rgba(155,89,182,0.4); }
+
         @media (max-width: 400px) {
             .card { width: 36px; height: 52px; }
             .corner { font-size: 9px; }
@@ -425,6 +465,7 @@
 <div class="topbar">
     <div class="topbar-left">
         <a href="/" class="topbar-back" id="backBtn">SOLO</a>
+        <a href="/tournament.html" class="topbar-tournoi">TOURNOI</a>
         <span class="topbar-brand">SATS<span style="color:#ffd700;">21</span></span>
         <span class="conn-dot ok" id="connDot"></span>
         <span class="topbar-nick" id="nicknameDisplay" onclick="showNicknamePrompt()"></span>
@@ -433,6 +474,14 @@
 </div>
 
 <div class="toast" id="toast"></div>
+
+<div class="profile-popup" id="profilePopup">
+    <label>PSEUDO</label>
+    <input type="text" id="profileNickInput" maxlength="16" placeholder="Votre pseudo...">
+    <label>AVATAR</label>
+    <div class="avatar-grid" id="avatarGrid"></div>
+    <button class="profile-save" onclick="saveProfile()">SAUVEGARDER</button>
+</div>
 
 <div class="lobby" id="lobby"></div>
 
@@ -480,9 +529,13 @@
 let balance = 0, currentTableId = null, currentBet = 0, lastBet = 0;
 let pollInterval = null, lastTableState = null, previousStatus = null;
 let chatMessages = [], pollErrors = 0, lastChatTimestamp = 0;
-let playerNickname = null, chatOpen = false;
+let playerNickname = null, playerAvatar = null, chatOpen = false;
 // Track quel round a deja ete anime (eviter re-animation au poll)
 let lastAnimatedRound = -1;
+// Track quel round a deja ete distribue (animation cartes sequentielles)
+let lastDealtRound = -1;
+// Avatars disponibles
+const AVATARS = ['💀','👑','♠️','💎','🔥','🚀','🎯','🐺','⚡','🦅','🎰','🃏'];
 
 async function apiCall(endpoint, method = 'GET', body = null) {
     const options = { method, credentials: 'include', headers: { 'Content-Type': 'application/json' } };
@@ -498,6 +551,7 @@ async function initSession() {
         const data = await apiCall('/api/session');
         balance = data.balance;
         playerNickname = data.nickname;
+        playerAvatar = data.avatar;
         updateBalance(); updateNicknameDisplay();
     } catch (e) { console.error('Session error:', e); }
 }
@@ -506,15 +560,56 @@ function updateBalance() {
 }
 function updateNicknameDisplay() {
     const el = document.getElementById('nicknameDisplay');
-    if (el) el.textContent = playerNickname || '[pseudo]';
+    if (el) el.textContent = (playerAvatar || '') + ' ' + (playerNickname || '[pseudo]');
 }
 function showNicknamePrompt() {
-    const nick = prompt('Votre pseudo (2-16 car.):', playerNickname || '');
-    if (nick !== null && nick.trim().length >= 2) {
-        apiCall('/api/session', 'POST', { nickname: nick.trim() }).then(data => {
-            playerNickname = data.nickname; updateNicknameDisplay();
-        }).catch(e => alert(e.message));
-    }
+    // Ouvrir le popup profil (pseudo + avatar)
+    document.getElementById('profilePopup').classList.toggle('open');
+}
+function saveProfile() {
+    const nick = document.getElementById('profileNickInput').value.trim();
+    const body = {};
+    if (nick.length >= 2) body.nickname = nick;
+    const sel = document.querySelector('.avatar-option.selected');
+    if (sel) body.avatar = sel.dataset.avatar;
+    if (Object.keys(body).length === 0) return;
+    apiCall('/api/session', 'POST', body).then(data => {
+        playerNickname = data.nickname;
+        playerAvatar = data.avatar;
+        updateNicknameDisplay();
+        document.getElementById('profilePopup').classList.remove('open');
+    }).catch(e => alert(e.message));
+}
+function selectAvatar(el) {
+    document.querySelectorAll('.avatar-option').forEach(a => a.classList.remove('selected'));
+    el.classList.add('selected');
+}
+
+// SON CARTE (Web Audio API - pas de fichier externe)
+let audioCtx = null;
+function playCardSound() {
+    try {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain); gain.connect(audioCtx.destination);
+        osc.type = 'sine'; osc.frequency.value = 800;
+        gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.08);
+        osc.start(); osc.stop(audioCtx.currentTime + 0.08);
+    } catch(e) {}
+}
+function playChipSound() {
+    try {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain); gain.connect(audioCtx.destination);
+        osc.type = 'triangle'; osc.frequency.value = 1200;
+        gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.05);
+        osc.start(); osc.stop(audioCtx.currentTime + 0.05);
+    } catch(e) {}
 }
 
 // TOAST
@@ -549,7 +644,7 @@ async function loadLobby() {
 // TABLE VIEW
 async function joinTableView(tableId) {
     currentTableId = tableId; currentBet = 0; previousStatus = null;
-    chatMessages = []; lastChatTimestamp = Date.now() - 5000; lastAnimatedRound = -1;
+    chatMessages = []; lastChatTimestamp = Date.now() - 5000; lastAnimatedRound = -1; lastDealtRound = -1;
     document.getElementById('lobby').classList.add('hidden');
     document.getElementById('tableView').classList.add('active');
     document.getElementById('chatToggle').style.display = 'flex';
@@ -635,11 +730,12 @@ function detectPhaseChange(data) {
     if (previousStatus === 'finished' && data.status === 'waiting') addChatSystem('Nouveau round - placez vos mises!');
 }
 
-// RENDER CARD
-function renderCardHTML(card) {
-    if (card.hidden) return '<div class="card hidden-card"></div>';
+// RENDER CARD (delay en ms pour animation sequentielle)
+function renderCardHTML(card, delay) {
+    const delayStyle = delay > 0 ? `animation-delay:${delay}ms;opacity:0;` : '';
+    if (card.hidden) return `<div class="card hidden-card" style="${delayStyle}"></div>`;
     const isRed = card.suit === '\u2665' || card.suit === '\u2666';
-    return `<div class="card"><div class="card-content ${isRed ? 'red' : 'black'}"><div class="corner">${card.value}${card.suit}</div><div class="center">${card.suit}</div></div></div>`;
+    return `<div class="card" style="${delayStyle}"><div class="card-content ${isRed ? 'red' : 'black'}"><div class="corner">${card.value}${card.suit}</div><div class="center">${card.suit}</div></div></div>`;
 }
 
 // RENDER TABLE
@@ -647,8 +743,22 @@ function renderTable(data) {
     const phaseLabels = { waiting: 'EN ATTENTE', betting: 'PLACEZ VOS MISES', dealing: 'DISTRIBUTION...', playing: 'EN JEU', dealer_turn: 'TOUR DU DEALER', finished: 'ROUND TERMINE', settling: 'PAIEMENT...' };
     document.getElementById('phaseLabel').textContent = phaseLabels[data.status] || data.status;
 
-    // Dealer
-    document.getElementById('dealerCards').innerHTML = (data.dealerCards || []).map(c => renderCardHTML(c)).join('');
+    // Animation sequentielle: seulement au premier rendu d'un nouveau round
+    const isNewDeal = data.status !== 'waiting' && data.dealerCards && data.dealerCards.length > 0 && data.roundNumber !== lastDealtRound;
+    if (isNewDeal && ['dealing','playing'].includes(data.status)) {
+        lastDealtRound = data.roundNumber;
+        playCardSound();
+        if (navigator.vibrate) navigator.vibrate(15);
+    }
+
+    // Dealer (avec delai sequentiel si nouveau deal)
+    let dealerDelay = 0;
+    const dealerCardsHTML = (data.dealerCards || []).map((c, i) => {
+        const d = isNewDeal ? (i * 300 + 200) : 0;
+        if (isNewDeal && d > 0) setTimeout(playCardSound, d);
+        return renderCardHTML(c, isNewDeal ? d : 0);
+    }).join('');
+    document.getElementById('dealerCards').innerHTML = dealerCardsHTML;
     const ds = document.getElementById('dealerScore');
     if (data.dealerScore !== null && data.dealerCards && data.dealerCards.length > 0) {
         ds.innerHTML = `<span class="dealer-score ${data.dealerScore > 21 ? 'bust' : ''}">${data.dealerScore}</span>`;
@@ -708,8 +818,13 @@ function renderTable(data) {
         div.className = cls.join(' ');
 
         let handsHTML = '';
+        let seatCardIdx = 0;
         (seat.hands || []).forEach((hand, hIdx) => {
-            const cards = hand.cards.map(c => renderCardHTML(c)).join('');
+            const cards = hand.cards.map((c, ci) => {
+                const delay = isNewDeal ? (seatCardIdx * 300) : 0;
+                seatCardIdx++;
+                return renderCardHTML(c, delay);
+            }).join('');
             const isBust = hand.score > 21;
             const isBJ = hand.result === 'bj';
             let rHTML = '';
@@ -730,10 +845,11 @@ function renderTable(data) {
             gainHTML = `<div class="seat-gain" style="color:${c}">${s}${seat.netGain} sats</div>`;
         }
 
+        const avatarDisplay = seat.avatar ? `<div class="seat-avatar">${seat.avatar}</div>` : '';
         const nameDisplay = seat.isMe ? 'VOUS' : seat.playerName;
         const betDisplay = seat.bet > 0 ? `<div class="seat-bet-badge">${seat.bet} sats</div>` : '';
 
-        div.innerHTML = `<div class="seat-name">${nameDisplay}</div>${betDisplay}${handsHTML}${gainHTML}${isActive ? '<div style="color:#ffa500;font-size:9px;font-family:Orbitron;animation:blink 1s infinite;margin-top:2px;">A JOUER</div>' : ''}`;
+        div.innerHTML = `${avatarDisplay}<div class="seat-name">${nameDisplay}</div>${betDisplay}${handsHTML}${gainHTML}${isActive ? '<div style="color:#ffa500;font-size:9px;font-family:Orbitron;animation:blink 1s infinite;margin-top:2px;">A JOUER</div>' : ''}`;
         grid.appendChild(div);
     });
 
@@ -828,6 +944,8 @@ async function sendChat(msg) {
 function addBet(amount, maxBet) {
     if (currentBet + amount > maxBet || balance < amount) return;
     currentBet += amount;
+    playChipSound();
+    if (navigator.vibrate) navigator.vibrate(15);
     if (lastTableState) renderControls(lastTableState);
 }
 async function quickRebet(amount) { currentBet = amount; await placeBet(); }
@@ -838,6 +956,8 @@ async function placeBet() {
         const data = await apiCall(`/api/table/${currentTableId}/bet`, 'POST', { amount: currentBet });
         balance = data.balance; updateBalance();
         lastBet = currentBet; currentBet = 0;
+        playChipSound();
+        if (navigator.vibrate) navigator.vibrate(30);
         addChatSystem(`Mise de ${lastBet} sats placee!`);
         await pollTable();
     } catch (e) { alert(e.message); }
@@ -860,6 +980,8 @@ async function joinSeat(seatIdx) {
 
 async function doAction(action) {
     if (!currentTableId) return;
+    playCardSound();
+    if (navigator.vibrate) navigator.vibrate(action === 'hit' ? 15 : 30);
     try {
         const data = await apiCall(`/api/table/${currentTableId}/action`, 'POST', { action });
         lastTableState = data;
@@ -900,7 +1022,29 @@ async function sendTip(seatIdx, playerName) {
     } catch (e) { alert(e.message); }
 }
 
-window.onload = async () => { await initSession(); await loadLobby(); };
+window.onload = async () => {
+    await initSession();
+    await loadLobby();
+    // Initialiser la grille d'avatars
+    const grid = document.getElementById('avatarGrid');
+    AVATARS.forEach(a => {
+        const el = document.createElement('div');
+        el.className = 'avatar-option' + (a === playerAvatar ? ' selected' : '');
+        el.dataset.avatar = a;
+        el.textContent = a;
+        el.onclick = () => selectAvatar(el);
+        grid.appendChild(el);
+    });
+    document.getElementById('profileNickInput').value = playerNickname || '';
+    // Fermer popup en cliquant dehors
+    document.addEventListener('click', e => {
+        const popup = document.getElementById('profilePopup');
+        const nick = document.getElementById('nicknameDisplay');
+        if (popup.classList.contains('open') && !popup.contains(e.target) && e.target !== nick) {
+            popup.classList.remove('open');
+        }
+    });
+};
 </script>
 </body>
 </html>
