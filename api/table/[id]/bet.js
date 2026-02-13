@@ -1,6 +1,6 @@
 import { kv } from '@vercel/kv';
 import { json, getSessionId } from '../../_helpers.js';
-import { checkTimeouts, startDealing, BETTING_TIMEOUT } from '../[id].js';
+import { checkTimeouts, startDealing, creditPlayers, BETTING_TIMEOUT } from '../[id].js';
 
 export const config = { runtime: 'edge' };
 
@@ -111,6 +111,18 @@ export default async function handler(req) {
 
     table.lastUpdate = Date.now();
     await kv.set(tableKey, table, { ex: 86400 });
+
+    // Si le round s'est terminé pendant la distribution (BJ dealer/joueur)
+    if (table.status === 'finished') {
+      await creditPlayers(table);
+      await kv.set(tableKey, table, { ex: 86400 });
+
+      // Relire le solde mis à jour après crédit
+      const updatedPlayer = await kv.get(playerKey);
+      if (updatedPlayer) {
+        player.balance = updatedPlayer.balance;
+      }
+    }
 
     return json(200, { success: true, bet: amount, balance: player.balance });
   } finally {

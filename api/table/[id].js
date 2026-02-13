@@ -380,6 +380,11 @@ export default async function handler(req) {
     return json(404, { error: 'Table non trouvée' });
   }
 
+  // Créditer les joueurs si le round est terminé (idempotent via clé creditKey)
+  if (table.status === 'finished') {
+    await creditPlayers(table);
+  }
+
   // Check timeouts - acquire lock only if state needs modification
   const changed = checkTimeouts(table);
   if (changed) {
@@ -390,13 +395,14 @@ export default async function handler(req) {
         // Re-read table under lock to avoid race conditions
         const freshTable = await kv.get(tableKey);
         if (freshTable) {
+          // Créditer avant le reset (idempotent)
+          if (freshTable.status === 'finished') {
+            await creditPlayers(freshTable);
+          }
           table = freshTable;
           const stillChanged = checkTimeouts(table);
           if (stillChanged) {
             await kv.set(tableKey, table, { ex: 86400 });
-            if (table.status === 'finished') {
-              await creditPlayers(table);
-            }
           }
         }
       } finally {
