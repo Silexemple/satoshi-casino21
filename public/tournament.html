@@ -8,80 +8,335 @@
         @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;500;700&display=swap');
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { background: #000; font-family: 'Rajdhani', sans-serif; min-height: 100vh; color: #fff; overflow-x: hidden; }
-        .container { max-width: 900px; margin: 0 auto; padding: 20px; position: relative; z-index: 10; }
-        .header { display: flex; justify-content: space-between; align-items: center; padding: 20px 0; margin-bottom: 20px; border-bottom: 2px solid #9b59b6; }
-        .brand { font-family: 'Orbitron'; font-size: 24px; font-weight: 900; background: linear-gradient(135deg, #9b59b6, #e74c3c); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-        .balance-box { background: rgba(155,89,182,0.1); border: 2px solid #9b59b6; padding: 10px 20px; border-radius: 10px; text-align: right; }
-        .balance-label { font-size: 10px; color: #9b59b6; font-family: 'Orbitron'; letter-spacing: 2px; }
-        .balance-amount { font-size: 24px; font-weight: bold; font-family: 'Orbitron'; color: #e74c3c; }
-        .back-btn { background: transparent; border: 2px solid #9b59b6; color: #9b59b6; padding: 10px 20px; border-radius: 8px; font-family: 'Orbitron'; cursor: pointer; font-size: 12px; text-decoration: none; }
-        .back-btn:hover { background: rgba(155,89,182,0.2); }
 
+        #threejs-canvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 0; }
+
+        /* ===== PLASMA BORDERS ===== */
+        .plasma-border { position: fixed; inset: 0; pointer-events: none; z-index: 2; }
+        .plasma-border::before, .plasma-border::after { content: ''; position: absolute; inset: 0; }
+        .plasma-border::before {
+            background: linear-gradient(90deg, transparent 0%, #9b59b6 5%, #ff6b00 10%, #9b59b6 15%, transparent 20%, transparent 80%, #9b59b6 85%, #ff6b00 90%, #9b59b6 95%, transparent 100%);
+            background-size: 200% 100%; height: 3px; top: 0;
+            animation: electricFlow 2s linear infinite;
+            box-shadow: 0 0 15px #9b59b6, 0 0 30px #ff6b00; filter: brightness(1.5);
+        }
+        .plasma-border::after {
+            background: linear-gradient(90deg, transparent 0%, #9b59b6 5%, #ff6b00 10%, #9b59b6 15%, transparent 20%, transparent 80%, #9b59b6 85%, #ff6b00 90%, #9b59b6 95%, transparent 100%);
+            background-size: 200% 100%; height: 3px; bottom: 0;
+            animation: electricFlow 2s linear infinite reverse;
+            box-shadow: 0 0 15px #9b59b6, 0 0 30px #ff6b00; filter: brightness(1.5);
+        }
+        @keyframes electricFlow { 0% { background-position: 0% 0%; } 100% { background-position: 200% 0%; } }
+
+        .plasma-vert { position: fixed; width: 3px; height: 100%; top: 0; z-index: 2; pointer-events: none; filter: brightness(1.5); }
+        .plasma-left {
+            left: 0;
+            background: linear-gradient(180deg, transparent 0%, #9b59b6 5%, #ff6b00 10%, #9b59b6 15%, transparent 20%, transparent 80%, #9b59b6 85%, #ff6b00 90%, #9b59b6 95%, transparent 100%);
+            background-size: 100% 200%; animation: electricVert 2.5s linear infinite;
+            box-shadow: 0 0 15px #9b59b6, 0 0 30px #ff6b00;
+        }
+        .plasma-right {
+            right: 0;
+            background: linear-gradient(180deg, transparent 0%, #9b59b6 5%, #ff6b00 10%, #9b59b6 15%, transparent 20%, transparent 80%, #9b59b6 85%, #ff6b00 90%, #9b59b6 95%, transparent 100%);
+            background-size: 100% 200%; animation: electricVert 2.5s linear infinite reverse;
+            box-shadow: 0 0 15px #9b59b6, 0 0 30px #ff6b00;
+        }
+        @keyframes electricVert { 0% { background-position: 0% 0%; } 100% { background-position: 0% 200%; } }
+
+        /* ===== CORNER GLOWS ===== */
+        .corner-glow { position: fixed; width: 80px; height: 80px; pointer-events: none; z-index: 1; }
+        .corner-glow::before { content: ''; position: absolute; width: 100%; height: 100%; background: radial-gradient(circle, #9b59b6 0%, transparent 70%); animation: pulse 2s ease-in-out infinite; }
+        .tl { top: 0; left: 0; } .tr { top: 0; right: 0; } .bl { bottom: 0; left: 0; } .br { bottom: 0; right: 0; }
+        @keyframes pulse { 0%, 100% { opacity: 0.3; transform: scale(1); } 50% { opacity: 0.8; transform: scale(1.2); } }
+
+        /* ===== LAYOUT ===== */
+        .container { max-width: 1000px; margin: 0 auto; padding: 20px; position: relative; z-index: 10; }
+
+        .header {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 20px 0; margin-bottom: 25px; position: relative;
+        }
+        .header::after {
+            content: ''; position: absolute; bottom: 0; left: 50%; transform: translateX(-50%);
+            width: 80%; height: 2px;
+            background: linear-gradient(90deg, transparent, #9b59b6, #ff6b00, #9b59b6, transparent);
+            box-shadow: 0 0 15px #9b59b6;
+        }
+
+        .brand {
+            font-family: 'Orbitron'; font-size: 26px; font-weight: 900;
+            background: linear-gradient(135deg, #9b59b6 0%, #ff6b00 50%, #e74c3c 100%);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            filter: drop-shadow(0 0 15px #9b59b6);
+            animation: brandGlow 3s ease-in-out infinite;
+        }
+        @keyframes brandGlow {
+            0%, 100% { filter: drop-shadow(0 0 15px #9b59b6) brightness(1); transform: scale(1); }
+            50% { filter: drop-shadow(0 0 30px #ff6b00) brightness(1.2); transform: scale(1.02); }
+        }
+
+        .balance-box {
+            background: linear-gradient(135deg, rgba(155,89,182,0.1), rgba(0,0,0,0.8));
+            border: 2px solid #9b59b6; padding: 12px 20px; border-radius: 10px; text-align: right;
+            position: relative; overflow: hidden;
+            box-shadow: 0 0 15px rgba(155,89,182,0.3), inset 0 0 15px rgba(155,89,182,0.1);
+        }
+        .balance-box::before {
+            content: ''; position: absolute; top: -50%; left: -50%; width: 200%; height: 200%;
+            background: linear-gradient(45deg, transparent 30%, rgba(155,89,182,0.1) 50%, transparent 70%);
+            animation: shimmer 3s linear infinite;
+        }
+        @keyframes shimmer { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .balance-label { font-size: 10px; color: #9b59b6; font-family: 'Orbitron'; letter-spacing: 2px; }
+        .balance-amount {
+            font-size: 24px; font-weight: bold; font-family: 'Orbitron';
+            background: linear-gradient(135deg, #9b59b6, #ff6b00);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            position: relative; z-index: 1;
+        }
+        .balance-amount.updated { animation: balUp 0.6s cubic-bezier(0.34, 1.56, 0.64, 1); }
+        @keyframes balUp { 0%,100% { transform: scale(1); } 50% { transform: scale(1.3); filter: drop-shadow(0 0 20px #9b59b6); } }
+
+        .back-btn {
+            background: transparent; border: 2px solid #9b59b6; color: #9b59b6;
+            padding: 10px 20px; border-radius: 8px; font-family: 'Orbitron';
+            cursor: pointer; font-size: 12px; text-decoration: none; transition: all 0.3s;
+        }
+        .back-btn:hover { background: rgba(155,89,182,0.2); transform: translateY(-2px); }
+
+        /* ===== TOAST ===== */
+        .toast {
+            position: fixed; top: 80px; right: 20px; z-index: 2000;
+            background: linear-gradient(135deg, rgba(0,0,0,0.95), rgba(20,10,30,0.95));
+            border: 2px solid #9b59b6; border-radius: 12px; padding: 15px 25px;
+            font-family: 'Orbitron'; font-size: 14px; min-width: 250px; text-align: center;
+            transform: translateX(400px); transition: transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+            box-shadow: 0 0 30px rgba(155,89,182,0.5);
+        }
+        .toast.show { transform: translateX(0); }
+        .toast.win { border-color: #00ff00; color: #00ff00; box-shadow: 0 0 30px rgba(0,255,0,0.4); }
+        .toast.loss { border-color: #ff0000; color: #ff0000; box-shadow: 0 0 30px rgba(255,0,0,0.4); }
+        .toast.bj { border-color: #ffd700; color: #ffd700; box-shadow: 0 0 30px rgba(255,215,0,0.5); }
+        .toast.push { border-color: #ffa500; color: #ffa500; }
+        .toast.info { border-color: #9b59b6; color: #9b59b6; }
+
+        /* ===== LOBBY ===== */
         .lobby { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; }
-        .tourney-card { background: linear-gradient(135deg, rgba(0,0,0,0.95), rgba(30,10,30,0.95)); border: 2px solid #9b59b6; border-radius: 15px; padding: 25px; text-align: center; transition: all 0.3s; }
-        .tourney-card:hover { transform: translateY(-3px); box-shadow: 0 0 30px rgba(155,89,182,0.4); }
-        .tourney-card h3 { font-family: 'Orbitron'; color: #e74c3c; font-size: 18px; margin-bottom: 10px; }
-        .tourney-info { color: #888; font-size: 14px; margin: 5px 0; }
-        .tourney-prize { font-family: 'Orbitron'; color: #ffd700; font-size: 20px; margin: 10px 0; }
-        .tourney-status { font-family: 'Orbitron'; font-size: 12px; padding: 5px 15px; border-radius: 20px; display: inline-block; margin-top: 10px; }
+        .lobby.hidden { display: none; }
+
+        .tourney-card {
+            background: linear-gradient(135deg, rgba(0,0,0,0.95), rgba(30,10,40,0.95));
+            border: 2px solid #9b59b6; border-radius: 15px; padding: 25px; text-align: center;
+            transition: all 0.3s; position: relative; overflow: hidden;
+        }
+        .tourney-card::before {
+            content: ''; position: absolute; inset: 0;
+            background-image: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(155,89,182,0.03) 2px, rgba(155,89,182,0.03) 4px),
+                              repeating-linear-gradient(90deg, transparent, transparent 2px, rgba(155,89,182,0.03) 2px, rgba(155,89,182,0.03) 4px);
+            pointer-events: none;
+        }
+        .tourney-card::after {
+            content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+            background: linear-gradient(90deg, transparent, #9b59b6, transparent);
+            box-shadow: 0 0 10px #9b59b6; animation: scanLine 4s linear infinite; z-index: 1;
+        }
+        @keyframes scanLine { 0% { transform: translateY(0); } 100% { transform: translateY(300px); } }
+        .tourney-card:hover { transform: translateY(-5px); box-shadow: 0 0 40px rgba(155,89,182,0.5); border-color: #ff6b00; }
+        .tourney-card h3 { font-family: 'Orbitron'; color: #e74c3c; font-size: 18px; margin-bottom: 10px; position: relative; z-index: 2; }
+        .tourney-info { color: #888; font-size: 14px; margin: 5px 0; position: relative; z-index: 2; }
+        .tourney-prize { font-family: 'Orbitron'; color: #ffd700; font-size: 22px; margin: 12px 0; position: relative; z-index: 2; text-shadow: 0 0 10px rgba(255,215,0,0.3); }
+        .tourney-status {
+            font-family: 'Orbitron'; font-size: 12px; padding: 5px 15px;
+            border-radius: 20px; display: inline-block; margin-top: 10px; position: relative; z-index: 2;
+        }
         .st-reg { background: rgba(0,255,0,0.15); color: #0f0; border: 1px solid rgba(0,255,0,0.4); }
         .st-run { background: rgba(255,107,0,0.15); color: #ff6b00; border: 1px solid rgba(255,107,0,0.4); }
         .st-fin { background: rgba(155,89,182,0.15); color: #9b59b6; border: 1px solid rgba(155,89,182,0.4); }
-        .countdown { font-family: 'Orbitron'; color: #ffa500; font-size: 16px; margin-top: 8px; }
+        .countdown {
+            font-family: 'Orbitron'; color: #ffa500; font-size: 18px; margin-top: 8px;
+            position: relative; z-index: 2; animation: countdownPulse 1s ease-in-out infinite;
+        }
+        @keyframes countdownPulse { 0%,100% { opacity: 1; } 50% { opacity: 0.6; } }
 
-        button { background: linear-gradient(135deg, #9b59b6, #8e44ad); border: 2px solid #9b59b6; color: #fff; padding: 12px 25px; border-radius: 8px; font-weight: bold; font-size: 14px; font-family: 'Orbitron'; cursor: pointer; margin: 5px; transition: all 0.3s; }
-        button:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 4px 15px rgba(155,89,182,0.5); }
-        button:disabled { opacity: 0.3; cursor: not-allowed; }
-        .btn-play { background: linear-gradient(135deg, #00ff00, #00cc00); border-color: #00ff00; color: #000; }
-        .btn-stand { background: linear-gradient(135deg, #ff0000, #cc0000); border-color: #ff0000; }
+        .player-bar {
+            background: rgba(155,89,182,0.1); border: 1px solid rgba(155,89,182,0.3);
+            border-radius: 10px; height: 8px; margin: 10px 0; overflow: hidden; position: relative; z-index: 2;
+        }
+        .player-bar-fill {
+            height: 100%; border-radius: 10px; transition: width 0.5s;
+            background: linear-gradient(90deg, #9b59b6, #ff6b00);
+            box-shadow: 0 0 10px rgba(155,89,182,0.5);
+        }
 
+        /* ===== BUTTONS ===== */
+        button {
+            background: linear-gradient(135deg, #9b59b6, #8e44ad);
+            border: 2px solid #9b59b6; color: #fff; padding: 12px 25px; border-radius: 10px;
+            font-weight: bold; font-size: 14px; font-family: 'Orbitron'; cursor: pointer;
+            margin: 5px; transition: all 0.3s; position: relative; overflow: hidden;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5), 0 0 15px rgba(155,89,182,0.3);
+        }
+        button::before {
+            content: ''; position: absolute; top: 0; left: -100%; width: 100%; height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+            transition: left 0.5s;
+        }
+        button:hover::before { left: 100%; }
+        button:hover:not(:disabled) { transform: translateY(-3px); box-shadow: 0 8px 20px rgba(0,0,0,0.6), 0 0 30px rgba(155,89,182,0.5); }
+        button:disabled { opacity: 0.3; cursor: not-allowed; background: #333; color: #666; border-color: #666; }
+        .btn-play { background: linear-gradient(135deg, #00ff00, #00cc00); border-color: #00ff00; color: #000; box-shadow: 0 4px 12px rgba(0,0,0,0.5), 0 0 15px rgba(0,255,0,0.3); }
+        .btn-play:hover:not(:disabled) { box-shadow: 0 8px 20px rgba(0,0,0,0.6), 0 0 30px rgba(0,255,0,0.5); }
+        .btn-stand { background: linear-gradient(135deg, #ff0000, #cc0000); border-color: #ff0000; color: #fff; }
+
+        /* ===== GAME VIEW ===== */
         .game-view { display: none; }
-        .game-view.active { display: block; }
-        .lobby.hidden { display: none; }
+        .game-view.active { display: block; animation: fadeIn 0.5s ease; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
 
-        .game-area { background: linear-gradient(135deg, rgba(0,0,0,0.95), rgba(30,10,30,0.95)); border: 2px solid #9b59b6; border-radius: 15px; padding: 25px; }
-        .chips-display { font-family: 'Orbitron'; font-size: 28px; color: #ffd700; text-align: center; margin: 10px 0; }
-        .round-info { font-family: 'Orbitron'; font-size: 14px; color: #9b59b6; text-align: center; letter-spacing: 2px; }
+        .game-area {
+            background: linear-gradient(135deg, rgba(0,0,0,0.95), rgba(30,10,40,0.95));
+            border: 2px solid #9b59b6; border-radius: 20px; padding: 30px;
+            position: relative; overflow: hidden;
+            box-shadow: 0 0 30px rgba(155,89,182,0.3), 0 20px 60px rgba(0,0,0,0.8), inset 0 0 30px rgba(155,89,182,0.05);
+        }
+        .game-area::before {
+            content: ''; position: absolute; inset: 0;
+            background-image: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(155,89,182,0.02) 2px, rgba(155,89,182,0.02) 4px),
+                              repeating-linear-gradient(90deg, transparent, transparent 2px, rgba(155,89,182,0.02) 2px, rgba(155,89,182,0.02) 4px);
+            pointer-events: none;
+        }
+        .game-area::after {
+            content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+            background: linear-gradient(90deg, transparent, #9b59b6, transparent);
+            box-shadow: 0 0 15px #9b59b6; animation: scanLine 5s linear infinite; z-index: 1;
+        }
+
+        .chips-display {
+            font-family: 'Orbitron'; font-size: 30px; text-align: center; margin: 10px 0;
+            background: linear-gradient(135deg, #ffd700, #ff6b00);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            filter: drop-shadow(0 0 10px rgba(255,215,0,0.3));
+        }
+        .round-info { font-family: 'Orbitron'; font-size: 14px; color: #9b59b6; text-align: center; letter-spacing: 3px; text-shadow: 0 0 10px rgba(155,89,182,0.3); }
         .bet-info { font-family: 'Orbitron'; font-size: 12px; color: #888; text-align: center; margin: 5px 0; }
-        .area-label { font-family: 'Orbitron'; color: #9b59b6; font-size: 14px; letter-spacing: 3px; margin-bottom: 10px; text-align: center; }
-        .cards { display: flex; justify-content: center; gap: 8px; min-height: 100px; flex-wrap: wrap; margin: 10px 0; }
-        .card { width: 70px; height: 98px; background: linear-gradient(135deg, #fff, #f0f0f0); border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.5); animation: cardDeal 0.5s cubic-bezier(0.34, 1.56, 0.64, 1); border: 1px solid rgba(155,89,182,0.3); }
-        @keyframes cardDeal { 0% { transform: translateY(-100px) scale(0.5); opacity: 0; } 100% { transform: translateY(0) scale(1); opacity: 1; } }
-        .card-content { padding: 6px; height: 100%; display: flex; flex-direction: column; justify-content: space-between; color: #000; }
-        .corner { font-size: 14px; font-weight: bold; }
-        .center { font-size: 36px; text-align: center; }
+        .area-label { font-family: 'Orbitron'; color: #9b59b6; font-size: 14px; letter-spacing: 4px; margin-bottom: 12px; text-align: center; text-shadow: 0 0 10px #9b59b6; font-weight: 700; position: relative; z-index: 2; }
+
+        /* ===== CARDS ===== */
+        .cards { display: flex; justify-content: center; gap: 12px; min-height: 130px; flex-wrap: wrap; perspective: 1000px; margin: 10px 0; position: relative; z-index: 2; }
+        .card {
+            width: 85px; height: 119px;
+            background: linear-gradient(135deg, #fff, #f0f0f0); border-radius: 10px;
+            box-shadow: 0 8px 16px rgba(0,0,0,0.5), 0 0 15px rgba(155,89,182,0.2);
+            animation: cardDeal 0.8s cubic-bezier(0.34, 1.56, 0.64, 1);
+            transform-style: preserve-3d; transition: all 0.3s; border: 1px solid rgba(155,89,182,0.3);
+        }
+        @keyframes cardDeal {
+            0% { transform: translateY(-200px) rotateY(180deg) scale(0.5); opacity: 0; filter: brightness(0); }
+            60% { filter: brightness(1.5); }
+            100% { transform: translateY(0) rotateY(0) scale(1); opacity: 1; filter: brightness(1); }
+        }
+        .card:hover { transform: translateY(-8px) scale(1.05) rotateZ(2deg); box-shadow: 0 12px 24px rgba(0,0,0,0.6), 0 0 30px rgba(155,89,182,0.5); }
+        .card-content { padding: 8px; height: 100%; display: flex; flex-direction: column; justify-content: space-between; color: #000; }
+        .corner { font-size: 16px; font-weight: bold; line-height: 1; }
+        .center { font-size: 42px; text-align: center; line-height: 1; }
         .red { color: #ff0000; }
         .black { color: #000; }
-        .card.hidden { background: linear-gradient(135deg, #1a001a, #000); border: 2px solid #9b59b6; position: relative; }
-        .card.hidden::after { content: "\20BF"; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 36px; color: #9b59b6; font-family: 'Orbitron'; }
-        .score-badge { display: inline-block; background: rgba(0,0,0,0.8); color: #9b59b6; padding: 4px 14px; border-radius: 15px; font-family: 'Orbitron'; font-size: 14px; border: 1px solid #9b59b6; margin-top: 8px; }
-        .score-badge.bust { color: #ff0000; border-color: #ff0000; }
 
-        .leaderboard { margin: 20px 0; }
-        .lb-row { display: flex; justify-content: space-between; align-items: center; padding: 12px 15px; margin: 5px 0; background: rgba(155,89,182,0.1); border: 1px solid rgba(155,89,182,0.2); border-radius: 8px; }
-        .lb-row.top1 { border-color: #ffd700; background: rgba(255,215,0,0.1); }
+        .card.hidden {
+            background: linear-gradient(135deg, #1a001a, #000); border: 2px solid #9b59b6;
+            box-shadow: 0 8px 16px rgba(0,0,0,0.5), 0 0 25px rgba(155,89,182,0.5), inset 0 0 15px rgba(155,89,182,0.1);
+        }
+        .card.hidden::before {
+            content: ''; position: absolute; inset: 5px; border: 1px solid #9b59b6; border-radius: 8px; opacity: 0.3;
+        }
+        .card.hidden::after {
+            content: "\20BF"; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            font-size: 44px; color: #9b59b6; font-family: 'Orbitron'; font-weight: 900;
+            text-shadow: 0 0 15px #9b59b6, 0 0 30px #ff6b00;
+            animation: bitcoinPulse 2s ease-in-out infinite;
+        }
+        @keyframes bitcoinPulse { 0%, 100% { transform: translate(-50%,-50%) scale(1); opacity: 0.8; } 50% { transform: translate(-50%,-50%) scale(1.1); opacity: 1; } }
+
+        .score-badge {
+            display: inline-block;
+            background: linear-gradient(135deg, rgba(0,0,0,0.9), rgba(20,10,30,0.9));
+            color: #9b59b6; padding: 6px 18px; border-radius: 20px;
+            font-family: 'Orbitron'; font-size: 16px; font-weight: bold;
+            border: 2px solid #9b59b6; margin-top: 10px; position: relative; z-index: 2;
+            box-shadow: 0 0 15px rgba(155,89,182,0.3), inset 0 0 8px rgba(155,89,182,0.1);
+        }
+        .score-badge.bust {
+            background: linear-gradient(135deg, rgba(200,0,0,0.9), rgba(100,0,0,0.9));
+            color: #fff; border-color: #ff0000; animation: bustPulse 0.5s ease infinite;
+            box-shadow: 0 0 20px rgba(255,0,0,0.5), inset 0 0 10px rgba(255,0,0,0.2);
+        }
+        @keyframes bustPulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.1); } }
+
+        /* ===== RESULTS ===== */
+        .controls { text-align: center; margin-top: 20px; position: relative; z-index: 2; }
+
+        .result-banner {
+            font-family: 'Orbitron'; font-size: 22px; text-align: center; margin: 15px 0; padding: 15px;
+            border-radius: 12px; position: relative; z-index: 2;
+            animation: resultPop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        @keyframes resultPop { 0% { transform: scale(0.5); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+        .result-banner.win { color: #00ff00; border: 2px solid #00ff00; background: rgba(0,255,0,0.08); box-shadow: 0 0 25px rgba(0,255,0,0.3); }
+        .result-banner.loss { color: #ff0000; border: 2px solid #ff0000; background: rgba(255,0,0,0.08); box-shadow: 0 0 25px rgba(255,0,0,0.3); }
+        .result-banner.push { color: #ffa500; border: 2px solid #ffa500; background: rgba(255,165,0,0.08); box-shadow: 0 0 25px rgba(255,165,0,0.3); }
+        .result-banner.bj { color: #ffd700; border: 2px solid #ffd700; background: rgba(255,215,0,0.08); box-shadow: 0 0 25px rgba(255,215,0,0.4); }
+
+        /* ===== LEADERBOARD ===== */
+        .leaderboard { margin: 25px 0; position: relative; z-index: 2; }
+        .lb-row {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 14px 18px; margin: 6px 0;
+            background: rgba(155,89,182,0.08); border: 1px solid rgba(155,89,182,0.2); border-radius: 10px;
+            animation: lbSlide 0.5s ease both;
+        }
+        @keyframes lbSlide { from { transform: translateX(-30px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        .lb-row:nth-child(1) { animation-delay: 0.1s; }
+        .lb-row:nth-child(2) { animation-delay: 0.2s; }
+        .lb-row:nth-child(3) { animation-delay: 0.3s; }
+        .lb-row:nth-child(4) { animation-delay: 0.4s; }
+        .lb-row:nth-child(5) { animation-delay: 0.5s; }
+        .lb-row.top1 { border-color: #ffd700; background: rgba(255,215,0,0.1); box-shadow: 0 0 20px rgba(255,215,0,0.2); }
         .lb-row.top2 { border-color: #c0c0c0; background: rgba(192,192,192,0.05); }
         .lb-row.top3 { border-color: #cd7f32; background: rgba(205,127,50,0.05); }
-        .lb-rank { font-family: 'Orbitron'; font-weight: bold; color: #9b59b6; min-width: 60px; }
-        .lb-name { color: #fff; flex: 1; }
-        .lb-chips { font-family: 'Orbitron'; color: #ffd700; }
-        .lb-prize { font-family: 'Orbitron'; color: #00ff00; font-size: 12px; margin-left: 10px; }
-
-        .controls { text-align: center; margin-top: 20px; }
-        .result-banner { font-family: 'Orbitron'; font-size: 24px; text-align: center; margin: 15px 0; padding: 15px; border-radius: 10px; }
-        .result-banner.win { color: #00ff00; border: 2px solid #00ff00; background: rgba(0,255,0,0.05); }
-        .result-banner.loss { color: #ff0000; border: 2px solid #ff0000; background: rgba(255,0,0,0.05); }
-        .result-banner.push { color: #ffa500; border: 2px solid #ffa500; background: rgba(255,165,0,0.05); }
-        .result-banner.bj { color: #ffd700; border: 2px solid #ffd700; background: rgba(255,215,0,0.05); }
+        .lb-rank { font-family: 'Orbitron'; font-weight: bold; color: #9b59b6; min-width: 70px; }
+        .lb-name { color: #fff; flex: 1; font-size: 16px; }
+        .lb-chips { font-family: 'Orbitron'; color: #ffd700; font-size: 14px; }
+        .lb-prize { font-family: 'Orbitron'; color: #00ff00; font-size: 13px; margin-left: 10px; }
 
         .waiting-msg { text-align: center; padding: 20px; color: #888; font-family: 'Orbitron'; font-size: 14px; }
         .waiting-msg .spinner { display: inline-block; width: 20px; height: 20px; border: 2px solid #9b59b6; border-top-color: transparent; border-radius: 50%; animation: spin 1s linear infinite; margin-right: 10px; vertical-align: middle; }
         @keyframes spin { to { transform: rotate(360deg); } }
 
-        @media (max-width: 768px) { .brand { font-size: 16px; } .header { flex-direction: column; gap: 10px; } .card { width: 55px; height: 77px; } .corner { font-size: 11px; } .center { font-size: 28px; } }
+        /* ===== RESPONSIVE ===== */
+        @media (max-width: 768px) {
+            .brand { font-size: 18px; }
+            .header { flex-direction: column; gap: 12px; }
+            .card { width: 65px; height: 91px; } .corner { font-size: 13px; } .center { font-size: 32px; }
+            .chips-display { font-size: 24px; }
+            .result-banner { font-size: 18px; }
+        }
     </style>
 </head>
 <body>
+
+<canvas id="threejs-canvas"></canvas>
+
+<div class="plasma-border"></div>
+<div class="plasma-vert plasma-left"></div>
+<div class="plasma-vert plasma-right"></div>
+
+<div class="corner-glow tl"></div>
+<div class="corner-glow tr"></div>
+<div class="corner-glow bl"></div>
+<div class="corner-glow br"></div>
+
+<div class="toast" id="toast"></div>
+
 <div class="container">
     <div class="header">
         <a href="/" class="back-btn">RETOUR</a>
@@ -100,7 +355,7 @@
             <div class="chips-display" id="chipsDisplay">1000 jetons</div>
             <div class="bet-info" id="betInfo"></div>
 
-            <div style="margin: 20px 0;">
+            <div style="margin: 25px 0;">
                 <div class="area-label">DEALER</div>
                 <div class="cards" id="dealerCards"></div>
                 <div id="dealerScore" style="text-align:center;"></div>
@@ -108,7 +363,7 @@
 
             <div id="resultBanner"></div>
 
-            <div style="margin: 20px 0;">
+            <div style="margin: 25px 0;">
                 <div class="area-label">VOUS</div>
                 <div class="cards" id="playerCards"></div>
                 <div id="playerScore" style="text-align:center;"></div>
@@ -128,7 +383,108 @@
     </div>
 </div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
 <script>
+// ============================================
+// THREE.JS BACKGROUND
+// ============================================
+const isMobile = window.innerWidth < 768;
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('threejs-canvas'), alpha: true, antialias: !isMobile });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(isMobile ? 1 : window.devicePixelRatio);
+camera.position.z = 50;
+
+// Particles
+const pGeo = new THREE.BufferGeometry();
+const pCount = isMobile ? 60 : 200;
+const pArr = new Float32Array(pCount * 3);
+for (let i = 0; i < pCount * 3; i++) pArr[i] = (Math.random() - 0.5) * 100;
+pGeo.setAttribute('position', new THREE.BufferAttribute(pArr, 3));
+const pMat = new THREE.PointsMaterial({ size: 0.3, color: 0x9b59b6, transparent: true, opacity: 0.7, blending: THREE.AdditiveBlending });
+const particles = new THREE.Points(pGeo, pMat);
+scene.add(particles);
+
+// Bitcoin spheres
+const btcGroup = new THREE.Group();
+const btcGeo = new THREE.SphereGeometry(0.5, 8, 8);
+const btcMat = new THREE.MeshBasicMaterial({ color: 0xff6b00, wireframe: true });
+for (let i = 0; i < (isMobile ? 4 : 15); i++) {
+    const m = new THREE.Mesh(btcGeo, btcMat);
+    m.position.set((Math.random()-0.5)*80, (Math.random()-0.5)*80, (Math.random()-0.5)*80);
+    m.rotation.set(Math.random()*Math.PI, Math.random()*Math.PI, 0);
+    btcGroup.add(m);
+}
+scene.add(btcGroup);
+
+// Lightning particles
+const lGeo = new THREE.BufferGeometry();
+const lCount = isMobile ? 10 : 40;
+const lArr = new Float32Array(lCount * 3);
+for (let i = 0; i < lCount * 3; i++) lArr[i] = (Math.random() - 0.5) * 120;
+lGeo.setAttribute('position', new THREE.BufferAttribute(lArr, 3));
+const lMat = new THREE.PointsMaterial({ size: 0.5, color: 0xe74c3c, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending });
+const lightning = new THREE.Points(lGeo, lMat);
+scene.add(lightning);
+
+let mouseX = 0, mouseY = 0;
+document.addEventListener('mousemove', e => {
+    mouseX = (e.clientX / window.innerWidth) * 2 - 1;
+    mouseY = -(e.clientY / window.innerHeight) * 2 + 1;
+});
+
+function animateThreeJS() {
+    requestAnimationFrame(animateThreeJS);
+    particles.rotation.y += 0.001; particles.rotation.x += 0.0005;
+    btcGroup.rotation.y += 0.002; btcGroup.rotation.x += 0.001;
+    btcGroup.children.forEach(b => { b.rotation.x += 0.01; b.rotation.y += 0.01; });
+    lightning.rotation.x += 0.003; lightning.rotation.z += 0.002;
+    camera.position.x += (mouseX * 5 - camera.position.x) * 0.05;
+    camera.position.y += (mouseY * 5 - camera.position.y) * 0.05;
+    camera.lookAt(scene.position);
+    renderer.render(scene, camera);
+}
+animateThreeJS();
+
+window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+// ============================================
+// SOUND EFFECTS
+// ============================================
+const sounds = {
+    card: new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTcI'),
+    win: new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTcI'),
+    lose: new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTcI'),
+    blackjack: new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTcI')
+};
+Object.values(sounds).forEach(s => { s.volume = 0.3; });
+function playSound(name) {
+    try { const s = sounds[name]; if (s && s.readyState >= 2) { s.currentTime = 0; s.play().catch(() => {}); } } catch(e) {}
+}
+
+// ============================================
+// TOAST SYSTEM
+// ============================================
+let toastTimeout = null;
+function showToast(text, type = 'info') {
+    const t = document.getElementById('toast');
+    t.textContent = text;
+    t.className = 'toast ' + type;
+    if (toastTimeout) clearTimeout(toastTimeout);
+    requestAnimationFrame(() => { t.classList.add('show'); });
+    toastTimeout = setTimeout(() => { t.classList.remove('show'); }, 3000);
+}
+
+// ============================================
+// GAME STATE
+// ============================================
 const API_BASE = '';
 let balance = 0;
 let currentTournamentId = null;
@@ -151,10 +507,7 @@ async function init() {
         const data = await apiCall('/api/session');
         balance = data.balance;
         document.getElementById('balance').textContent = balance;
-    } catch (e) {
-        console.error('Session error:', e);
-    }
-    // Ensure tournaments exist
+    } catch (e) { console.error('Session error:', e); }
     await apiCall('/api/tournament/create', 'POST', {}).catch(() => {});
     await loadLobby();
     startLobbyPolling();
@@ -177,9 +530,7 @@ async function loadLobby() {
         const data = await apiCall('/api/tournament/list');
         tournamentCache = data.tournaments;
         renderLobby();
-    } catch (e) {
-        console.error('Lobby error:', e);
-    }
+    } catch (e) { console.error('Lobby error:', e); }
 }
 
 function renderLobby() {
@@ -187,7 +538,7 @@ function renderLobby() {
     lobby.innerHTML = '';
 
     if (tournamentCache.length === 0) {
-        lobby.innerHTML = '<div style="text-align:center;color:#888;padding:40px;">Aucun tournoi disponible. Revenez bientot!</div>';
+        lobby.innerHTML = '<div style="text-align:center;color:#888;padding:40px;font-family:Orbitron;font-size:14px;">Aucun tournoi disponible</div>';
         return;
     }
 
@@ -210,23 +561,24 @@ function renderLobby() {
             countdownHTML = `<div class="countdown" data-start="${t.startTime}">${formatCountdown(secs)}</div>`;
         }
 
+        const fillPct = Math.round((t.playerCount / t.maxPlayers) * 100);
+
         const card = document.createElement('div');
         card.className = 'tourney-card';
         card.innerHTML = `
             <h3>${t.name}</h3>
-            <div class="tourney-info">Buy-in: ${t.buyIn} sats</div>
-            <div class="tourney-info">Jetons: ${t.startingChips}</div>
+            <div class="tourney-info">Buy-in: ${t.buyIn} sats | Jetons: ${t.startingChips}</div>
             <div class="tourney-info">${t.totalRounds} rounds</div>
+            <div class="player-bar"><div class="player-bar-fill" style="width:${fillPct}%"></div></div>
             <div class="tourney-info">${t.playerCount}/${t.maxPlayers} joueurs (min ${t.minPlayers})</div>
             <div class="tourney-prize">${t.prizePool} sats</div>
             ${countdownHTML}
             <div class="tourney-status ${stClass}">${stLabel}</div>
-            <div style="margin-top:15px;">${actionBtn}</div>
+            <div style="margin-top:15px; position:relative; z-index:2;">${actionBtn}</div>
         `;
         lobby.appendChild(card);
     });
 
-    // Start countdown timer
     if (countdownInterval) clearInterval(countdownInterval);
     countdownInterval = setInterval(updateCountdowns, 1000);
 }
@@ -243,10 +595,7 @@ function updateCountdowns() {
         const start = parseInt(el.dataset.start);
         const secs = Math.max(0, Math.ceil((start - Date.now()) / 1000));
         el.textContent = formatCountdown(secs);
-        if (secs <= 0) {
-            // Tournament should be starting, refresh lobby
-            loadLobby();
-        }
+        if (secs <= 0) loadLobby();
     });
 }
 
@@ -255,8 +604,9 @@ async function register(id) {
         const data = await apiCall('/api/tournament/register', 'POST', { tournamentId: id });
         balance = data.balance;
         document.getElementById('balance').textContent = balance;
+        showToast('Inscrit au tournoi!', 'info');
         await loadLobby();
-    } catch (e) { alert('Erreur: ' + e.message); }
+    } catch (e) { showToast('Erreur: ' + e.message, 'loss'); }
 }
 
 let currentTotalRounds = 0;
@@ -299,30 +649,34 @@ function showDealButton() {
 
 async function tDeal() {
     try {
+        playSound('card');
         const data = await apiCall('/api/tournament/play', 'POST', { tournamentId: currentTournamentId, action: 'deal' });
         renderTournamentGame(data);
-    } catch (e) { alert('Erreur: ' + e.message); }
+    } catch (e) { showToast('Erreur: ' + e.message, 'loss'); }
 }
 
 async function tHit() {
     try {
+        playSound('card');
         const data = await apiCall('/api/tournament/play', 'POST', { tournamentId: currentTournamentId, action: 'hit' });
         renderTournamentGame(data);
-    } catch (e) { alert('Erreur: ' + e.message); }
+    } catch (e) { showToast('Erreur: ' + e.message, 'loss'); }
 }
 
 async function tStand() {
     try {
         const data = await apiCall('/api/tournament/play', 'POST', { tournamentId: currentTournamentId, action: 'stand' });
         renderTournamentGame(data);
-    } catch (e) { alert('Erreur: ' + e.message); }
+    } catch (e) { showToast('Erreur: ' + e.message, 'loss'); }
 }
 
 function renderTournamentGame(data) {
-    // Handle busted response (different format)
+    // Handle busted response
     if (data.status === 'busted' && data.message) {
         document.getElementById('chipsDisplay').textContent = `${data.chips} jetons`;
-        document.getElementById('resultBanner').innerHTML = `<div class="result-banner loss">ELIMINE - ${data.message}</div>`;
+        document.getElementById('resultBanner').innerHTML = `<div class="result-banner loss">ELIMINE!</div>`;
+        showToast('Elimine - Plus assez de jetons!', 'loss');
+        playSound('lose');
         if (data.tournamentStatus === 'finished' && data.leaderboard) {
             showLeaderboard(data);
         } else {
@@ -331,7 +685,6 @@ function renderTournamentGame(data) {
         return;
     }
 
-    // Round display: show current round (roundsPlayed + 1 during play, roundsPlayed after finish)
     const currentRound = data.status === 'playing' ? data.roundsPlayed + 1 : data.roundsPlayed;
     document.getElementById('roundInfo').textContent = `ROUND ${currentRound}/${data.totalRounds}`;
     document.getElementById('chipsDisplay').textContent = `${data.chips} jetons`;
@@ -357,7 +710,26 @@ function renderTournamentGame(data) {
         const cls = { win: 'win', loss: 'loss', bust: 'loss', push: 'push', bj: 'bj' };
         rb.innerHTML = `<div class="result-banner ${cls[data.result] || ''}">${labels[data.result] || data.result}</div>`;
 
-        // Check tournament end
+        // Sound + confetti
+        if (data.result === 'bj') {
+            playSound('blackjack');
+            showToast('BLACKJACK!', 'bj');
+            if (typeof confetti !== 'undefined') confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 }, colors: ['#9b59b6', '#ff6b00', '#ffd700'] });
+        } else if (data.result === 'win') {
+            playSound('win');
+            showToast('Victoire! +' + data.bet + ' jetons', 'win');
+            if (typeof confetti !== 'undefined') confetti({ particleCount: 80, spread: 50, origin: { y: 0.6 }, colors: ['#9b59b6', '#ff6b00'] });
+        } else if (data.result === 'push') {
+            showToast('Push - Mise remboursee', 'push');
+        } else {
+            playSound('lose');
+            showToast('Defaite -' + data.bet + ' jetons', 'loss');
+        }
+
+        // Vibration
+        if (navigator.vibrate && (data.result === 'win' || data.result === 'bj')) navigator.vibrate([200, 100, 200]);
+
+        // Next action
         if (data.tournamentStatus === 'finished' && data.leaderboard) {
             showLeaderboard(data);
         } else if (data.busted) {
@@ -372,7 +744,7 @@ function renderTournamentGame(data) {
         } else {
             const nextBet = Math.max(10, Math.floor(data.chips * 10 / 100));
             document.getElementById('controls').innerHTML = `
-                <div style="color:#888;margin-bottom:10px;">Prochaine mise: ${nextBet} jetons</div>
+                <div style="color:#888;margin-bottom:10px;font-family:Orbitron;font-size:12px;">Prochaine mise: ${nextBet} jetons</div>
                 <button class="btn-play" onclick="tDeal()">ROUND SUIVANT</button>
             `;
         }
@@ -394,16 +766,17 @@ function startWaitingPoll() {
     waitingPollInterval = setInterval(async () => {
         if (!currentTournamentId) return;
         try {
-            const data = await apiCall('/api/tournament/play', 'POST', {
-                tournamentId: currentTournamentId, action: 'status'
-            });
+            const data = await apiCall('/api/tournament/play', 'POST', { tournamentId: currentTournamentId, action: 'status' });
             if (data.tournamentStatus === 'finished' && data.leaderboard) {
                 stopWaitingPoll();
+                showToast('Tournoi termine!', 'info');
                 showLeaderboard(data);
-                // Refresh balance
                 const session = await apiCall('/api/session');
                 balance = session.balance;
                 document.getElementById('balance').textContent = balance;
+                const balEl = document.getElementById('balance');
+                balEl.classList.add('updated');
+                setTimeout(() => balEl.classList.remove('updated'), 600);
             }
         } catch (e) { console.error('Status poll error:', e); }
     }, 3000);
@@ -420,9 +793,10 @@ function showLeaderboard(data) {
     const rows = document.getElementById('lbRows');
     rows.innerHTML = '';
 
+    const medals = ['1er', '2eme', '3eme'];
+
     data.leaderboard.forEach((p, i) => {
         const topClass = i === 0 ? 'top1' : (i === 1 ? 'top2' : (i === 2 ? 'top3' : ''));
-        const medals = ['1er', '2eme', '3eme'];
         const prizeHTML = p.prize ? `<span class="lb-prize">+${p.prize} sats</span>` : '';
         rows.innerHTML += `
             <div class="lb-row ${topClass}">
@@ -433,14 +807,20 @@ function showLeaderboard(data) {
         `;
     });
 
+    // Confetti for prize winners
+    if (data.myPrize > 0 && typeof confetti !== 'undefined') {
+        confetti({ particleCount: 200, spread: 90, origin: { y: 0.5 }, colors: ['#ffd700', '#9b59b6', '#ff6b00', '#00ff00'] });
+    }
+
     if (data.myPrize > 0) {
         document.getElementById('controls').innerHTML = `
-            <div style="color:#ffd700; font-family:'Orbitron'; font-size:20px; margin:15px;">VOUS AVEZ GAGNE ${data.myPrize} SATS!</div>
+            <div style="font-family:'Orbitron'; font-size:22px; margin:15px; background: linear-gradient(135deg, #ffd700, #ff6b00); -webkit-background-clip: text; -webkit-text-fill-color: transparent; filter: drop-shadow(0 0 10px rgba(255,215,0,0.5));">VOUS AVEZ GAGNE ${data.myPrize} SATS!</div>
             <button onclick="backToLobby()">RETOUR AU LOBBY</button>
         `;
+        showToast('+' + data.myPrize + ' sats!', 'win');
     } else {
         document.getElementById('controls').innerHTML = `
-            <div style="color:#888; margin:15px;">Tournoi termine. Rang: #${data.myRank}</div>
+            <div style="color:#888; margin:15px; font-family:Orbitron;">Tournoi termine. Rang: #${data.myRank}</div>
             <button onclick="backToLobby()">RETOUR AU LOBBY</button>
         `;
     }
