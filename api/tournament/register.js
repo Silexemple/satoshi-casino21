@@ -76,12 +76,14 @@ export default async function handler(req) {
     await kv.set(tKey, tournament, { ex: 86400 });
 
     // Log transaction
-    await kv.rpush(`transactions:${sessionId}`, {
+    const txKey = `transactions:${sessionId}`;
+    await kv.rpush(txKey, {
       type: 'tournament_buyin',
       amount: -tournament.buyIn,
       timestamp: Date.now(),
       description: `Buy-in: ${tournament.name}`
     });
+    await kv.expire(txKey, 2592000);
 
     return json(200, {
       success: true,

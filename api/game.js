@@ -144,7 +144,7 @@ export default async function handler(req) {
         gs.phase = 'insurance_offered';
       }
 
-      await kv.set(playerKey, player);
+      await kv.set(playerKey, player, { ex: 2592000 });
       await kv.set(gameKey, gs, { ex: 3600 });
 
       const score = handScore(pHand);
@@ -230,7 +230,7 @@ export default async function handler(req) {
         return json(200, finishResponse(gs, player, 'bj'));
       }
 
-      await kv.set(playerKey, player);
+      await kv.set(playerKey, player, { ex: 2592000 });
       await kv.set(gameKey, gs, { ex: 3600 });
       return json(200, playingResponse(gs, player));
     }
@@ -385,7 +385,7 @@ export default async function handler(req) {
         return await advanceOrFinish(gs, player, playerKey, gameKey, sessionId);
       }
 
-      await kv.set(playerKey, player);
+      await kv.set(playerKey, player, { ex: 2592000 });
       await kv.set(gameKey, gs, { ex: 3600 });
       return json(200, playingResponse(gs, player));
     }
@@ -414,7 +414,7 @@ async function advanceOrFinish(gs, player, playerKey, gameKey, sessionId) {
       return await advanceOrFinish(gs, player, playerKey, gameKey, sessionId);
     }
 
-    await kv.set(playerKey, player);
+    await kv.set(playerKey, player, { ex: 2592000 });
     await kv.set(gameKey, gs, { ex: 3600 });
     return json(200, playingResponse(gs, player));
   }
@@ -518,16 +518,18 @@ function finishResponse(gs, player, globalResult) {
 
 async function save(playerKey, player, gameKey, gs, sessionId, result, netGain) {
   await Promise.all([
-    kv.set(playerKey, player),
+    kv.set(playerKey, player, { ex: 2592000 }),
     kv.set(gameKey, gs, { ex: 3600 })
   ]);
 
   if (result) {
-    await kv.rpush(`transactions:${sessionId}`, {
+    const txKey = `transactions:${sessionId}`;
+    await kv.rpush(txKey, {
       type: result,
       amount: netGain,
       timestamp: Date.now(),
       description: `Blackjack (${result})`
     });
+    await kv.expire(txKey, 2592000);
   }
 }

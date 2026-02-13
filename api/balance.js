@@ -1,35 +1,20 @@
 import { kv } from '@vercel/kv';
-import cookie from 'cookie';
+import { json, getSessionId } from './_helpers.js';
 
 export const config = {
   runtime: 'edge',
 };
 
 export default async function handler(req) {
-  const cookies = cookie.parse(req.headers.get('cookie') || '');
-  const sessionId = cookies.session_id;
-  
+  const sessionId = getSessionId(req);
   if (!sessionId) {
-    return new Response(JSON.stringify({ error: 'Session invalide' }), {
-      status: 401,
-      headers: { 'Content-Type': 'application/json' }
-    });
+    return json(401, { error: 'Session invalide' });
   }
-  
+
   const player = await kv.get(`player:${sessionId}`);
-  
   if (!player) {
-    return new Response(JSON.stringify({ error: 'Joueur non trouvé' }), {
-      status: 404,
-      headers: { 'Content-Type': 'application/json' }
-    });
+    return json(404, { error: 'Joueur non trouvé' });
   }
-  
-  return new Response(
-    JSON.stringify({ balance: player.balance }),
-    {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' }
-    }
-  );
+
+  return json(200, { balance: player.balance });
 }

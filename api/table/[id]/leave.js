@@ -29,9 +29,23 @@ export default async function handler(req) {
       return json(400, { error: 'Vous n\'êtes pas assis à cette table' });
     }
 
-    // Interdire de quitter en pleine partie si on a misé
-    if (table.status === 'playing' && table.seats[seatIdx].bet > 0 && !table.seats[seatIdx].finished) {
+    const seat = table.seats[seatIdx];
+
+    // Interdire de quitter en pleine partie si on a misé et pas fini
+    if (table.status === 'playing' && seat.bet > 0 && !seat.finished) {
       return json(400, { error: 'Impossible de quitter pendant votre tour' });
+    }
+
+    // Rembourser la mise si le joueur quitte pendant la phase de mises
+    let refunded = 0;
+    if (['betting', 'waiting'].includes(table.status) && seat.bet > 0) {
+      const playerKey = `player:${sessionId}`;
+      const player = await kv.get(playerKey);
+      if (player) {
+        player.balance += seat.bet;
+        await kv.set(playerKey, player, { ex: 2592000 });
+        refunded = seat.bet;
+      }
     }
 
     table.seats[seatIdx] = null;
@@ -39,7 +53,7 @@ export default async function handler(req) {
 
     await kv.set(tableKey, table, { ex: 86400 });
 
-    return json(200, { success: true });
+    return json(200, { success: true, refunded });
   } finally {
     await kv.del(lockKey);
   }

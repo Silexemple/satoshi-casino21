@@ -213,7 +213,7 @@ function dealerPlay(table) {
   }
 }
 
-async function settleRound(table) {
+function settleRound(table) {
   const dScore = handScore(table.dealerHand);
   table.status = 'settling';
 
@@ -374,20 +374,34 @@ export default async function handler(req) {
   const tableId = pathParts[pathParts.length - 1];
 
   const tableKey = `table:${tableId}`;
-  const table = await kv.get(tableKey);
+  let table = await kv.get(tableKey);
 
   if (!table) {
     return json(404, { error: 'Table non trouvée' });
   }
 
-  // Check timeouts à chaque requête
+  // Check timeouts - acquire lock only if state needs modification
   const changed = checkTimeouts(table);
   if (changed) {
-    await kv.set(tableKey, table, { ex: 86400 });
-
-    // Si round fini, créditer les joueurs
-    if (table.status === 'finished') {
-      await creditPlayers(table);
+    const lockKey = `lock:table:${tableId}`;
+    const locked = await kv.set(lockKey, '1', { nx: true, ex: 5 });
+    if (locked) {
+      try {
+        // Re-read table under lock to avoid race conditions
+        const freshTable = await kv.get(tableKey);
+        if (freshTable) {
+          table = freshTable;
+          const stillChanged = checkTimeouts(table);
+          if (stillChanged) {
+            await kv.set(tableKey, table, { ex: 86400 });
+            if (table.status === 'finished') {
+              await creditPlayers(table);
+            }
+          }
+        }
+      } finally {
+        await kv.del(lockKey);
+      }
     }
   }
 
@@ -430,12 +444,14 @@ async function creditPlayers(table) {
       player.last_activity = Date.now();
       await kv.set(playerKey, player, { ex: 2592000 });
 
-      await kv.rpush(`transactions:${seat.sessionId}`, {
+      const txKey = `transactions:${seat.sessionId}`;
+      await kv.rpush(txKey, {
         type: seat.netGain > 0 ? 'win' : (seat.netGain < 0 ? 'loss' : 'push'),
         amount: seat.netGain,
         timestamp: Date.now(),
         description: `Table ${table.name} (round ${table.roundNumber})`
       });
+      await kv.expire(txKey, 2592000);
     }
   }
 

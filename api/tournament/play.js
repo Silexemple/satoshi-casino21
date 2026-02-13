@@ -255,12 +255,14 @@ async function finishTournament(tournament) {
       if (player) {
         player.balance += prizes[i];
         await kv.set(pk, player, { ex: 2592000 });
-        await kv.rpush(`transactions:${p.sessionId}`, {
+        const txKey = `transactions:${p.sessionId}`;
+        await kv.rpush(txKey, {
           type: 'tournament_prize',
           amount: prizes[i],
           timestamp: Date.now(),
           description: `${tournament.name} - ${i + 1}${i === 0 ? 'er' : 'eme'} place`
         });
+        await kv.expire(txKey, 2592000);
       }
       p.prize = prizes[i];
     }

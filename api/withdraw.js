@@ -1,5 +1,5 @@
 import { kv } from '@vercel/kv';
-import cookie from 'cookie';
+import { json, getSessionId } from './_helpers.js';
 
 export const config = {
   runtime: 'edge',
@@ -38,26 +38,16 @@ function generateIdempotencyKey(sessionId) {
 }
 
 export default async function handler(req) {
-  // Vérifier la méthode
   if (req.method !== 'POST') {
-    return new Response(JSON.stringify({ error: 'Method not allowed' }), {
-      status: 405,
-      headers: { 'Content-Type': 'application/json' }
-    });
+    return json(405, { error: 'Method not allowed' });
   }
 
   const idempotencyKey = generateIdempotencyKey('req');
-  
+
   try {
-    // Parse le cookie
-    const cookies = cookie.parse(req.headers.get('cookie') || '');
-    const sessionId = cookies.session_id;
-    
+    const sessionId = getSessionId(req);
     if (!sessionId) {
-      return new Response(JSON.stringify({ error: 'Session invalide' }), {
-        status: 401,
-        headers: { 'Content-Type': 'application/json' }
-      });
+      return json(401, { error: 'Session invalide' });
     }
 
     // Rate limiting - max 1 retrait par minute
@@ -66,71 +56,42 @@ export default async function handler(req) {
     
     if (lastWithdraw && (Date.now() - lastWithdraw) < 60000) {
       const waitSeconds = Math.ceil((60000 - (Date.now() - lastWithdraw)) / 1000);
-      return new Response(JSON.stringify({ 
-        error: `Veuillez attendre ${waitSeconds}s entre les retraits` 
-      }), {
-        status: 429,
-        headers: { 
-          'Content-Type': 'application/json',
-          'Retry-After': String(waitSeconds)
-        }
-      });
+      return json(429, { error: `Veuillez attendre ${waitSeconds}s entre les retraits` });
     }
 
-    // Parse le body
     let body;
     try {
       body = await req.json();
     } catch (e) {
-      return new Response(JSON.stringify({ error: 'Body JSON invalide' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' }
-      });
+      return json(400, { error: 'Body JSON invalide' });
     }
 
     const invoice = body.invoice?.trim();
     
     // Validation stricte de l'invoice
     if (!invoice) {
-      return new Response(JSON.stringify({ error: 'Invoice manquante' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' }
-      });
+      return json(400, { error: 'Invoice manquante' });
     }
 
     if (!invoice.startsWith('lnbc')) {
-      return new Response(JSON.stringify({ error: 'Invoice invalide (doit commencer par lnbc)' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' }
-      });
+      return json(400, { error: 'Invoice invalide (doit commencer par lnbc)' });
     }
 
     if (invoice.length < 20 || invoice.length > 10000) {
-      return new Response(JSON.stringify({ error: 'Invoice invalide (longueur incorrecte)' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' }
-      });
+      return json(400, { error: 'Invoice invalide (longueur incorrecte)' });
     }
 
     // Décoder et vérifier le montant
     const amountSat = decodeInvoiceAmount(invoice);
     
     if (amountSat === null || amountSat <= 0) {
-      return new Response(JSON.stringify({ error: 'Impossible de décoder le montant de l\'invoice' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' }
-      });
+      return json(400, { error: 'Impossible de décoder le montant de l\'invoice' });
     }
 
     // Limite de retrait (optionnel - ajuster selon tes besoins)
     const MAX_WITHDRAW = 1000000; // 1M sats max par retrait
     if (amountSat > MAX_WITHDRAW) {
-      return new Response(JSON.stringify({ 
-        error: `Montant maximum de retrait: ${MAX_WITHDRAW} sats` 
-      }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' }
-      });
+      return json(400, { error: `Montant maximum de retrait: ${MAX_WITHDRAW} sats` });
     }
 
     // Récupérer le joueur avec verrou pour éviter les race conditions
@@ -138,38 +99,24 @@ export default async function handler(req) {
     const lock = await kv.set(lockKey, Date.now(), { nx: true, ex: 30 }); // 30s TTL
     
     if (!lock) {
-      return new Response(JSON.stringify({ error: 'Une autre opération est en cours' }), {
-        status: 423,
-        headers: { 'Content-Type': 'application/json' }
-      });
+      return json(423, { error: 'Une autre opération est en cours' });
     }
 
     try {
       const player = await kv.get(`player:${sessionId}`);
       
       if (!player) {
-        return new Response(JSON.stringify({ error: 'Joueur non trouvé' }), {
-          status: 404,
-          headers: { 'Content-Type': 'application/json' }
-        });
+        return json(404, { error: 'Joueur non trouvé' });
       }
 
       const currentBalance = player.balance || 0;
 
       if (currentBalance <= 0) {
-        return new Response(JSON.stringify({ error: 'Solde insuffisant' }), {
-          status: 400,
-          headers: { 'Content-Type': 'application/json' }
-        });
+        return json(400, { error: 'Solde insuffisant' });
       }
 
       if (amountSat > currentBalance) {
-        return new Response(JSON.stringify({ 
-          error: `Solde insuffisant. Disponible: ${currentBalance} sats, Demandé: ${amountSat} sats` 
-        }), {
-          status: 400,
-          headers: { 'Content-Type': 'application/json' }
-        });
+        return json(400, { error: `Solde insuffisant. Disponible: ${currentBalance} sats, Demandé: ${amountSat} sats` });
       }
 
       // Vérifier les variables d'environnement
@@ -177,17 +124,11 @@ export default async function handler(req) {
       const adminKey = process.env.LNBITS_ADMIN_KEY;
 
       if (!lnbitsUrl) {
-        return new Response(JSON.stringify({ error: 'LNBITS_URL non configurée' }), {
-          status: 500,
-          headers: { 'Content-Type': 'application/json' }
-        });
+        return json(500, { error: 'LNBITS_URL non configurée' });
       }
 
       if (!adminKey) {
-        return new Response(JSON.stringify({ error: 'LNBITS_ADMIN_KEY non configurée' }), {
-          status: 500,
-          headers: { 'Content-Type': 'application/json' }
-        });
+        return json(500, { error: 'LNBITS_ADMIN_KEY non configurée' });
       }
 
       // Vérifier l'idempotence - éviter les doubles paiements
@@ -195,20 +136,14 @@ export default async function handler(req) {
       const alreadyProcessed = await kv.get(processedKey);
       
       if (alreadyProcessed) {
-        return new Response(JSON.stringify({ 
-          error: 'Cette invoice a déjà été payée',
-          payment_hash: alreadyProcessed.payment_hash 
-        }), {
-          status: 409,
-          headers: { 'Content-Type': 'application/json' }
-        });
+        return json(409, { error: 'Cette invoice a déjà été payée', payment_hash: alreadyProcessed.payment_hash });
       }
 
       // DEBIT-FIRST: débiter le solde AVANT le paiement LNbits
       const newBalance = currentBalance - amountSat;
       player.balance = newBalance;
       player.last_activity = Date.now();
-      await kv.set(`player:${sessionId}`, player);
+      await kv.set(`player:${sessionId}`, player, { ex: 2592000 });
 
       // Logger la tentative (pour audit)
       const attemptId = `withdraw:${sessionId}:${Date.now()}`;
@@ -240,7 +175,7 @@ export default async function handler(req) {
       } catch (fetchError) {
         // REFUND: rembourser si l'appel réseau échoue
         player.balance = currentBalance;
-        await kv.set(`player:${sessionId}`, player);
+        await kv.set(`player:${sessionId}`, player, { ex: 2592000 });
         await kv.set(`attempt:${attemptId}`, {
           invoice: invoice.substring(0, 50),
           amount: amountSat,
@@ -262,7 +197,7 @@ export default async function handler(req) {
       } catch (e) {
         // REFUND: réponse illisible = paiement échoué
         player.balance = currentBalance;
-        await kv.set(`player:${sessionId}`, player);
+        await kv.set(`player:${sessionId}`, player, { ex: 2592000 });
         throw new Error('Réponse LNbits invalide');
       }
 
@@ -270,7 +205,7 @@ export default async function handler(req) {
       if (!response.ok) {
         // REFUND: paiement refusé par LNbits
         player.balance = currentBalance;
-        await kv.set(`player:${sessionId}`, player);
+        await kv.set(`player:${sessionId}`, player, { ex: 2592000 });
 
         await kv.set(`attempt:${attemptId}`, {
           invoice: invoice.substring(0, 50),
@@ -285,7 +220,7 @@ export default async function handler(req) {
 
       if (!payment.payment_hash) {
         player.balance = currentBalance;
-        await kv.set(`player:${sessionId}`, player);
+        await kv.set(`player:${sessionId}`, player, { ex: 2592000 });
         throw new Error('Réponse LNbits invalide: payment_hash manquant');
       }
 
@@ -303,7 +238,8 @@ export default async function handler(req) {
       await kv.set(rateLimitKey, Date.now(), { ex: 120 }); // 2min TTL
 
       // Logger la transaction
-      await kv.rpush(`transactions:${sessionId}`, {
+      const txKey = `transactions:${sessionId}`;
+      await kv.rpush(txKey, {
         type: 'withdraw',
         amount: amountSat,
         timestamp: Date.now(),
@@ -313,23 +249,18 @@ export default async function handler(req) {
         balance_before: currentBalance,
         balance_after: newBalance
       });
+      await kv.expire(txKey, 2592000);
 
       // Mettre à jour le statut de la tentative
       await kv.del(`attempt:${attemptId}`);
 
-      return new Response(
-        JSON.stringify({ 
-          success: true,
-          amount: amountSat,
-          new_balance: newBalance,
-          payment_hash: payment.payment_hash,
-          timestamp: Date.now()
-        }),
-        {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' }
-        }
-      );
+      return json(200, {
+        success: true,
+        amount: amountSat,
+        new_balance: newBalance,
+        payment_hash: payment.payment_hash,
+        timestamp: Date.now()
+      });
 
     } finally {
       // Toujours libérer le verrou
@@ -353,16 +284,6 @@ export default async function handler(req) {
       errorMessage = 'Auto-paiement non autorisé';
     }
 
-    return new Response(
-      JSON.stringify({ 
-        error: errorMessage,
-        balance_unchanged: true,
-        id: idempotencyKey
-      }),
-      {
-        status: statusCode,
-        headers: { 'Content-Type': 'application/json' }
-      }
-    );
+    return json(statusCode, { error: errorMessage, balance_unchanged: true, id: idempotencyKey });
   }
 }

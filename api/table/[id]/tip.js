@@ -71,19 +71,25 @@ export default async function handler(req) {
     ]);
 
     // Log transactions
+    const senderTxKey = `transactions:${sessionId}`;
+    const receiverTxKey = `transactions:${targetSeat.sessionId}`;
     await Promise.all([
-      kv.rpush(`transactions:${sessionId}`, {
+      kv.rpush(senderTxKey, {
         type: 'tip_sent',
         amount: -amount,
         timestamp: Date.now(),
         description: `Pourboire a ${targetSeat.playerName}`
       }),
-      kv.rpush(`transactions:${targetSeat.sessionId}`, {
+      kv.rpush(receiverTxKey, {
         type: 'tip_received',
         amount: amount,
         timestamp: Date.now(),
         description: `Pourboire de ${table.seats[senderIdx].playerName}`
       })
+    ]);
+    await Promise.all([
+      kv.expire(senderTxKey, 2592000),
+      kv.expire(receiverTxKey, 2592000)
     ]);
 
     // Post a chat message about the tip

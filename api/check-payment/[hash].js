@@ -57,14 +57,16 @@ export default async function handler(req) {
 
         player.balance = newBalance;
         player.last_activity = Date.now();
-        await kv.set(`player:${sessionId}`, player);
+        await kv.set(`player:${sessionId}`, player, { ex: 2592000 });
 
-        await kv.rpush(`transactions:${sessionId}`, {
+        const txKey = `transactions:${sessionId}`;
+        await kv.rpush(txKey, {
           type: 'deposit',
           amount: freshInvoice.amount,
           timestamp: Date.now(),
           description: `Dépôt Lightning ${paymentHash.substring(0, 8)}`
         });
+        await kv.expire(txKey, 2592000);
 
         await kv.del(`invoice:${paymentHash}`);
         await kv.del(lockKey);
