@@ -1,50 +1,22 @@
 import { kv } from '@vercel/kv';
 import { json, getSessionId } from './_helpers.js';
+import { createAndShuffleDeck, handScore, isBlackjack, isPair, cardForClient } from './_game-helpers.js';
 
 export const config = {
   runtime: 'edge',
 };
 
-// --- Blackjack helpers ---
+const RAKE_PERCENT = 2; // 2% commission on net winnings
 
-const SUITS = ['♠', '♥', '♦', '♣'];
-const RANKS = ['A','2','3','4','5','6','7','8','9','10','J','Q','K'];
-
-function createAndShuffleDeck() {
-  const deck = [];
-  for (const suit of SUITS) {
-    for (const rank of RANKS) {
-      const num = rank === 'A' ? 11 : (isNaN(rank) ? 10 : parseInt(rank));
-      deck.push({ suit, value: rank, num });
-    }
-  }
-  // Fisher-Yates avec crypto.getRandomValues
-  const arr = new Uint32Array(deck.length);
-  crypto.getRandomValues(arr);
-  for (let i = deck.length - 1; i > 0; i--) {
-    const j = arr[i] % (i + 1);
-    [deck[i], deck[j]] = [deck[j], deck[i]];
-  }
-  return deck;
+function applyRake(netGain) {
+  if (netGain <= 0) return netGain;
+  const rake = Math.max(1, Math.floor(netGain * RAKE_PERCENT / 100));
+  return netGain - rake;
 }
 
-function handScore(hand) {
-  let score = hand.reduce((s, c) => s + c.num, 0);
-  let aces = hand.filter(c => c.value === 'A').length;
-  while (score > 21 && aces > 0) { score -= 10; aces--; }
-  return score;
-}
-
-function isBlackjack(hand) {
-  return hand.length === 2 && handScore(hand) === 21;
-}
-
-function isPair(hand) {
-  return hand.length === 2 && hand[0].value === hand[1].value;
-}
-
-function cardForClient(card) {
-  return { suit: card.suit, value: card.value, num: card.num };
+function getRake(netGain) {
+  if (netGain <= 0) return 0;
+  return Math.max(1, Math.floor(netGain * RAKE_PERCENT / 100));
 }
 
 // --- Handler ---
@@ -89,8 +61,8 @@ export default async function handler(req) {
     const body = await req.json();
     const { action, bet_amount } = body;
 
-    if (!['deal', 'hit', 'stand', 'double', 'split'].includes(action)) {
-      return json(400, { error: 'Action invalide (deal, hit, stand, double, split)' });
+    if (!['deal', 'hit', 'stand', 'double', 'split', 'insurance', 'surrender'].includes(action)) {
+      return json(400, { error: 'Action invalide' });
     }
 
     const playerKey = `player:${sessionId}`;
@@ -128,12 +100,18 @@ export default async function handler(req) {
         dealerHand: dHand,
         currentHandIdx: 0,
         totalBet: bet,
+        insuranceBet: 0,
+        insuranceResult: null,
+        surrendered: false,
         status: 'playing',
         createdAt: Date.now()
       };
 
-      // Dealer blackjack check
-      if (dHand[0].num >= 10 && isBlackjack(dHand)) {
+      // Check if dealer up card is Ace -> offer insurance
+      const dealerUpIsAce = dHand[0].value === 'A';
+
+      // Dealer blackjack check (only if no insurance offered, or handle after insurance)
+      if (!dealerUpIsAce && dHand[0].num >= 10 && isBlackjack(dHand)) {
         if (isBlackjack(pHand)) {
           player.balance += bet;
           gs.status = 'finished';
@@ -148,35 +126,177 @@ export default async function handler(req) {
         }
       }
 
-      // Player blackjack
-      if (isBlackjack(pHand)) {
+      // Player blackjack (no insurance scenario)
+      if (!dealerUpIsAce && isBlackjack(pHand)) {
         const bjPayout = Math.floor(bet * 2.5);
-        player.balance += bjPayout;
+        const netGain = bjPayout - bet;
+        const rake = getRake(netGain);
+        player.balance += bjPayout - rake;
         gs.status = 'finished';
         gs.playerHands[0].result = 'bj';
-        await save(playerKey, player, gameKey, gs, sessionId, 'bj', bjPayout - bet);
+        await save(playerKey, player, gameKey, gs, sessionId, 'bj', netGain - rake);
+        await kv.incrby('house:bankroll', rake);
         return json(200, finishResponse(gs, player, 'bj'));
+      }
+
+      // If dealer shows Ace, set phase to 'insurance_offered'
+      if (dealerUpIsAce) {
+        gs.phase = 'insurance_offered';
       }
 
       await kv.set(playerKey, player);
       await kv.set(gameKey, gs, { ex: 3600 });
 
       const score = handScore(pHand);
-      return json(200, {
+      const resp = {
         action: 'deal',
         playerHands: [{ cards: pHand.map(cardForClient), bet, score }],
         dealerUpCard: cardForClient(dHand[0]),
         balance: player.balance,
         canDouble: score >= 9 && score <= 11 && player.balance >= bet,
         canSplit: isPair(pHand) && player.balance >= bet,
+        canInsurance: dealerUpIsAce && player.balance >= Math.floor(bet / 2),
+        canSurrender: true,
         status: 'playing'
-      });
+      };
+      return json(200, resp);
+    }
+
+    // ===================== INSURANCE =====================
+    if (action === 'insurance') {
+      const gs = await kv.get(gameKey);
+      if (!gs || gs.status !== 'playing') {
+        return json(400, { error: 'Aucune partie en cours' });
+      }
+      if (gs.phase !== 'insurance_offered') {
+        return json(400, { error: 'Assurance non disponible' });
+      }
+
+      const accept = body.accept !== false; // default true
+      const insuranceCost = Math.floor(gs.bet / 2);
+
+      if (accept) {
+        if (player.balance < insuranceCost) {
+          return json(400, { error: 'Solde insuffisant pour l\'assurance' });
+        }
+        player.balance -= insuranceCost;
+        gs.insuranceBet = insuranceCost;
+      }
+
+      gs.phase = null;
+
+      // Now check dealer blackjack
+      if (isBlackjack(gs.dealerHand)) {
+        // Insurance pays 2:1
+        if (gs.insuranceBet > 0) {
+          const insurancePayout = gs.insuranceBet * 3; // original bet + 2:1
+          player.balance += insurancePayout;
+          gs.insuranceResult = 'win';
+        }
+
+        // Check player blackjack for push
+        if (isBlackjack(gs.playerHands[0].cards)) {
+          player.balance += gs.bet; // push on main bet
+          gs.status = 'finished';
+          gs.playerHands[0].result = 'push';
+          const netGain = gs.insuranceBet > 0 ? gs.insuranceBet * 2 : 0;
+          await save(playerKey, player, gameKey, gs, sessionId, 'push', netGain);
+          return json(200, finishResponse(gs, player, 'push'));
+        } else {
+          gs.status = 'finished';
+          gs.playerHands[0].result = 'loss';
+          const netGain = gs.insuranceBet > 0 ? (gs.insuranceBet * 2 - gs.bet) : -gs.bet;
+          await save(playerKey, player, gameKey, gs, sessionId, 'loss', netGain);
+          return json(200, finishResponse(gs, player, 'loss'));
+        }
+      }
+
+      // Dealer doesn't have blackjack - insurance lost
+      if (gs.insuranceBet > 0) {
+        gs.insuranceResult = 'loss';
+        gs.totalBet += gs.insuranceBet;
+      }
+
+      // Check player blackjack
+      if (isBlackjack(gs.playerHands[0].cards)) {
+        const bjPayout = Math.floor(gs.bet * 2.5);
+        const netGain = bjPayout - gs.bet - (gs.insuranceBet || 0);
+        const rake = getRake(Math.max(0, netGain));
+        player.balance += bjPayout - rake;
+        gs.status = 'finished';
+        gs.playerHands[0].result = 'bj';
+        await save(playerKey, player, gameKey, gs, sessionId, 'bj', netGain - rake);
+        if (rake > 0) await kv.incrby('house:bankroll', rake);
+        return json(200, finishResponse(gs, player, 'bj'));
+      }
+
+      await kv.set(playerKey, player);
+      await kv.set(gameKey, gs, { ex: 3600 });
+      return json(200, playingResponse(gs, player));
+    }
+
+    // ===================== SURRENDER =====================
+    if (action === 'surrender') {
+      const gs = await kv.get(gameKey);
+      if (!gs || gs.status !== 'playing') {
+        return json(400, { error: 'Aucune partie en cours' });
+      }
+
+      const hand = gs.playerHands[gs.currentHandIdx];
+      // Surrender only on initial 2 cards, first hand, no splits
+      if (hand.cards.length !== 2 || gs.playerHands.length > 1) {
+        return json(400, { error: 'Surrender seulement sur les 2 premières cartes' });
+      }
+
+      // Return half the bet
+      const refund = Math.floor(hand.bet / 2);
+      player.balance += refund;
+      hand.finished = true;
+      hand.result = 'surrender';
+      gs.surrendered = true;
+      gs.status = 'finished';
+
+      const netGain = -(hand.bet - refund);
+      await save(playerKey, player, gameKey, gs, sessionId, 'surrender', netGain);
+      return json(200, finishResponse(gs, player, 'surrender'));
     }
 
     // ===================== HIT / STAND / DOUBLE / SPLIT =====================
     const gs = await kv.get(gameKey);
     if (!gs || gs.status !== 'playing') {
       return json(400, { error: 'Aucune partie en cours' });
+    }
+
+    // If insurance is still offered, auto-decline
+    if (gs.phase === 'insurance_offered') {
+      gs.phase = null;
+      // Check dealer BJ
+      if (isBlackjack(gs.dealerHand)) {
+        if (isBlackjack(gs.playerHands[0].cards)) {
+          player.balance += gs.bet;
+          gs.status = 'finished';
+          gs.playerHands[0].result = 'push';
+          await save(playerKey, player, gameKey, gs, sessionId, 'push', 0);
+          return json(200, finishResponse(gs, player, 'push'));
+        } else {
+          gs.status = 'finished';
+          gs.playerHands[0].result = 'loss';
+          await save(playerKey, player, gameKey, gs, sessionId, 'loss', -gs.bet);
+          return json(200, finishResponse(gs, player, 'loss'));
+        }
+      }
+      // Check player BJ
+      if (isBlackjack(gs.playerHands[0].cards)) {
+        const bjPayout = Math.floor(gs.bet * 2.5);
+        const netGain = bjPayout - gs.bet;
+        const rake = getRake(netGain);
+        player.balance += bjPayout - rake;
+        gs.status = 'finished';
+        gs.playerHands[0].result = 'bj';
+        await save(playerKey, player, gameKey, gs, sessionId, 'bj', netGain - rake);
+        if (rake > 0) await kv.incrby('house:bankroll', rake);
+        return json(200, finishResponse(gs, player, 'bj'));
+      }
     }
 
     const hand = gs.playerHands[gs.currentHandIdx];
@@ -322,12 +442,21 @@ async function advanceOrFinish(gs, player, playerKey, gameKey, sessionId) {
     }
   }
 
-  player.balance += totalPayout;
+  // Apply rake on net winnings
+  const grossGain = totalPayout - gs.totalBet;
+  const rake = getRake(grossGain);
+  const finalPayout = totalPayout - rake;
+
+  player.balance += finalPayout;
   player.last_activity = Date.now();
   gs.status = 'finished';
 
   const globalResult = resolveGlobalResult(gs.playerHands);
-  const netGain = totalPayout - gs.totalBet;
+  const netGain = finalPayout - gs.totalBet;
+
+  if (rake > 0) {
+    await kv.incrby('house:bankroll', rake);
+  }
 
   await save(playerKey, player, gameKey, gs, sessionId, globalResult, netGain);
 
@@ -346,6 +475,7 @@ function resolveGlobalResult(hands) {
 function playingResponse(gs, player) {
   const hand = gs.playerHands[gs.currentHandIdx];
   const score = handScore(hand.cards);
+  const isFirstAction = hand.cards.length === 2 && gs.playerHands.length === 1;
   return {
     status: 'playing',
     currentHandIdx: gs.currentHandIdx,
@@ -360,7 +490,10 @@ function playingResponse(gs, player) {
     dealerUpCard: cardForClient(gs.dealerHand[0]),
     balance: player.balance,
     canDouble: hand.cards.length === 2 && score >= 9 && score <= 11 && player.balance >= hand.bet,
-    canSplit: isPair(hand.cards) && player.balance >= gs.bet && gs.playerHands.length < 4
+    canSplit: isPair(hand.cards) && player.balance >= gs.bet && gs.playerHands.length < 4,
+    canInsurance: gs.phase === 'insurance_offered' && player.balance >= Math.floor(gs.bet / 2),
+    canSurrender: isFirstAction && !gs.phase,
+    insuranceResult: gs.insuranceResult
   };
 }
 
@@ -377,7 +510,9 @@ function finishResponse(gs, player, globalResult) {
     dealerHand: gs.dealerHand.map(cardForClient),
     dealerScore: handScore(gs.dealerHand),
     balance: player.balance,
-    totalBet: gs.totalBet
+    totalBet: gs.totalBet,
+    insuranceResult: gs.insuranceResult,
+    surrendered: gs.surrendered
   };
 }
 

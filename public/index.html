@@ -966,6 +966,7 @@
         <div class="brand-container">
             <div class="brand">₿ SATS JACK 21</div>
             <div class="brand-subtitle">BITCOIN MAXI CASINO</div>
+            <div id="nicknameDisplay" onclick="showNicknameModal()" style="font-family: 'Orbitron'; font-size: 11px; color: #ffa500; cursor: pointer; margin-top: 5px; letter-spacing: 1px;"></div>
         </div>
         
         <div class="stats-box" onclick="showStatsModal()">
@@ -1001,14 +1002,24 @@
                     <button onclick="showDepositModal()" style="background: linear-gradient(135deg, #00ff00, #00cc00); border-color: #00ff00; color: #000;">+ DÉPOSER</button>
                     <button onclick="showWithdrawModal()" style="background: linear-gradient(135deg, #0080ff, #0060ff); border-color: #0080ff; color: #fff;" id="withdrawBtn" disabled>CASHER</button>
                     <button onclick="showTransactionsModal()" style="background: transparent; border: 2px solid #ff6b00; color: #ff6b00;">HISTORIQUE</button>
+                    <button onclick="window.location.href='/table.html'" style="background: linear-gradient(135deg, #ffd700, #ff6b00); border-color: #ffd700; color: #000;">TABLES MULTI</button>
+                    <button onclick="window.location.href='/tournament.html'" style="background: linear-gradient(135deg, #9b59b6, #8e44ad); border-color: #9b59b6; color: #fff;">TOURNOIS</button>
                 </div>
             </div>
             
+            <div id="insurancePanel" style="display: none;">
+                <div style="font-family: 'Orbitron'; color: #ffd700; font-size: 16px; margin-bottom: 15px; letter-spacing: 2px;">ASSURANCE ?</div>
+                <div style="color: #888; font-size: 14px; margin-bottom: 10px;">Le dealer montre un As. Assurance = moitie de la mise, paie 2:1 si dealer BJ</div>
+                <button onclick="insurance(true)" style="background: linear-gradient(135deg, #ffd700, #ff6b00); border-color: #ffd700; color: #000;">OUI - ASSURER</button>
+                <button onclick="insurance(false)" style="background: transparent; border: 2px solid #666; color: #666;">NON MERCI</button>
+            </div>
+
             <div id="actionPanel" style="display: none;">
                 <button class="btn-hit" onclick="hit()">CARTE</button>
                 <button class="btn-stand" onclick="stand()">RESTER</button>
-                <button onclick="double()" id="doubleBtn" style="background: linear-gradient(135deg, #9b59b6, #8e44ad); border-color: #9b59b6; color: #fff;">DOUBLER</button>
+                <button onclick="doDouble()" id="doubleBtn" style="background: linear-gradient(135deg, #9b59b6, #8e44ad); border-color: #9b59b6; color: #fff;">DOUBLER</button>
                 <button onclick="split()" id="splitBtn" style="background: linear-gradient(135deg, #e67e22, #d35400); border-color: #e67e22; color: #fff;">SPLIT</button>
+                <button onclick="surrender()" id="surrenderBtn" style="background: transparent; border: 2px solid #ff6b00; color: #ff6b00;">ABANDONNER</button>
             </div>
         </div>
         
@@ -1019,6 +1030,15 @@
                 <div class="score" id="playerScore">--</div>
             </div>
         </div>
+    </div>
+</div>
+
+<div class="modal" id="nicknameModal">
+    <div class="modal-content">
+        <div class="modal-title">VOTRE PSEUDO</div>
+        <input type="text" id="nicknameInput" placeholder="2-16 caracteres (lettres, chiffres)" maxlength="16">
+        <button onclick="saveNickname()">SAUVEGARDER</button>
+        <button onclick="closeModal('nicknameModal')" style="background: transparent; border: 2px solid #666; color: #666; margin-top: 10px;">ANNULER</button>
     </div>
 </div>
 
@@ -1495,13 +1515,45 @@ async function apiCall(endpoint, method = 'GET', body = null) {
     return await response.json();
 }
 
+let playerNickname = null;
+
 async function initSession() {
     try {
         const data = await apiCall('/api/session');
         balance = data.balance;
+        playerNickname = data.nickname;
+        updateNicknameDisplay();
         updateDisplay();
     } catch (error) {
         console.error('Erreur init session:', error);
+    }
+}
+
+function updateNicknameDisplay() {
+    const el = document.getElementById('nicknameDisplay');
+    if (el) {
+        el.textContent = playerNickname ? playerNickname : '[Definir pseudo]';
+    }
+}
+
+function showNicknameModal() {
+    document.getElementById('nicknameInput').value = playerNickname || '';
+    document.getElementById('nicknameModal').classList.add('active');
+}
+
+async function saveNickname() {
+    const nick = document.getElementById('nicknameInput').value.trim();
+    if (nick.length < 2) {
+        alert('Pseudo trop court (min 2 caracteres)');
+        return;
+    }
+    try {
+        const data = await apiCall('/api/session', 'POST', { nickname: nick });
+        playerNickname = data.nickname;
+        updateNicknameDisplay();
+        closeModal('nicknameModal');
+    } catch (e) {
+        alert('Erreur: ' + e.message);
     }
 }
 
@@ -1806,9 +1858,18 @@ async function deal() {
 
     // Partie en cours
     document.getElementById('betPanel').style.display = 'none';
-    document.getElementById('actionPanel').style.display = 'block';
-    document.getElementById('doubleBtn').disabled = !data.canDouble;
-    document.getElementById('splitBtn').disabled = !data.canSplit;
+
+    // Check if insurance is offered
+    if (data.canInsurance) {
+        document.getElementById('insurancePanel').style.display = 'block';
+        document.getElementById('actionPanel').style.display = 'none';
+    } else {
+        document.getElementById('insurancePanel').style.display = 'none';
+        document.getElementById('actionPanel').style.display = 'block';
+        document.getElementById('doubleBtn').disabled = !data.canDouble;
+        document.getElementById('splitBtn').disabled = !data.canSplit;
+        document.getElementById('surrenderBtn').style.display = data.canSurrender ? '' : 'none';
+    }
 }
 
 async function hit() {
@@ -1822,6 +1883,7 @@ async function hit() {
     } else {
         document.getElementById('doubleBtn').disabled = !data.canDouble;
         document.getElementById('splitBtn').disabled = !data.canSplit;
+        document.getElementById('surrenderBtn').style.display = data.canSurrender ? '' : 'none';
     }
 }
 
@@ -1835,7 +1897,38 @@ async function stand() {
     }
 }
 
-async function double() {
+async function insurance(accept) {
+    const balanceBefore = balance;
+    const data = await gameAction('insurance', { accept });
+    if (!data) return;
+
+    document.getElementById('insurancePanel').style.display = 'none';
+
+    if (data.status === 'finished') {
+        handleFinished(data, balanceBefore);
+    } else {
+        document.getElementById('actionPanel').style.display = 'block';
+        document.getElementById('doubleBtn').disabled = !data.canDouble;
+        document.getElementById('splitBtn').disabled = !data.canSplit;
+        document.getElementById('surrenderBtn').style.display = data.canSurrender ? '' : 'none';
+
+        if (data.insuranceResult === 'loss') {
+            // Brief notification that insurance was lost
+        }
+    }
+}
+
+async function surrender() {
+    const balanceBefore = balance;
+    const data = await gameAction('surrender');
+    if (!data) return;
+
+    if (data.status === 'finished') {
+        handleFinished(data, balanceBefore);
+    }
+}
+
+async function doDouble() {
     playSound('card');
     const balanceBefore = balance;
     const data = await gameAction('double');
@@ -1857,6 +1950,7 @@ async function split() {
     } else {
         document.getElementById('doubleBtn').disabled = !data.canDouble;
         document.getElementById('splitBtn').disabled = !data.canSplit;
+        document.getElementById('surrenderBtn').style.display = data.canSurrender ? '' : 'none';
     }
 }
 
@@ -1893,6 +1987,7 @@ function handleFinished(data, balanceBefore) {
             case 'push': icon = '🤝'; title = 'PUSH'; break;
             case 'bust': icon = '💥'; title = 'BUST!'; break;
             case 'loss': icon = '😢'; title = 'DEALER GAGNE'; break;
+            case 'surrender': icon = '🏳'; title = 'ABANDON'; break;
             default: icon = '🎰'; title = result ? result.toUpperCase() : 'FIN';
         }
     }

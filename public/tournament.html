@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SATS JACK 21 - Tournois</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;500;700&display=swap');
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { background: #000; font-family: 'Rajdhani', sans-serif; min-height: 100vh; color: #fff; overflow-x: hidden; }
+        .container { max-width: 900px; margin: 0 auto; padding: 20px; position: relative; z-index: 10; }
+        .header { display: flex; justify-content: space-between; align-items: center; padding: 20px 0; margin-bottom: 20px; border-bottom: 2px solid #9b59b6; }
+        .brand { font-family: 'Orbitron'; font-size: 24px; font-weight: 900; background: linear-gradient(135deg, #9b59b6, #e74c3c); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .balance-box { background: rgba(155,89,182,0.1); border: 2px solid #9b59b6; padding: 10px 20px; border-radius: 10px; text-align: right; }
+        .balance-label { font-size: 10px; color: #9b59b6; font-family: 'Orbitron'; letter-spacing: 2px; }
+        .balance-amount { font-size: 24px; font-weight: bold; font-family: 'Orbitron'; color: #e74c3c; }
+        .back-btn { background: transparent; border: 2px solid #9b59b6; color: #9b59b6; padding: 10px 20px; border-radius: 8px; font-family: 'Orbitron'; cursor: pointer; font-size: 12px; text-decoration: none; }
+        .back-btn:hover { background: rgba(155,89,182,0.2); }
+
+        .lobby { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; }
+        .tourney-card { background: linear-gradient(135deg, rgba(0,0,0,0.95), rgba(30,10,30,0.95)); border: 2px solid #9b59b6; border-radius: 15px; padding: 25px; text-align: center; transition: all 0.3s; }
+        .tourney-card:hover { transform: translateY(-3px); box-shadow: 0 0 30px rgba(155,89,182,0.4); }
+        .tourney-card h3 { font-family: 'Orbitron'; color: #e74c3c; font-size: 18px; margin-bottom: 10px; }
+        .tourney-info { color: #888; font-size: 14px; margin: 5px 0; }
+        .tourney-prize { font-family: 'Orbitron'; color: #ffd700; font-size: 20px; margin: 10px 0; }
+        .tourney-status { font-family: 'Orbitron'; font-size: 12px; padding: 5px 15px; border-radius: 20px; display: inline-block; margin-top: 10px; }
+        .st-reg { background: rgba(0,255,0,0.15); color: #0f0; border: 1px solid rgba(0,255,0,0.4); }
+        .st-run { background: rgba(255,107,0,0.15); color: #ff6b00; border: 1px solid rgba(255,107,0,0.4); }
+        .st-fin { background: rgba(155,89,182,0.15); color: #9b59b6; border: 1px solid rgba(155,89,182,0.4); }
+
+        button { background: linear-gradient(135deg, #9b59b6, #8e44ad); border: 2px solid #9b59b6; color: #fff; padding: 12px 25px; border-radius: 8px; font-weight: bold; font-size: 14px; font-family: 'Orbitron'; cursor: pointer; margin: 5px; transition: all 0.3s; }
+        button:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 4px 15px rgba(155,89,182,0.5); }
+        button:disabled { opacity: 0.3; cursor: not-allowed; }
+        .btn-play { background: linear-gradient(135deg, #00ff00, #00cc00); border-color: #00ff00; color: #000; }
+        .btn-stand { background: linear-gradient(135deg, #ff0000, #cc0000); border-color: #ff0000; }
+
+        .game-view { display: none; }
+        .game-view.active { display: block; }
+        .lobby.hidden { display: none; }
+
+        .game-area { background: linear-gradient(135deg, rgba(0,0,0,0.95), rgba(30,10,30,0.95)); border: 2px solid #9b59b6; border-radius: 15px; padding: 25px; }
+        .chips-display { font-family: 'Orbitron'; font-size: 28px; color: #ffd700; text-align: center; margin: 10px 0; }
+        .round-info { font-family: 'Orbitron'; font-size: 14px; color: #9b59b6; text-align: center; letter-spacing: 2px; }
+        .area-label { font-family: 'Orbitron'; color: #9b59b6; font-size: 14px; letter-spacing: 3px; margin-bottom: 10px; text-align: center; }
+        .cards { display: flex; justify-content: center; gap: 8px; min-height: 100px; flex-wrap: wrap; margin: 10px 0; }
+        .card { width: 70px; height: 98px; background: linear-gradient(135deg, #fff, #f0f0f0); border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.5); animation: cardDeal 0.5s cubic-bezier(0.34, 1.56, 0.64, 1); border: 1px solid rgba(155,89,182,0.3); }
+        @keyframes cardDeal { 0% { transform: translateY(-100px) scale(0.5); opacity: 0; } 100% { transform: translateY(0) scale(1); opacity: 1; } }
+        .card-content { padding: 6px; height: 100%; display: flex; flex-direction: column; justify-content: space-between; color: #000; }
+        .corner { font-size: 14px; font-weight: bold; }
+        .center { font-size: 36px; text-align: center; }
+        .red { color: #ff0000; }
+        .black { color: #000; }
+        .card.hidden { background: linear-gradient(135deg, #1a001a, #000); border: 2px solid #9b59b6; position: relative; }
+        .card.hidden::after { content: "\20BF"; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 36px; color: #9b59b6; font-family: 'Orbitron'; }
+        .score-badge { display: inline-block; background: rgba(0,0,0,0.8); color: #9b59b6; padding: 4px 14px; border-radius: 15px; font-family: 'Orbitron'; font-size: 14px; border: 1px solid #9b59b6; margin-top: 8px; }
+        .score-badge.bust { color: #ff0000; border-color: #ff0000; }
+
+        .leaderboard { margin: 20px 0; }
+        .lb-row { display: flex; justify-content: space-between; padding: 12px 15px; margin: 5px 0; background: rgba(155,89,182,0.1); border: 1px solid rgba(155,89,182,0.2); border-radius: 8px; }
+        .lb-row.top1 { border-color: #ffd700; background: rgba(255,215,0,0.1); }
+        .lb-row.top2 { border-color: #c0c0c0; background: rgba(192,192,192,0.05); }
+        .lb-row.top3 { border-color: #cd7f32; background: rgba(205,127,50,0.05); }
+        .lb-rank { font-family: 'Orbitron'; font-weight: bold; color: #9b59b6; }
+        .lb-name { color: #fff; }
+        .lb-chips { font-family: 'Orbitron'; color: #ffd700; }
+        .lb-prize { font-family: 'Orbitron'; color: #00ff00; font-size: 12px; }
+
+        .controls { text-align: center; margin-top: 20px; }
+        .result-banner { font-family: 'Orbitron'; font-size: 24px; text-align: center; margin: 15px 0; padding: 15px; border-radius: 10px; }
+        .result-banner.win { color: #00ff00; border: 2px solid #00ff00; background: rgba(0,255,0,0.05); }
+        .result-banner.loss { color: #ff0000; border: 2px solid #ff0000; background: rgba(255,0,0,0.05); }
+        .result-banner.push { color: #ffa500; border: 2px solid #ffa500; background: rgba(255,165,0,0.05); }
+        .result-banner.bj { color: #ffd700; border: 2px solid #ffd700; background: rgba(255,215,0,0.05); }
+
+        @media (max-width: 768px) { .brand { font-size: 16px; } .header { flex-direction: column; gap: 10px; } .card { width: 55px; height: 77px; } .corner { font-size: 11px; } .center { font-size: 28px; } }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <a href="/" class="back-btn">RETOUR</a>
+        <div class="brand">TOURNOIS</div>
+        <div class="balance-box">
+            <div class="balance-label">BALANCE</div>
+            <div class="balance-amount" id="balance">0</div>
+        </div>
+    </div>
+
+    <div class="lobby" id="lobby"></div>
+
+    <div class="game-view" id="gameView">
+        <div class="game-area">
+            <div class="round-info" id="roundInfo">ROUND 1/10</div>
+            <div class="chips-display" id="chipsDisplay">1000 jetons</div>
+
+            <div style="margin: 20px 0;">
+                <div class="area-label">DEALER</div>
+                <div class="cards" id="dealerCards"></div>
+                <div id="dealerScore" style="text-align:center;"></div>
+            </div>
+
+            <div id="resultBanner"></div>
+
+            <div style="margin: 20px 0;">
+                <div class="area-label">VOUS</div>
+                <div class="cards" id="playerCards"></div>
+                <div id="playerScore" style="text-align:center;"></div>
+            </div>
+
+            <div class="controls" id="controls"></div>
+
+            <div class="leaderboard" id="leaderboard" style="display:none;">
+                <div class="area-label">CLASSEMENT FINAL</div>
+                <div id="lbRows"></div>
+            </div>
+        </div>
+
+        <div style="text-align:center; margin-top:15px;">
+            <button onclick="backToLobby()" style="background:transparent; border:2px solid #9b59b6; color:#9b59b6;">RETOUR AU LOBBY</button>
+        </div>
+    </div>
+</div>
+
+<script>
+const API_BASE = '';
+let balance = 0;
+let currentTournamentId = null;
+let currentChips = 0;
+
+async function apiCall(endpoint, method = 'GET', body = null) {
+    const options = { method, credentials: 'include', headers: { 'Content-Type': 'application/json' } };
+    if (body) options.body = JSON.stringify(body);
+    const response = await fetch(API_BASE + endpoint, options);
+    if (!response.ok) { const err = await response.json(); throw new Error(err.error || 'Erreur'); }
+    return response.json();
+}
+
+async function init() {
+    const data = await apiCall('/api/session');
+    balance = data.balance;
+    document.getElementById('balance').textContent = balance;
+    // Ensure tournaments exist
+    await apiCall('/api/tournament/create', 'POST', {}).catch(() => {});
+    await loadLobby();
+}
+
+async function loadLobby() {
+    const data = await apiCall('/api/tournament/list');
+    const lobby = document.getElementById('lobby');
+    lobby.innerHTML = '';
+
+    if (data.tournaments.length === 0) {
+        lobby.innerHTML = '<div style="text-align:center;color:#888;padding:40px;">Aucun tournoi disponible. Revenez bientot!</div>';
+        return;
+    }
+
+    data.tournaments.forEach(t => {
+        const stClass = t.status === 'registering' ? 'st-reg' : (t.status === 'running' ? 'st-run' : 'st-fin');
+        const stLabel = { registering: 'INSCRIPTIONS', running: 'EN COURS', finished: 'TERMINE', cancelled: 'ANNULE' }[t.status] || t.status;
+
+        let actionBtn = '';
+        if (t.status === 'registering' && !t.isRegistered) {
+            actionBtn = `<button onclick="register('${t.id}')">S'INSCRIRE (${t.buyIn} sats)</button>`;
+        } else if (t.isRegistered && t.status === 'running') {
+            actionBtn = `<button class="btn-play" onclick="enterTournament('${t.id}')">JOUER</button>`;
+        } else if (t.isRegistered && t.status === 'registering') {
+            actionBtn = `<div style="color:#0f0; font-family:'Orbitron'; font-size:12px; margin-top:10px;">INSCRIT</div>`;
+        }
+
+        const countdown = t.startTime && t.status === 'registering'
+            ? `<div class="tourney-info">Debut dans ${Math.max(0, Math.ceil((t.startTime - Date.now()) / 1000))}s</div>` : '';
+
+        const card = document.createElement('div');
+        card.className = 'tourney-card';
+        card.innerHTML = `
+            <h3>${t.name}</h3>
+            <div class="tourney-info">Buy-in: ${t.buyIn} sats</div>
+            <div class="tourney-info">Jetons: ${t.startingChips}</div>
+            <div class="tourney-info">${t.totalRounds} rounds</div>
+            <div class="tourney-info">${t.playerCount}/${t.maxPlayers} joueurs</div>
+            <div class="tourney-prize">${t.prizePool} sats</div>
+            ${countdown}
+            <div class="tourney-status ${stClass}">${stLabel}</div>
+            <div style="margin-top:15px;">${actionBtn}</div>
+        `;
+        lobby.appendChild(card);
+    });
+}
+
+async function register(id) {
+    try {
+        const data = await apiCall('/api/tournament/register', 'POST', { tournamentId: id });
+        balance = data.balance;
+        document.getElementById('balance').textContent = balance;
+        alert(`Inscrit! ${data.chips} jetons. Debut dans ${Math.ceil((data.startTime - Date.now()) / 1000)}s`);
+        await loadLobby();
+    } catch (e) { alert('Erreur: ' + e.message); }
+}
+
+async function enterTournament(id) {
+    currentTournamentId = id;
+    document.getElementById('lobby').classList.add('hidden');
+    document.getElementById('gameView').classList.add('active');
+    document.getElementById('leaderboard').style.display = 'none';
+    showDealButton();
+}
+
+function backToLobby() {
+    currentTournamentId = null;
+    document.getElementById('lobby').classList.remove('hidden');
+    document.getElementById('gameView').classList.remove('active');
+    loadLobby();
+}
+
+function renderCardHTML(card) {
+    if (card.hidden) return '<div class="card hidden"></div>';
+    const isRed = card.suit === '\u2665' || card.suit === '\u2666';
+    return `<div class="card"><div class="card-content ${isRed ? 'red' : 'black'}"><div class="corner">${card.value}${card.suit}</div><div class="center">${card.suit}</div></div></div>`;
+}
+
+function showDealButton() {
+    document.getElementById('controls').innerHTML = '<button class="btn-play" onclick="tDeal()">DISTRIBUER</button>';
+    document.getElementById('dealerCards').innerHTML = '';
+    document.getElementById('playerCards').innerHTML = '';
+    document.getElementById('dealerScore').innerHTML = '';
+    document.getElementById('playerScore').innerHTML = '';
+    document.getElementById('resultBanner').innerHTML = '';
+}
+
+async function tDeal() {
+    try {
+        const data = await apiCall('/api/tournament/play', 'POST', { tournamentId: currentTournamentId, action: 'deal' });
+        renderTournamentGame(data);
+    } catch (e) { alert('Erreur: ' + e.message); }
+}
+
+async function tHit() {
+    try {
+        const data = await apiCall('/api/tournament/play', 'POST', { tournamentId: currentTournamentId, action: 'hit' });
+        renderTournamentGame(data);
+    } catch (e) { alert('Erreur: ' + e.message); }
+}
+
+async function tStand() {
+    try {
+        const data = await apiCall('/api/tournament/play', 'POST', { tournamentId: currentTournamentId, action: 'stand' });
+        renderTournamentGame(data);
+    } catch (e) { alert('Erreur: ' + e.message); }
+}
+
+function renderTournamentGame(data) {
+    document.getElementById('roundInfo').textContent = `ROUND ${data.roundsPlayed}/${data.totalRounds}`;
+    document.getElementById('chipsDisplay').textContent = `${data.chips} jetons`;
+    currentChips = data.chips;
+
+    // Player hand
+    const pc = document.getElementById('playerCards');
+    pc.innerHTML = data.playerHand.map(renderCardHTML).join('');
+    const isBust = data.playerScore > 21;
+    document.getElementById('playerScore').innerHTML = `<span class="score-badge ${isBust ? 'bust' : ''}">${data.playerScore}</span>`;
+
+    // Dealer
+    const dc = document.getElementById('dealerCards');
+    if (data.status === 'finished') {
+        dc.innerHTML = data.dealerHand.map(renderCardHTML).join('');
+        const dBust = data.dealerScore > 21;
+        document.getElementById('dealerScore').innerHTML = `<span class="score-badge ${dBust ? 'bust' : ''}">${data.dealerScore}</span>`;
+
+        // Result
+        const rb = document.getElementById('resultBanner');
+        const labels = { win: 'VICTOIRE!', loss: 'DEFAITE', bust: 'BUST!', push: 'PUSH', bj: 'BLACKJACK!' };
+        const cls = { win: 'win', loss: 'loss', bust: 'loss', push: 'push', bj: 'bj' };
+        rb.innerHTML = `<div class="result-banner ${cls[data.result] || ''}">${labels[data.result] || data.result}</div>`;
+
+        // Check tournament end
+        if (data.tournamentStatus === 'finished' && data.leaderboard) {
+            showLeaderboard(data);
+        } else if (data.busted) {
+            document.getElementById('controls').innerHTML = '<div style="color:#ff0000; font-family:Orbitron; font-size:18px; margin:15px;">ELIMINE!</div><button onclick="backToLobby()">RETOUR</button>';
+        } else if (data.roundsPlayed >= data.totalRounds) {
+            document.getElementById('controls').innerHTML = '<div style="color:#ffd700; font-family:Orbitron; font-size:16px; margin:15px;">TOUS VOS ROUNDS TERMINES!</div><div style="color:#888;">En attente des autres joueurs...</div><button onclick="backToLobby()">RETOUR</button>';
+        } else {
+            document.getElementById('controls').innerHTML = `
+                <div style="color:#888;margin-bottom:10px;">Mise auto: ${Math.max(10, Math.floor(data.chips * 10 / 100))} jetons</div>
+                <button class="btn-play" onclick="tDeal()">ROUND SUIVANT</button>
+            `;
+        }
+    } else {
+        // Playing
+        dc.innerHTML = renderCardHTML(data.dealerUpCard) + '<div class="card hidden"></div>';
+        document.getElementById('dealerScore').innerHTML = `<span class="score-badge">${data.dealerUpCard.num || '?'}</span>`;
+        document.getElementById('resultBanner').innerHTML = '';
+
+        document.getElementById('controls').innerHTML = `
+            <button class="btn-play" onclick="tHit()">CARTE</button>
+            <button class="btn-stand" onclick="tStand()">RESTER</button>
+        `;
+    }
+}
+
+function showLeaderboard(data) {
+    const lb = document.getElementById('leaderboard');
+    lb.style.display = 'block';
+    const rows = document.getElementById('lbRows');
+    rows.innerHTML = '';
+
+    data.leaderboard.forEach((p, i) => {
+        const topClass = i === 0 ? 'top1' : (i === 1 ? 'top2' : (i === 2 ? 'top3' : ''));
+        const medals = ['1er', '2eme', '3eme'];
+        const prizeHTML = p.prize ? `<span class="lb-prize">+${p.prize} sats</span>` : '';
+        rows.innerHTML += `
+            <div class="lb-row ${topClass}">
+                <span class="lb-rank">#${p.rank} ${medals[i] || ''}</span>
+                <span class="lb-name">${p.nickname}</span>
+                <span class="lb-chips">${p.chips} jetons ${prizeHTML}</span>
+            </div>
+        `;
+    });
+
+    if (data.myPrize > 0) {
+        document.getElementById('controls').innerHTML = `
+            <div style="color:#ffd700; font-family:'Orbitron'; font-size:20px; margin:15px;">VOUS AVEZ GAGNE ${data.myPrize} SATS!</div>
+            <button onclick="backToLobby()">RETOUR AU LOBBY</button>
+        `;
+    } else {
+        document.getElementById('controls').innerHTML = `
+            <div style="color:#888; margin:15px;">Tournoi termine. Rang: #${data.myRank}</div>
+            <button onclick="backToLobby()">RETOUR AU LOBBY</button>
+        `;
+    }
+}
+
+window.onload = init;
+</script>
+</body>
+</html>
