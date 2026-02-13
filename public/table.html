@@ -19,7 +19,7 @@
             -webkit-user-select: none;
         }
 
-        /* ========== TOP BAR (toujours visible) ========== */
+        /* ========== TOP BAR ========== */
         .topbar {
             position: fixed; top: 0; left: 0; right: 0; z-index: 50;
             display: flex; justify-content: space-between; align-items: center;
@@ -50,10 +50,7 @@
             cursor: pointer; font-size: 9px; letter-spacing: 1px;
         }
         .topbar-back:hover { background: rgba(255,107,0,0.2); }
-
-        .conn-dot {
-            width: 6px; height: 6px; border-radius: 50%; display: inline-block;
-        }
+        .conn-dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
         .conn-dot.ok { background: #0f0; box-shadow: 0 0 6px #0f0; }
         .conn-dot.error { background: #f00; box-shadow: 0 0 6px #f00; animation: blink 1s infinite; }
         @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
@@ -67,7 +64,6 @@
             align-content: start;
         }
         .lobby.hidden { display: none; }
-
         .table-card {
             background: linear-gradient(135deg, rgba(0,0,0,0.9), rgba(20,15,5,0.9));
             border: 2px solid #ff6b00; border-radius: 12px; padding: 20px;
@@ -88,7 +84,7 @@
         .status-playing { background: rgba(255,107,0,0.12); color: #ff6b00; border: 1px solid rgba(255,107,0,0.3); }
         .status-betting { background: rgba(255,215,0,0.12); color: #ffd700; border: 1px solid rgba(255,215,0,0.3); }
 
-        /* ========== TABLE VIEW - Layout en forme de table ========== */
+        /* ========== TABLE VIEW ========== */
         .table-view { display: none; }
         .table-view.active {
             display: flex; flex-direction: column;
@@ -100,7 +96,7 @@
             flex: 1; position: relative;
             background: radial-gradient(ellipse at 50% 30%, #1a4d1a, #0d2e0d 60%, #081a08);
             border: 3px solid #2a1500;
-            border-radius: 0 0 50% 50% / 0 0 20% 20%;
+            border-radius: 0 0 50% 50% / 0 0 18% 18%;
             margin: 4px 4px 0;
             box-shadow: inset 0 0 60px rgba(0,0,0,0.5), 0 0 20px rgba(255,107,0,0.15);
             overflow: hidden;
@@ -112,34 +108,55 @@
             pointer-events: none;
         }
 
-        /* DEALER ZONE - haut du feutre */
+        /* Compteur joueurs */
+        .players-badge {
+            position: absolute; top: 8px; right: 12px; z-index: 5;
+            font-family: 'Orbitron'; font-size: 10px; color: #ffa500;
+            background: rgba(0,0,0,0.5); padding: 3px 10px; border-radius: 10px;
+            border: 1px solid rgba(255,165,0,0.3); letter-spacing: 1px;
+        }
+        .players-badge .count { color: #ffd700; font-weight: 700; }
+
+        /* Bouton rejoindre */
+        .join-btn-float {
+            position: absolute; top: 8px; left: 12px; z-index: 5;
+            font-family: 'Orbitron'; font-size: 10px; color: #0f0;
+            background: rgba(0,40,0,0.6); padding: 4px 12px; border-radius: 10px;
+            border: 1px solid rgba(0,255,0,0.3); cursor: pointer;
+            letter-spacing: 1px; transition: all 0.2s;
+        }
+        .join-btn-float:hover { background: rgba(0,80,0,0.7); border-color: #0f0; }
+        .join-btn-float.hidden { display: none; }
+
+        /* DEALER */
         .dealer-zone {
-            text-align: center; padding: 10px 10px 5px; position: relative; z-index: 2;
+            text-align: center; padding: 8px 10px 4px; position: relative; z-index: 2;
             flex-shrink: 0;
         }
         .dealer-label {
-            font-family: 'Orbitron'; color: rgba(255,215,0,0.6); font-size: 10px;
-            letter-spacing: 4px; margin-bottom: 4px;
+            font-family: 'Orbitron'; color: rgba(255,215,0,0.5); font-size: 9px;
+            letter-spacing: 4px; margin-bottom: 3px;
         }
-        .dealer-cards { display: flex; justify-content: center; gap: 5px; min-height: 62px; }
-        .dealer-score-badge {
-            display: inline-block; background: rgba(0,0,0,0.6); color: #ffd700;
-            padding: 2px 10px; border-radius: 10px; font-family: 'Orbitron';
-            font-size: 13px; border: 1px solid rgba(255,215,0,0.4); margin-top: 4px;
+        .dealer-cards { display: flex; justify-content: center; gap: 6px; min-height: 72px; }
+        .dealer-score {
+            display: inline-block; background: rgba(0,0,0,0.7); color: #ffd700;
+            padding: 3px 14px; border-radius: 12px; font-family: 'Orbitron';
+            font-size: 16px; font-weight: 700; border: 1px solid rgba(255,215,0,0.4);
+            margin-top: 4px;
         }
-        .dealer-score-badge.bust { color: #ff4444; border-color: #ff4444; }
+        .dealer-score.bust { color: #ff4444; border-color: #ff4444; }
 
-        /* PHASE + TIMER au centre */
+        /* PHASE + TIMER */
         .center-info {
-            text-align: center; padding: 3px 0; position: relative; z-index: 2;
+            text-align: center; padding: 2px 0; position: relative; z-index: 2;
             flex-shrink: 0;
         }
         .phase-text {
-            font-family: 'Orbitron'; font-size: 12px; color: #ffd700;
+            font-family: 'Orbitron'; font-size: 13px; color: #ffd700;
             letter-spacing: 2px; text-shadow: 0 0 10px rgba(255,215,0,0.3);
         }
         .timer-row {
-            display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 3px;
+            display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 2px;
         }
         .timer-bar-mini {
             width: 120px; height: 3px; background: rgba(255,255,255,0.1); border-radius: 2px; overflow: hidden;
@@ -149,74 +166,84 @@
             border-radius: 2px; transition: width 1s linear;
         }
         .timer-fill-mini.low { background: #ff0000; }
-        .timer-text-mini {
-            font-family: 'Orbitron'; font-size: 11px; color: #ff6b00; min-width: 24px;
-        }
+        .timer-text-mini { font-family: 'Orbitron'; font-size: 11px; color: #ff6b00; min-width: 24px; }
 
-        /* SEATS - disposés en arc en bas du feutre */
+        /* SEATS */
         .seats-arc {
             flex: 1; display: flex; justify-content: center; align-items: flex-end;
-            gap: 6px; padding: 5px 8px 8px; position: relative; z-index: 2;
+            gap: 8px; padding: 5px 10px 10px; position: relative; z-index: 2;
             min-height: 0;
         }
 
         .seat {
-            flex: 1; max-width: 180px; min-width: 0;
+            flex: 1; max-width: 220px; min-width: 80px;
             background: rgba(0,0,0,0.35); border: 2px solid rgba(255,255,255,0.1);
-            border-radius: 10px; padding: 6px 4px; text-align: center;
+            border-radius: 12px; padding: 8px 6px; text-align: center;
             transition: all 0.3s; position: relative;
             display: flex; flex-direction: column; align-items: center;
-            max-height: 100%;
-            overflow: hidden;
+            max-height: 100%; overflow: hidden;
         }
         .seat.active-turn {
-            border-color: #ffa500; box-shadow: 0 0 20px rgba(255,165,0,0.4);
+            border-color: #ffa500; box-shadow: 0 0 25px rgba(255,165,0,0.5);
             animation: turnGlow 1.5s ease-in-out infinite;
         }
         @keyframes turnGlow {
             0%, 100% { box-shadow: 0 0 15px rgba(255,165,0,0.3); }
-            50% { box-shadow: 0 0 30px rgba(255,165,0,0.6); }
+            50% { box-shadow: 0 0 35px rgba(255,165,0,0.7); }
         }
-        .seat.is-me { border-color: rgba(0,255,0,0.4); background: rgba(0,255,0,0.03); }
+        .seat.is-me { border-color: rgba(0,255,0,0.5); background: rgba(0,255,0,0.04); }
         .seat.is-me.active-turn { border-color: #ffa500; }
-        .seat.empty-seat {
-            border-style: dashed; border-color: rgba(255,255,255,0.08); opacity: 0.5;
-            cursor: pointer; justify-content: center;
+
+        /* Animations de resultat sur le siege */
+        .seat.result-anim-win { animation: seatWin 1.5s ease-out; }
+        .seat.result-anim-loss { animation: seatLoss 1s ease-out; }
+        .seat.result-anim-bj { animation: seatBJ 2s ease-out; }
+        @keyframes seatWin {
+            0% { box-shadow: 0 0 0 rgba(0,255,0,0); }
+            30% { box-shadow: 0 0 40px rgba(0,255,0,0.7), inset 0 0 20px rgba(0,255,0,0.15); border-color: #00ff00; }
+            100% { box-shadow: none; }
         }
-        .seat.empty-seat:hover { opacity: 0.9; border-color: #ff6b00; }
+        @keyframes seatLoss {
+            0% { box-shadow: 0 0 0 rgba(255,0,0,0); }
+            30% { box-shadow: 0 0 30px rgba(255,0,0,0.5); border-color: #ff0000; }
+            100% { box-shadow: none; }
+        }
+        @keyframes seatBJ {
+            0% { box-shadow: 0 0 0 rgba(255,215,0,0); transform: scale(1); }
+            20% { box-shadow: 0 0 50px rgba(255,215,0,0.8), inset 0 0 25px rgba(255,215,0,0.2); border-color: #ffd700; transform: scale(1.03); }
+            100% { box-shadow: none; transform: scale(1); }
+        }
 
         .seat-name {
-            font-family: 'Orbitron'; font-size: 9px; color: #ffa500;
+            font-family: 'Orbitron'; font-size: 10px; color: #ffa500;
             letter-spacing: 1px; white-space: nowrap; overflow: hidden;
-            text-overflow: ellipsis; width: 100%;
+            text-overflow: ellipsis; width: 100%; margin-bottom: 1px;
         }
-        .seat-bet-badge {
-            font-size: 10px; color: #888; margin: 1px 0;
-        }
-        .seat-cards { display: flex; justify-content: center; gap: 2px; flex-wrap: nowrap; margin: 2px 0; }
+        .seat-bet-badge { font-size: 10px; color: #888; margin: 1px 0; }
+        .seat-cards { display: flex; justify-content: center; gap: 3px; flex-wrap: nowrap; margin: 3px 0; }
 
-        /* Cartes */
+        /* CARTES - plus grosses */
         .card {
-            width: 38px; height: 54px; background: linear-gradient(135deg, #fff, #f0f0f0);
-            border-radius: 4px; box-shadow: 0 2px 6px rgba(0,0,0,0.5);
+            width: 44px; height: 62px; background: linear-gradient(135deg, #fff, #f0f0f0);
+            border-radius: 5px; box-shadow: 0 3px 8px rgba(0,0,0,0.5);
             animation: dealIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
             border: 1px solid rgba(0,0,0,0.15); flex-shrink: 0;
         }
-        .dealer-cards .card { width: 48px; height: 68px; }
+        .dealer-cards .card { width: 52px; height: 74px; }
         @keyframes dealIn {
             0% { transform: translateY(-80px) scale(0.5); opacity: 0; }
             100% { transform: translateY(0) scale(1); opacity: 1; }
         }
         .card-content {
-            padding: 2px 3px; height: 100%;
+            padding: 3px 4px; height: 100%;
             display: flex; flex-direction: column; justify-content: space-between;
             color: #000; line-height: 1;
         }
         .dealer-cards .card-content { padding: 4px 5px; }
-        .corner { font-size: 9px; font-weight: bold; }
-        .dealer-cards .corner { font-size: 12px; }
-        .center { font-size: 18px; text-align: center; }
-        .dealer-cards .center { font-size: 26px; }
+        .corner { font-size: 11px; font-weight: bold; }
+        .dealer-cards .corner { font-size: 13px; }
+        .center { font-size: 22px; text-align: center; }
+        .dealer-cards .center { font-size: 28px; }
         .red { color: #d00; }
         .black { color: #111; }
 
@@ -226,55 +253,74 @@
         }
         .card.hidden-card::after {
             content: "\20BF"; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            font-size: 22px; color: #ff6b00; font-family: 'Orbitron';
+            font-size: 24px; color: #ff6b00; font-family: 'Orbitron';
             text-shadow: 0 0 8px #ff6b00;
         }
-        .dealer-cards .card.hidden-card::after { font-size: 30px; }
+        .dealer-cards .card.hidden-card::after { font-size: 32px; }
 
-        .mini-score {
-            display: inline-block; background: rgba(0,0,0,0.6); color: #ffa500;
-            padding: 1px 6px; border-radius: 8px; font-family: 'Orbitron';
-            font-size: 10px; border: 1px solid rgba(255,165,0,0.3); margin-top: 2px;
+        /* SCORE joueur - plus gros et visible */
+        .player-score {
+            display: inline-block; background: rgba(0,0,0,0.7); color: #ffa500;
+            padding: 2px 10px; border-radius: 10px; font-family: 'Orbitron';
+            font-size: 14px; font-weight: 700; border: 1px solid rgba(255,165,0,0.4);
+            margin-top: 3px;
         }
-        .mini-score.bust { color: #ff4444; border-color: #ff4444; }
+        .player-score.bust { color: #ff4444; border-color: #ff4444; }
+        .player-score.bj-score { color: #ffd700; border-color: #ffd700; text-shadow: 0 0 6px rgba(255,215,0,0.5); }
 
+        /* Resultat */
         .seat-result {
-            font-family: 'Orbitron'; font-size: 10px; font-weight: bold; margin-top: 2px;
+            font-family: 'Orbitron'; font-size: 12px; font-weight: 900; margin-top: 3px;
+            letter-spacing: 1px;
         }
-        .result-win { color: #00ff00; text-shadow: 0 0 8px rgba(0,255,0,0.5); }
-        .result-loss { color: #ff4444; }
-        .result-push { color: #ffa500; }
-        .result-bj { color: #ffd700; text-shadow: 0 0 8px rgba(255,215,0,0.5); }
-        .result-bust { color: #ff4444; }
-        .result-surrender { color: #ff8800; }
+        .result-win { color: #00ff00; text-shadow: 0 0 10px rgba(0,255,0,0.6); animation: resultPop 0.5s ease-out; }
+        .result-loss { color: #ff4444; animation: resultPop 0.5s ease-out; }
+        .result-push { color: #ffa500; animation: resultPop 0.5s ease-out; }
+        .result-bj { color: #ffd700; text-shadow: 0 0 12px rgba(255,215,0,0.7); font-size: 14px; animation: resultBJPop 0.8s ease-out; }
+        .result-bust { color: #ff4444; animation: resultPop 0.5s ease-out; }
+        .result-surrender { color: #ff8800; animation: resultPop 0.5s ease-out; }
+        @keyframes resultPop {
+            0% { transform: scale(0); opacity: 0; }
+            60% { transform: scale(1.3); }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        @keyframes resultBJPop {
+            0% { transform: scale(0) rotate(-10deg); opacity: 0; }
+            50% { transform: scale(1.5) rotate(3deg); }
+            100% { transform: scale(1) rotate(0); opacity: 1; }
+        }
 
         .seat-gain {
-            font-family: 'Orbitron'; font-size: 11px; font-weight: bold; margin-top: 1px;
+            font-family: 'Orbitron'; font-size: 13px; font-weight: 900; margin-top: 2px;
+            animation: gainSlide 0.5s ease-out;
+        }
+        @keyframes gainSlide {
+            0% { transform: translateY(10px); opacity: 0; }
+            100% { transform: translateY(0); opacity: 1; }
         }
 
-        /* ========== BOTTOM PANEL - Controles + chat ========== */
+        /* ========== BOTTOM PANEL ========== */
         .bottom-panel {
             flex-shrink: 0; padding: 6px 8px 8px;
             background: linear-gradient(0deg, rgba(0,0,0,0.95), rgba(0,0,0,0.8));
             border-top: 1px solid rgba(255,107,0,0.2);
             position: relative; z-index: 10;
         }
-
         .controls-row {
             display: flex; justify-content: center; align-items: center;
             gap: 6px; flex-wrap: wrap; min-height: 44px;
         }
 
-        /* Boutons compacts */
         .act-btn {
-            padding: 8px 14px; border-radius: 6px; font-weight: bold;
-            font-size: 11px; font-family: 'Orbitron'; cursor: pointer;
+            padding: 10px 16px; border-radius: 8px; font-weight: bold;
+            font-size: 12px; font-family: 'Orbitron'; cursor: pointer;
             text-transform: uppercase; letter-spacing: 1px;
             transition: all 0.2s; border: 2px solid; color: #000;
             box-shadow: 0 2px 8px rgba(0,0,0,0.4);
         }
         .act-btn:disabled { opacity: 0.25; cursor: not-allowed; transform: none !important; }
         .act-btn:hover:not(:disabled) { transform: translateY(-2px); }
+        .act-btn:active:not(:disabled) { transform: scale(0.95); }
 
         .act-hit { background: linear-gradient(135deg, #00dd00, #00aa00); border-color: #00ff00; }
         .act-stand { background: linear-gradient(135deg, #dd0000, #aa0000); border-color: #ff0000; color: #fff; }
@@ -284,18 +330,17 @@
         .act-surrender { background: linear-gradient(135deg, #666, #444); border-color: #888; color: #fff; }
         .act-bet { background: linear-gradient(135deg, #ff6b00, #ffa500); border-color: #ffd700; }
         .act-rebet { background: linear-gradient(135deg, #ffd700, #ff8c00); border-color: #ffd700; }
-        .act-leave { background: none; border: 1px solid #ff4444; color: #ff4444; padding: 6px 10px; font-size: 9px; }
 
-        /* Chips compacts */
         .chips-row { display: flex; justify-content: center; gap: 8px; margin: 4px 0; }
         .chip {
-            width: 44px; height: 44px; border-radius: 50%; border: 3px solid;
+            width: 46px; height: 46px; border-radius: 50%; border: 3px solid;
             display: flex; align-items: center; justify-content: center;
             font-weight: bold; cursor: pointer; color: #fff; font-size: 11px;
             font-family: 'Orbitron'; transition: all 0.2s;
             box-shadow: 0 3px 8px rgba(0,0,0,0.5);
         }
         .chip:hover:not(.disabled) { transform: translateY(-4px) scale(1.1); }
+        .chip:active:not(.disabled) { transform: scale(0.9); }
         .chip.disabled { opacity: 0.25; cursor: not-allowed; filter: grayscale(1); }
         .chip.c100 { background: radial-gradient(circle, #0088ff, #0044cc); border-color: #00ccff; }
         .chip.c500 { background: radial-gradient(circle, #ff0088, #cc0044); border-color: #ff44cc; }
@@ -303,10 +348,9 @@
         .chip.c5k { background: radial-gradient(circle, #8800ff, #5500cc); border-color: #cc88ff; }
 
         .bet-amount {
-            font-family: 'Orbitron'; font-size: 20px; font-weight: 900;
-            color: #ffa500; text-align: center; text-shadow: 0 0 8px rgba(255,165,0,0.4);
+            font-family: 'Orbitron'; font-size: 22px; font-weight: 900;
+            color: #ffa500; text-align: center; text-shadow: 0 0 10px rgba(255,165,0,0.4);
         }
-
         .info-text { color: #888; font-size: 12px; text-align: center; }
         .phase-highlight {
             font-family: 'Orbitron'; font-size: 12px; color: #ffa500;
@@ -350,35 +394,34 @@
 
         /* TOAST */
         .toast {
-            position: fixed; top: 40%; left: 50%; transform: translate(-50%, -50%) scale(0);
-            z-index: 1000; font-family: 'Orbitron'; font-size: 22px; font-weight: 900;
-            padding: 15px 30px; border-radius: 12px; text-align: center;
+            position: fixed; top: 38%; left: 50%; transform: translate(-50%, -50%) scale(0);
+            z-index: 1000; font-family: 'Orbitron'; font-size: 24px; font-weight: 900;
+            padding: 18px 35px; border-radius: 14px; text-align: center;
             opacity: 0; transition: all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
-            pointer-events: none;
+            pointer-events: none; white-space: nowrap;
         }
         .toast.show { opacity: 1; transform: translate(-50%, -50%) scale(1); }
-        .toast.win { background: rgba(0,0,0,0.9); border: 2px solid #00ff00; color: #00ff00; box-shadow: 0 0 40px rgba(0,255,0,0.4); }
-        .toast.loss { background: rgba(0,0,0,0.9); border: 2px solid #ff0000; color: #ff0000; box-shadow: 0 0 40px rgba(255,0,0,0.3); }
-        .toast.bj { background: rgba(0,0,0,0.9); border: 2px solid #ffd700; color: #ffd700; box-shadow: 0 0 40px rgba(255,215,0,0.5); }
-        .toast.push { background: rgba(0,0,0,0.9); border: 2px solid #ffa500; color: #ffa500; box-shadow: 0 0 30px rgba(255,165,0,0.3); }
+        .toast.win { background: rgba(0,20,0,0.95); border: 2px solid #00ff00; color: #00ff00; box-shadow: 0 0 50px rgba(0,255,0,0.5); }
+        .toast.loss { background: rgba(20,0,0,0.95); border: 2px solid #ff0000; color: #ff0000; box-shadow: 0 0 40px rgba(255,0,0,0.3); }
+        .toast.bj { background: rgba(20,15,0,0.95); border: 2px solid #ffd700; color: #ffd700; box-shadow: 0 0 50px rgba(255,215,0,0.5); }
+        .toast.push { background: rgba(20,10,0,0.95); border: 2px solid #ffa500; color: #ffa500; box-shadow: 0 0 30px rgba(255,165,0,0.3); }
 
         @media (max-width: 400px) {
-            .card { width: 32px; height: 46px; }
-            .corner { font-size: 8px; }
-            .center { font-size: 15px; }
-            .dealer-cards .card { width: 42px; height: 60px; }
-            .dealer-cards .corner { font-size: 10px; }
-            .dealer-cards .center { font-size: 22px; }
-            .seat { padding: 4px 2px; }
-            .seat-name { font-size: 8px; }
-            .act-btn { padding: 6px 10px; font-size: 9px; }
-            .chip { width: 38px; height: 38px; font-size: 10px; }
+            .card { width: 36px; height: 52px; }
+            .corner { font-size: 9px; }
+            .center { font-size: 18px; }
+            .dealer-cards .card { width: 44px; height: 64px; }
+            .dealer-cards .corner { font-size: 11px; }
+            .dealer-cards .center { font-size: 24px; }
+            .seat { padding: 5px 3px; }
+            .act-btn { padding: 8px 12px; font-size: 10px; }
+            .chip { width: 40px; height: 40px; font-size: 10px; }
+            .player-score { font-size: 12px; }
         }
     </style>
 </head>
 <body>
 
-<!-- TOP BAR -->
 <div class="topbar">
     <div class="topbar-left">
         <a href="/" class="topbar-back" id="backBtn">SOLO</a>
@@ -391,21 +434,19 @@
 
 <div class="toast" id="toast"></div>
 
-<!-- LOBBY -->
 <div class="lobby" id="lobby"></div>
 
-<!-- TABLE VIEW -->
 <div class="table-view" id="tableView">
-    <!-- Feutre vert = la table -->
     <div class="felt">
-        <!-- Dealer en haut -->
+        <div class="players-badge" id="playersBadge"><span class="count">0</span>/5</div>
+        <div class="join-btn-float hidden" id="joinBtnFloat" onclick="joinFirstEmpty()">+ REJOINDRE</div>
+
         <div class="dealer-zone">
             <div class="dealer-label">DEALER</div>
             <div class="dealer-cards" id="dealerCards"></div>
             <div id="dealerScore"></div>
         </div>
 
-        <!-- Phase + Timer -->
         <div class="center-info">
             <div class="phase-text" id="phaseLabel">EN ATTENTE</div>
             <div class="timer-row" id="timerRow" style="display:none;">
@@ -414,17 +455,14 @@
             </div>
         </div>
 
-        <!-- Sièges en arc -->
         <div class="seats-arc" id="seatsGrid"></div>
     </div>
 
-    <!-- Controles en bas (toujours visible) -->
     <div class="bottom-panel">
         <div class="controls-row" id="controls"></div>
     </div>
 </div>
 
-<!-- Chat drawer -->
 <div class="chat-toggle" id="chatToggle" onclick="toggleChat()" style="display:none;">&#128172;</div>
 <div class="chat-drawer" id="chatDrawer">
     <div class="chat-messages" id="chatMessages"></div>
@@ -439,72 +477,48 @@
 
 <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
 <script>
-// ============================================
-// STATE
-// ============================================
-let balance = 0;
-let currentTableId = null;
-let currentBet = 0;
-let lastBet = 0;
-let pollInterval = null;
-let lastTableState = null;
-let previousStatus = null;
-let chatMessages = [];
-let pollErrors = 0;
-let lastChatTimestamp = 0;
-let playerNickname = null;
-let chatOpen = false;
+let balance = 0, currentTableId = null, currentBet = 0, lastBet = 0;
+let pollInterval = null, lastTableState = null, previousStatus = null;
+let chatMessages = [], pollErrors = 0, lastChatTimestamp = 0;
+let playerNickname = null, chatOpen = false;
+// Track quel round a deja ete anime (eviter re-animation au poll)
+let lastAnimatedRound = -1;
 
-// ============================================
-// API
-// ============================================
 async function apiCall(endpoint, method = 'GET', body = null) {
     const options = { method, credentials: 'include', headers: { 'Content-Type': 'application/json' } };
     if (body) options.body = JSON.stringify(body);
     const response = await fetch(endpoint, options);
-    if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Erreur API');
-    }
+    if (!response.ok) { const error = await response.json(); throw new Error(error.error || 'Erreur API'); }
     return await response.json();
 }
 
-// ============================================
 // SESSION
-// ============================================
 async function initSession() {
     try {
         const data = await apiCall('/api/session');
         balance = data.balance;
         playerNickname = data.nickname;
-        updateBalance();
-        updateNicknameDisplay();
+        updateBalance(); updateNicknameDisplay();
     } catch (e) { console.error('Session error:', e); }
 }
-
 function updateBalance() {
     document.getElementById('balance').innerHTML = `<span class="sat-icon">&#8383;</span>${balance.toLocaleString()}`;
 }
-
 function updateNicknameDisplay() {
     const el = document.getElementById('nicknameDisplay');
     if (el) el.textContent = playerNickname || '[pseudo]';
 }
-
 function showNicknamePrompt() {
     const nick = prompt('Votre pseudo (2-16 car.):', playerNickname || '');
     if (nick !== null && nick.trim().length >= 2) {
         apiCall('/api/session', 'POST', { nickname: nick.trim() }).then(data => {
-            playerNickname = data.nickname;
-            updateNicknameDisplay();
+            playerNickname = data.nickname; updateNicknameDisplay();
         }).catch(e => alert(e.message));
     }
 }
 
-// ============================================
 // TOAST
-// ============================================
-function showToast(text, type, duration = 2500) {
+function showToast(text, type, duration = 2800) {
     const toast = document.getElementById('toast');
     toast.textContent = text;
     toast.className = 'toast ' + type;
@@ -512,9 +526,7 @@ function showToast(text, type, duration = 2500) {
     setTimeout(() => toast.classList.remove('show'), duration);
 }
 
-// ============================================
 // LOBBY
-// ============================================
 async function loadLobby() {
     try {
         const data = await apiCall('/api/table/list');
@@ -534,15 +546,10 @@ async function loadLobby() {
     } catch (e) { console.error('Lobby error:', e); }
 }
 
-// ============================================
 // TABLE VIEW
-// ============================================
 async function joinTableView(tableId) {
-    currentTableId = tableId;
-    currentBet = 0;
-    previousStatus = null;
-    chatMessages = [];
-    lastChatTimestamp = Date.now() - 5000;
+    currentTableId = tableId; currentBet = 0; previousStatus = null;
+    chatMessages = []; lastChatTimestamp = Date.now() - 5000; lastAnimatedRound = -1;
     document.getElementById('lobby').classList.add('hidden');
     document.getElementById('tableView').classList.add('active');
     document.getElementById('chatToggle').style.display = 'flex';
@@ -557,12 +564,8 @@ async function joinTableView(tableId) {
 
 function backToLobby() {
     if (pollInterval) clearInterval(pollInterval);
-    currentTableId = null;
-    lastTableState = null;
-    currentBet = 0;
-    previousStatus = null;
-    pollErrors = 0;
-    chatOpen = false;
+    currentTableId = null; lastTableState = null; currentBet = 0;
+    previousStatus = null; pollErrors = 0; chatOpen = false;
     document.getElementById('lobby').classList.remove('hidden');
     document.getElementById('tableView').classList.remove('active');
     document.getElementById('chatToggle').style.display = 'none';
@@ -578,14 +581,10 @@ async function pollTable() {
     try {
         const chatSince = lastChatTimestamp || (Date.now() - 30000);
         const data = await apiCall(`/api/table/${currentTableId}?chat_since=${chatSince}`);
-        lastTableState = data;
-        pollErrors = 0;
+        lastTableState = data; pollErrors = 0;
         document.getElementById('connDot').className = 'conn-dot ok';
 
-        if (data.balance !== undefined) {
-            balance = data.balance;
-            updateBalance();
-        }
+        if (data.balance !== undefined) { balance = data.balance; updateBalance(); }
 
         if (data.chatMessages && data.chatMessages.length > 0) {
             data.chatMessages.forEach(msg => {
@@ -614,56 +613,45 @@ function detectPhaseChange(data) {
             const gain = mySeat.netGain;
             if (gain > 0) {
                 const hasBJ = mySeat.hands && mySeat.hands.some(h => h.result === 'bj');
-                if (hasBJ) {
-                    showToast(`BLACKJACK! +${gain}`, 'bj');
-                } else {
-                    showToast(`+${gain} sats!`, 'win');
-                }
-                if (typeof confetti !== 'undefined') confetti({ particleCount: hasBJ ? 150 : 80, spread: 60, origin: { y: 0.5 }, colors: ['#ff6b00', '#ffa500', '#ffd700'] });
+                showToast(hasBJ ? `BLACKJACK! +${gain} sats` : `GAGNE! +${gain} sats`, hasBJ ? 'bj' : 'win');
+                if (typeof confetti !== 'undefined') confetti({ particleCount: hasBJ ? 180 : 100, spread: 70, origin: { y: 0.5 }, colors: ['#ff6b00', '#ffa500', '#ffd700', '#00ff00'] });
                 if (mySeat.bet) lastBet = mySeat.bet;
             } else if (gain < 0) {
-                showToast(`${gain} sats`, 'loss');
+                showToast(`PERDU ${gain} sats`, 'loss');
             } else {
-                showToast('PUSH', 'push');
+                showToast('EGALITE', 'push');
             }
             if (navigator.vibrate) navigator.vibrate(gain > 0 ? [200, 100, 200] : [80]);
         }
     }
 
-    if (previousStatus === 'betting' && (data.status === 'dealing' || data.status === 'playing')) {
-        addChatSystem('Distribution des cartes...');
-    }
+    if (previousStatus === 'betting' && (data.status === 'dealing' || data.status === 'playing'))
+        addChatSystem('Les cartes sont distribuees!');
     if (data.isMyTurn && (!lastTableState || !lastTableState.isMyTurn)) {
-        addChatSystem('C\'est votre tour!');
+        addChatSystem('A vous de jouer!');
         if (navigator.vibrate) navigator.vibrate(50);
     }
     if (previousStatus !== 'betting' && data.status === 'betting') addChatSystem('Phase de mise ouverte!');
-    if (previousStatus === 'finished' && data.status === 'waiting') addChatSystem('Nouveau round!');
+    if (previousStatus === 'finished' && data.status === 'waiting') addChatSystem('Nouveau round - placez vos mises!');
 }
 
-// ============================================
 // RENDER CARD
-// ============================================
 function renderCardHTML(card) {
-    if (card.hidden) return `<div class="card hidden-card"></div>`;
+    if (card.hidden) return '<div class="card hidden-card"></div>';
     const isRed = card.suit === '\u2665' || card.suit === '\u2666';
     return `<div class="card"><div class="card-content ${isRed ? 'red' : 'black'}"><div class="corner">${card.value}${card.suit}</div><div class="center">${card.suit}</div></div></div>`;
 }
 
-// ============================================
 // RENDER TABLE
-// ============================================
 function renderTable(data) {
     const phaseLabels = { waiting: 'EN ATTENTE', betting: 'PLACEZ VOS MISES', dealing: 'DISTRIBUTION...', playing: 'EN JEU', dealer_turn: 'TOUR DU DEALER', finished: 'ROUND TERMINE', settling: 'PAIEMENT...' };
     document.getElementById('phaseLabel').textContent = phaseLabels[data.status] || data.status;
 
     // Dealer
-    const dc = document.getElementById('dealerCards');
-    dc.innerHTML = (data.dealerCards || []).map(c => renderCardHTML(c)).join('');
-
+    document.getElementById('dealerCards').innerHTML = (data.dealerCards || []).map(c => renderCardHTML(c)).join('');
     const ds = document.getElementById('dealerScore');
     if (data.dealerScore !== null && data.dealerCards && data.dealerCards.length > 0) {
-        ds.innerHTML = `<span class="dealer-score-badge ${data.dealerScore > 21 ? 'bust' : ''}">${data.dealerScore}</span>`;
+        ds.innerHTML = `<span class="dealer-score ${data.dealerScore > 21 ? 'bust' : ''}">${data.dealerScore}</span>`;
     } else ds.innerHTML = '';
 
     // Timer
@@ -676,81 +664,99 @@ function renderTable(data) {
         fill.style.width = pct + '%';
         fill.className = 'timer-fill-mini' + (pct < 25 ? ' low' : '');
         document.getElementById('timerText').textContent = data.timerSeconds + 's';
+    } else timerRow.style.display = 'none';
+
+    // Compteur joueurs
+    const occupiedSeats = data.seats.filter(s => !s.empty);
+    const totalSeats = data.seats.length;
+    const freeSeats = totalSeats - occupiedSeats.length;
+    document.getElementById('playersBadge').innerHTML = `<span class="count">${occupiedSeats.length}</span>/${totalSeats} joueurs`;
+
+    // Bouton rejoindre (si pas assis et places dispo)
+    const joinBtn = document.getElementById('joinBtnFloat');
+    if (data.mySeat < 0 && freeSeats > 0) {
+        joinBtn.classList.remove('hidden');
+        joinBtn.textContent = `+ REJOINDRE (${freeSeats} place${freeSeats > 1 ? 's' : ''})`;
     } else {
-        timerRow.style.display = 'none';
+        joinBtn.classList.add('hidden');
     }
 
-    // Seats
+    // Determiner si on anime les resultats (nouveau round fini)
+    const shouldAnimateResults = data.status === 'finished' && data.roundNumber !== lastAnimatedRound;
+    if (data.status === 'finished') lastAnimatedRound = data.roundNumber;
+
+    // Seats - SEULEMENT les occupes
     const grid = document.getElementById('seatsGrid');
     grid.innerHTML = '';
 
     data.seats.forEach((seat, idx) => {
+        if (seat.empty) return; // On n'affiche PAS les sieges vides
+
         const div = document.createElement('div');
+        const isActive = data.status === 'playing' && data.currentSeatIdx === idx;
+        const cls = ['seat'];
+        if (seat.isMe) cls.push('is-me');
+        if (isActive) cls.push('active-turn');
 
-        if (seat.empty) {
-            div.className = 'seat empty-seat';
-            div.onclick = () => joinSeat(idx);
-            div.innerHTML = `<div class="seat-name">SIEGE ${idx + 1}</div><div style="font-size:20px;color:rgba(255,107,0,0.5);margin:6px 0;">+</div>`;
-        } else {
-            const isActive = data.status === 'playing' && data.currentSeatIdx === idx;
-            const cls = ['seat'];
-            if (seat.isMe) cls.push('is-me');
-            if (isActive) cls.push('active-turn');
-            div.className = cls.join(' ');
-
-            let handsHTML = '';
-            (seat.hands || []).forEach((hand, hIdx) => {
-                const cards = hand.cards.map(c => renderCardHTML(c)).join('');
-                const isBust = hand.score > 21;
-                let rHTML = '';
-                if (hand.result) {
-                    const rClass = { win:'result-win', loss:'result-loss', bust:'result-bust', push:'result-push', bj:'result-bj', surrender:'result-surrender' }[hand.result] || '';
-                    const rLabel = { win:'WIN', loss:'LOSS', bust:'BUST', push:'PUSH', bj:'BJ!', surrender:'ABANDON' }[hand.result] || hand.result;
-                    rHTML = `<div class="seat-result ${rClass}">${rLabel}</div>`;
-                }
-                const hLabel = seat.hands.length > 1 ? `<div style="font-size:8px;color:#666;margin-top:2px;">M${hIdx+1}</div>` : '';
-                handsHTML += `${hLabel}<div class="seat-cards">${cards}</div><span class="mini-score ${isBust?'bust':''}">${hand.score}</span>${rHTML}`;
-            });
-
-            let gainHTML = '';
-            if (data.status === 'finished' && seat.netGain !== undefined && seat.netGain !== null) {
-                const c = seat.netGain > 0 ? '#00ff00' : (seat.netGain < 0 ? '#ff4444' : '#ffa500');
-                const s = seat.netGain >= 0 ? '+' : '';
-                gainHTML = `<div class="seat-gain" style="color:${c}">${s}${seat.netGain}</div>`;
-            }
-
-            const nameDisplay = seat.isMe ? 'VOUS' : seat.playerName;
-            const betDisplay = seat.bet > 0 ? `<div class="seat-bet-badge">${seat.bet} sats</div>` : '';
-
-            div.innerHTML = `<div class="seat-name">${nameDisplay}</div>${betDisplay}${handsHTML}${gainHTML}${isActive ? '<div style="color:#ffa500;font-size:8px;animation:blink 1s infinite;">EN JEU</div>' : ''}`;
+        // Animation de resultat sur le siege
+        if (shouldAnimateResults && data.status === 'finished' && seat.netGain !== undefined) {
+            if (seat.hands && seat.hands.some(h => h.result === 'bj')) cls.push('result-anim-bj');
+            else if (seat.netGain > 0) cls.push('result-anim-win');
+            else if (seat.netGain < 0) cls.push('result-anim-loss');
         }
+
+        div.className = cls.join(' ');
+
+        let handsHTML = '';
+        (seat.hands || []).forEach((hand, hIdx) => {
+            const cards = hand.cards.map(c => renderCardHTML(c)).join('');
+            const isBust = hand.score > 21;
+            const isBJ = hand.result === 'bj';
+            let rHTML = '';
+            if (hand.result) {
+                const rClass = { win:'result-win', loss:'result-loss', bust:'result-bust', push:'result-push', bj:'result-bj', surrender:'result-surrender' }[hand.result] || '';
+                const rLabel = { win:'GAGNE', loss:'PERDU', bust:'BUST', push:'EGALITE', bj:'BLACKJACK!', surrender:'ABANDON' }[hand.result] || hand.result;
+                rHTML = `<div class="seat-result ${rClass}">${rLabel}</div>`;
+            }
+            const hLabel = seat.hands.length > 1 ? `<div style="font-size:8px;color:#666;margin-top:2px;">Main ${hIdx+1}</div>` : '';
+            const scoreClass = isBust ? 'bust' : (isBJ ? 'bj-score' : '');
+            handsHTML += `${hLabel}<div class="seat-cards">${cards}</div><span class="player-score ${scoreClass}">${hand.score}</span>${rHTML}`;
+        });
+
+        let gainHTML = '';
+        if (data.status === 'finished' && seat.netGain !== undefined && seat.netGain !== null) {
+            const c = seat.netGain > 0 ? '#00ff00' : (seat.netGain < 0 ? '#ff4444' : '#ffa500');
+            const s = seat.netGain >= 0 ? '+' : '';
+            gainHTML = `<div class="seat-gain" style="color:${c}">${s}${seat.netGain} sats</div>`;
+        }
+
+        const nameDisplay = seat.isMe ? 'VOUS' : seat.playerName;
+        const betDisplay = seat.bet > 0 ? `<div class="seat-bet-badge">${seat.bet} sats</div>` : '';
+
+        div.innerHTML = `<div class="seat-name">${nameDisplay}</div>${betDisplay}${handsHTML}${gainHTML}${isActive ? '<div style="color:#ffa500;font-size:9px;font-family:Orbitron;animation:blink 1s infinite;margin-top:2px;">A JOUER</div>' : ''}`;
         grid.appendChild(div);
     });
 
     renderControls(data);
 }
 
-// ============================================
 // CONTROLS
-// ============================================
 function renderControls(data) {
     const c = document.getElementById('controls');
 
     if (data.mySeat < 0) {
-        c.innerHTML = '<span class="info-text">Choisissez un siege pour jouer</span>';
+        c.innerHTML = '<span class="info-text">Cliquez sur + REJOINDRE pour jouer</span>';
         return;
     }
 
-    // Can bet
     if (data.canBet) {
         const min = data.minBet, max = data.maxBet;
         let rebet = '';
         if (lastBet > 0 && lastBet >= min && lastBet <= max && balance >= lastBet)
             rebet = `<button class="act-btn act-rebet" onclick="quickRebet(${lastBet})">RE-BET ${lastBet}</button>`;
-
         c.innerHTML = `
             <div style="display:flex;flex-direction:column;align-items:center;gap:4px;width:100%;">
-                <div class="bet-amount" id="betDisplay">${currentBet || '-'}</div>
+                <div class="bet-amount">${currentBet || '-'}</div>
                 <div class="chips-row">
                     <div class="chip c100 ${currentBet+100>max||balance<100?'disabled':''}" onclick="addBet(100,${max})">100</div>
                     <div class="chip c500 ${currentBet+500>max||balance<500?'disabled':''}" onclick="addBet(500,${max})">500</div>
@@ -766,7 +772,6 @@ function renderControls(data) {
         return;
     }
 
-    // My turn
     if (data.isMyTurn) {
         c.innerHTML = `
             <button class="act-btn act-hit" onclick="doAction('hit')" ${!data.canHit?'disabled':''}>CARTE</button>
@@ -788,83 +793,60 @@ function renderControls(data) {
 
     if (data.status === 'finished') {
         let rebet = '';
-        if (lastBet > 0 && balance >= lastBet) rebet = `<button class="act-btn act-rebet" onclick="quickRebet(${lastBet})">RE-BET ${lastBet}</button>`;
+        if (lastBet > 0 && balance >= lastBet) rebet = `<button class="act-btn act-rebet" onclick="quickRebet(${lastBet})" style="margin-left:8px;">RE-BET ${lastBet}</button>`;
         c.innerHTML = `<span class="phase-highlight">ROUND TERMINE</span>${rebet}`;
         return;
     }
 
-    if (data.status === 'betting') {
-        c.innerHTML = '<span class="info-text">Mise placee! En attente...</span>';
-        return;
-    }
-
-    if (['dealing', 'dealer_turn', 'settling'].includes(data.status)) {
-        c.innerHTML = `<span class="info-text">${data.status === 'dealer_turn' ? 'Le dealer joue...' : 'En cours...'}</span>`;
-        return;
-    }
-
+    if (data.status === 'betting') { c.innerHTML = '<span class="info-text">Mise placee! En attente...</span>'; return; }
+    if (['dealing','dealer_turn','settling'].includes(data.status)) { c.innerHTML = `<span class="info-text">${data.status === 'dealer_turn' ? 'Le dealer joue...' : 'En cours...'}</span>`; return; }
     c.innerHTML = '<span class="info-text">En attente...</span>';
 }
 
-// ============================================
 // CHAT
-// ============================================
-function toggleChat() {
-    chatOpen = !chatOpen;
-    document.getElementById('chatDrawer').classList.toggle('open', chatOpen);
-}
-
+function toggleChat() { chatOpen = !chatOpen; document.getElementById('chatDrawer').classList.toggle('open', chatOpen); }
 function addChatMessage(name, text) {
-    chatMessages.push({ name, text });
-    if (chatMessages.length > 30) chatMessages.shift();
+    chatMessages.push({ name, text }); if (chatMessages.length > 30) chatMessages.shift();
     const container = document.getElementById('chatMessages');
-    const div = document.createElement('div');
-    div.className = 'chat-msg';
+    const div = document.createElement('div'); div.className = 'chat-msg';
     div.innerHTML = `<span class="name">${name}:</span> ${text}`;
-    container.appendChild(div);
-    container.scrollTop = container.scrollHeight;
+    container.appendChild(div); container.scrollTop = container.scrollHeight;
 }
-
 function addChatSystem(text) {
     const container = document.getElementById('chatMessages');
-    const div = document.createElement('div');
-    div.className = 'chat-msg';
+    const div = document.createElement('div'); div.className = 'chat-msg';
     div.innerHTML = `<span class="system">${text}</span>`;
-    container.appendChild(div);
-    container.scrollTop = container.scrollHeight;
+    container.appendChild(div); container.scrollTop = container.scrollHeight;
 }
-
 async function sendChat(msg) {
     if (!currentTableId) return;
     try { await apiCall(`/api/table/${currentTableId}/chat`, 'POST', { message: msg }); } catch(e) {}
     addChatMessage('Vous', msg);
 }
 
-// ============================================
 // ACTIONS
-// ============================================
 function addBet(amount, maxBet) {
     if (currentBet + amount > maxBet || balance < amount) return;
     currentBet += amount;
     if (lastTableState) renderControls(lastTableState);
 }
-
-async function quickRebet(amount) {
-    currentBet = amount;
-    await placeBet();
-}
+async function quickRebet(amount) { currentBet = amount; await placeBet(); }
 
 async function placeBet() {
     if (!currentTableId || currentBet <= 0) return;
     try {
         const data = await apiCall(`/api/table/${currentTableId}/bet`, 'POST', { amount: currentBet });
-        balance = data.balance;
-        updateBalance();
-        lastBet = currentBet;
-        currentBet = 0;
+        balance = data.balance; updateBalance();
+        lastBet = currentBet; currentBet = 0;
         addChatSystem(`Mise de ${lastBet} sats placee!`);
         await pollTable();
     } catch (e) { alert(e.message); }
+}
+
+function joinFirstEmpty() {
+    if (!lastTableState) return;
+    const idx = lastTableState.seats.findIndex(s => s.empty);
+    if (idx >= 0) joinSeat(idx);
 }
 
 async function joinSeat(seatIdx) {
@@ -882,8 +864,7 @@ async function doAction(action) {
         const data = await apiCall(`/api/table/${currentTableId}/action`, 'POST', { action });
         lastTableState = data;
         if (data.status === 'finished' && previousStatus !== 'finished') {
-            detectPhaseChange(data);
-            previousStatus = data.status;
+            detectPhaseChange(data); previousStatus = data.status;
         }
         renderTable(data);
     } catch (e) { alert(e.message); }
@@ -895,8 +876,7 @@ async function doInsurance(accept) {
         const data = await apiCall(`/api/table/${currentTableId}/action`, 'POST', { action: 'insurance', accept });
         lastTableState = data;
         if (data.status === 'finished' && previousStatus !== 'finished') {
-            detectPhaseChange(data);
-            previousStatus = data.status;
+            detectPhaseChange(data); previousStatus = data.status;
         }
         renderTable(data);
     } catch (e) { alert(e.message); }
@@ -915,19 +895,12 @@ async function sendTip(seatIdx, playerName) {
     if (!tipAmount || tipAmount < 10 || tipAmount > 1000 || tipAmount > balance) { alert('Montant invalide'); return; }
     try {
         const data = await apiCall(`/api/table/${currentTableId}/tip`, 'POST', { seatIdx, amount: tipAmount });
-        balance = data.balance;
-        updateBalance();
+        balance = data.balance; updateBalance();
         addChatSystem(`Tip ${tipAmount} sats a ${playerName}!`);
     } catch (e) { alert(e.message); }
 }
 
-// ============================================
-// INIT
-// ============================================
-window.onload = async () => {
-    await initSession();
-    await loadLobby();
-};
+window.onload = async () => { await initSession(); await loadLobby(); };
 </script>
 </body>
 </html>
