@@ -1,6 +1,6 @@
 import { kv } from '@vercel/kv';
 import { json, getSessionId } from '../../_helpers.js';
-import { handScore, isPair, drawCard } from '../../_game-helpers.js';
+import { handScore, isPair, drawCard, isBlackjack } from '../../_game-helpers.js';
 import { checkTimeouts, advanceToNextPlayer, creditPlayers, tableStateForClient } from '../[id].js';
 
 export const config = { runtime: 'edge' };
@@ -20,7 +20,7 @@ export default async function handler(req) {
   const body = await req.json();
   const { action } = body;
 
-  if (!['hit', 'stand', 'double', 'split'].includes(action)) {
+  if (!['hit', 'stand', 'double', 'split', 'insurance', 'surrender'].includes(action)) {
     return json(400, { error: 'Action invalide' });
   }
 
@@ -56,6 +56,83 @@ export default async function handler(req) {
       return json(400, { error: 'Main déjà terminée' });
     }
 
+    // ===================== INSURANCE =====================
+    if (action === 'insurance') {
+      // L'assurance doit être sur les 2 premières cartes, dealer montre un As
+      if (hand.cards.length !== 2 || seat.hands.length > 1) {
+        return json(400, { error: 'Assurance non disponible' });
+      }
+      if (!table.dealerHand || table.dealerHand[0].value !== 'A') {
+        return json(400, { error: 'Assurance seulement quand le dealer montre un As' });
+      }
+      if (seat.insuranceBet !== undefined) {
+        return json(400, { error: 'Assurance déjà prise/refusée' });
+      }
+
+      const accept = body.accept !== false;
+      const insuranceCost = Math.floor(hand.bet / 2);
+
+      if (accept) {
+        const playerKey = `player:${sessionId}`;
+        const player = await kv.get(playerKey);
+        if (!player || player.balance < insuranceCost) {
+          return json(400, { error: 'Solde insuffisant pour l\'assurance' });
+        }
+        player.balance -= insuranceCost;
+        await kv.set(playerKey, player, { ex: 2592000 });
+        seat.insuranceBet = insuranceCost;
+      } else {
+        seat.insuranceBet = 0; // refusé
+      }
+
+      // Vérifier si le dealer a blackjack
+      if (isBlackjack(table.dealerHand)) {
+        // Insurance gagne 2:1
+        if (seat.insuranceBet > 0) {
+          const playerKey = `player:${sessionId}`;
+          const player = await kv.get(playerKey);
+          if (player) {
+            const insurancePayout = seat.insuranceBet * 3;
+            player.balance += insurancePayout;
+            await kv.set(playerKey, player, { ex: 2592000 });
+          }
+          seat.insuranceResult = 'win';
+        }
+        // Main perd (ou push si joueur aussi BJ)
+        if (isBlackjack(hand.cards)) {
+          hand.result = 'push';
+        } else {
+          hand.result = 'loss';
+        }
+        hand.finished = true;
+        seat.finished = true;
+        advanceToNextPlayer(table);
+      }
+
+      table.turnStartedAt = Date.now();
+    }
+
+    // ===================== SURRENDER =====================
+    if (action === 'surrender') {
+      if (hand.cards.length !== 2 || seat.hands.length > 1) {
+        return json(400, { error: 'Abandon seulement sur les 2 premières cartes' });
+      }
+
+      // Rembourser la moitié de la mise
+      const refund = Math.floor(hand.bet / 2);
+      const playerKey = `player:${sessionId}`;
+      const player = await kv.get(playerKey);
+      if (player) {
+        player.balance += refund;
+        await kv.set(playerKey, player, { ex: 2592000 });
+      }
+
+      hand.finished = true;
+      hand.result = 'surrender';
+      seat.finished = true;
+      advanceToNextPlayer(table);
+    }
+
     // ===================== HIT =====================
     if (action === 'hit') {
       hand.cards.push(drawCard(table.deck));
@@ -83,10 +160,6 @@ export default async function handler(req) {
     if (action === 'double') {
       if (hand.cards.length !== 2) {
         return json(400, { error: 'Double seulement sur 2 cartes' });
-      }
-      const score = handScore(hand.cards);
-      if (score < 9 || score > 11) {
-        return json(400, { error: 'Double seulement sur 9-11' });
       }
 
       // Vérifier le solde

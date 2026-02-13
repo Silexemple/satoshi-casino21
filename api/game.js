@@ -153,7 +153,7 @@ export default async function handler(req) {
         playerHands: [{ cards: pHand.map(cardForClient), bet, score }],
         dealerUpCard: cardForClient(dHand[0]),
         balance: player.balance,
-        canDouble: score >= 9 && score <= 11 && player.balance >= bet,
+        canDouble: player.balance >= bet,
         canSplit: isPair(pHand) && player.balance >= bet,
         canInsurance: dealerUpIsAce && player.balance >= Math.floor(bet / 2),
         canSurrender: true,
@@ -328,10 +328,6 @@ export default async function handler(req) {
       if (hand.cards.length !== 2) {
         return json(400, { error: 'Double seulement sur 2 cartes' });
       }
-      const score = handScore(hand.cards);
-      if (score < 9 || score > 11) {
-        return json(400, { error: 'Double seulement sur 9-11' });
-      }
       if (player.balance < hand.bet) {
         return json(400, { error: 'Solde insuffisant pour doubler' });
       }
@@ -489,7 +485,7 @@ function playingResponse(gs, player) {
     })),
     dealerUpCard: cardForClient(gs.dealerHand[0]),
     balance: player.balance,
-    canDouble: hand.cards.length === 2 && score >= 9 && score <= 11 && player.balance >= hand.bet,
+    canDouble: hand.cards.length === 2 && player.balance >= hand.bet,
     canSplit: isPair(hand.cards) && player.balance >= gs.bet && gs.playerHands.length < 4,
     canInsurance: gs.phase === 'insurance_offered' && player.balance >= Math.floor(gs.bet / 2),
     canSurrender: isFirstAction && !gs.phase,

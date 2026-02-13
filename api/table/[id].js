@@ -73,6 +73,8 @@ function resetTableForNextRound(table) {
       table.seats[i].finished = true;
       table.seats[i].payout = undefined;
       table.seats[i].netGain = undefined;
+      table.seats[i].insuranceBet = undefined;
+      table.seats[i].insuranceResult = undefined;
     }
   }
 }
@@ -226,7 +228,7 @@ function settleRound(table) {
     for (const hand of seat.hands) {
       totalBet += hand.bet;
 
-      if (hand.result === 'bust') continue;
+      if (hand.result === 'bust' || hand.result === 'surrender') continue;
       if (hand.result === 'bj') {
         totalPayout += Math.floor(hand.bet * 2.5);
         continue;
@@ -284,7 +286,8 @@ function tableStateForClient(table, sessionId) {
       })),
       currentHandIdx: seat.currentHandIdx || 0,
       payout: seat.payout,
-      netGain: seat.netGain
+      netGain: seat.netGain,
+      insuranceResult: seat.insuranceResult
     };
   });
 
@@ -317,6 +320,7 @@ function tableStateForClient(table, sessionId) {
 
   // Can actions
   let canHit = false, canStand = false, canDouble = false, canSplit = false;
+  let canInsurance = false, canSurrender = false;
   if (isMyTurn && mySeat >= 0) {
     const seat = table.seats[mySeat];
     const hand = seat.hands[seat.currentHandIdx];
@@ -324,9 +328,16 @@ function tableStateForClient(table, sessionId) {
       const score = handScore(hand.cards);
       canHit = score < 21;
       canStand = true;
-      canDouble = hand.cards.length === 2 && score >= 9 && score <= 11;
+      // Double sur n'importe quelles 2 cartes
+      canDouble = hand.cards.length === 2;
       // Split: besoin de vérifier le solde du joueur (pas dispo ici, sera vérifié côté action)
       canSplit = hand.cards.length === 2 && hand.cards[0].value === hand.cards[1].value && seat.hands.length < 4;
+      // Insurance: dealer montre un As, première main, 2 cartes, pas encore pris
+      canInsurance = hand.cards.length === 2 && seat.hands.length === 1 &&
+        table.dealerHand && table.dealerHand[0].value === 'A' &&
+        seat.insuranceBet === undefined;
+      // Surrender: première main, 2 cartes, pas de split
+      canSurrender = hand.cards.length === 2 && seat.hands.length === 1;
     }
   }
 
@@ -352,7 +363,7 @@ function tableStateForClient(table, sessionId) {
     isMyTurn,
     mySeat,
     canBet,
-    canHit, canStand, canDouble, canSplit,
+    canHit, canStand, canDouble, canSplit, canInsurance, canSurrender,
     lastUpdate: table.lastUpdate
   };
 }
