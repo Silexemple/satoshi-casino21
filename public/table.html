@@ -260,19 +260,22 @@
         .seat-bet-badge { font-size: 10px; color: #888; margin: 1px 0; }
         .seat-cards { display: flex; justify-content: center; gap: 3px; flex-wrap: nowrap; margin: 3px 0; }
 
-        /* CARTES - plus grosses */
+        /* CARTES */
         .card {
             width: 44px; height: 62px; background: linear-gradient(135deg, #fff, #f0f0f0);
             border-radius: 5px; box-shadow: 0 3px 8px rgba(0,0,0,0.5);
-            animation: dealIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
             border: 1px solid rgba(0,0,0,0.15); flex-shrink: 0;
         }
         .dealer-cards .card { width: 52px; height: 74px; }
+        /* Animation seulement sur les nouvelles cartes */
+        .card-new {
+            animation: dealIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+            animation-fill-mode: forwards;
+        }
         @keyframes dealIn {
             0% { transform: translateY(-80px) scale(0.5); opacity: 0; }
             100% { transform: translateY(0) scale(1); opacity: 1; }
         }
-        .card { animation-fill-mode: forwards; }
         .card-content {
             padding: 3px 4px; height: 100%;
             display: flex; flex-direction: column; justify-content: space-between;
@@ -577,6 +580,8 @@ let playerNickname = null, playerAvatar = null, chatOpen = false;
 let lastAnimatedRound = -1;
 // Track quel round a deja ete distribue (animation cartes sequentielles)
 let lastDealtRound = -1;
+// Track le nombre total de cartes pour detecter les nouvelles (hit, double)
+let lastTotalCards = 0;
 // Avatars disponibles
 const AVATARS = ['💀','👑','♠️','💎','🔥','🚀','🎯','🐺','⚡','🦅','🎰','🃏'];
 
@@ -687,7 +692,7 @@ async function loadLobby() {
 // TABLE VIEW
 async function joinTableView(tableId) {
     currentTableId = tableId; currentBet = 0; previousStatus = null;
-    chatMessages = []; lastChatTimestamp = Date.now() - 5000; lastAnimatedRound = -1; lastDealtRound = -1;
+    chatMessages = []; lastChatTimestamp = Date.now() - 5000; lastAnimatedRound = -1; lastDealtRound = -1; lastTotalCards = 0;
     document.getElementById('lobby').classList.add('hidden');
     document.getElementById('tableView').classList.add('active');
     document.getElementById('chatToggle').style.display = 'flex';
@@ -773,12 +778,13 @@ function detectPhaseChange(data) {
     if (previousStatus === 'finished' && data.status === 'waiting') addChatSystem('Nouveau round - placez vos mises!');
 }
 
-// RENDER CARD (delay en ms pour animation sequentielle)
-function renderCardHTML(card, delay) {
-    const delayStyle = delay > 0 ? `animation-delay:${delay}ms;opacity:0;` : '';
-    if (card.hidden) return `<div class="card hidden-card" style="${delayStyle}"></div>`;
+// RENDER CARD (animate=true pour la premiere apparition seulement)
+function renderCardHTML(card, animate, delay) {
+    const animClass = animate ? ' card-new' : '';
+    const delayStyle = animate && delay > 0 ? `animation-delay:${delay}ms;opacity:0;` : '';
+    if (card.hidden) return `<div class="card hidden-card${animClass}" style="${delayStyle}"></div>`;
     const isRed = card.suit === '\u2665' || card.suit === '\u2666';
-    return `<div class="card" style="${delayStyle}"><div class="card-content ${isRed ? 'red' : 'black'}"><div class="corner">${card.value}${card.suit}</div><div class="center">${card.suit}</div></div></div>`;
+    return `<div class="card${animClass}" style="${delayStyle}"><div class="card-content ${isRed ? 'red' : 'black'}"><div class="corner">${card.value}${card.suit}</div><div class="center">${card.suit}</div></div></div>`;
 }
 
 // RENDER TABLE
@@ -786,20 +792,32 @@ function renderTable(data) {
     const phaseLabels = { waiting: 'EN ATTENTE', betting: 'PLACEZ VOS MISES', dealing: 'DISTRIBUTION...', playing: 'EN JEU', dealer_turn: 'TOUR DU DEALER', finished: 'ROUND TERMINE', settling: 'PAIEMENT...' };
     document.getElementById('phaseLabel').textContent = phaseLabels[data.status] || data.status;
 
-    // Animation sequentielle: seulement au premier rendu d'un nouveau round
+    // Compter le total de cartes visibles pour detecter les nouvelles
+    let currentTotalCards = (data.dealerCards || []).length;
+    data.seats.forEach(s => { if (!s.empty) (s.hands || []).forEach(h => { currentTotalCards += h.cards.length; }); });
+
+    // isNewDeal = premier affichage du round (toutes les cartes sont nouvelles)
     const isNewDeal = data.status !== 'waiting' && data.dealerCards && data.dealerCards.length > 0 && data.roundNumber !== lastDealtRound;
+    // isNewCard = une carte a ete ajoutee (hit, double, dealer draw)
+    const isNewCard = !isNewDeal && currentTotalCards > lastTotalCards && lastTotalCards > 0;
+    lastTotalCards = currentTotalCards;
+
     if (isNewDeal && ['dealing','playing'].includes(data.status)) {
         lastDealtRound = data.roundNumber;
         playCardSound();
         if (navigator.vibrate) navigator.vibrate(15);
     }
+    if (isNewCard) { playCardSound(); if (navigator.vibrate) navigator.vibrate(15); }
 
-    // Dealer (avec delai sequentiel si nouveau deal)
-    let dealerDelay = 0;
-    const dealerCardsHTML = (data.dealerCards || []).map((c, i) => {
-        const d = isNewDeal ? (i * 300 + 200) : 0;
-        if (isNewDeal && d > 0) setTimeout(playCardSound, d);
-        return renderCardHTML(c, isNewDeal ? d : 0);
+    // Dealer cards
+    const dCards = data.dealerCards || [];
+    const dealerCardsHTML = dCards.map((c, i) => {
+        // Animer: nouveau deal (toutes) ou nouvelle carte dealer (derniere seulement)
+        const animateDeal = isNewDeal;
+        const animateHit = isNewCard && i === dCards.length - 1;
+        const d = i * 300 + 200;
+        if (animateDeal && d > 0) setTimeout(playCardSound, d);
+        return renderCardHTML(c, animateDeal || animateHit, animateDeal ? d : 0);
     }).join('');
     document.getElementById('dealerCards').innerHTML = dealerCardsHTML;
     const ds = document.getElementById('dealerScore');
@@ -863,9 +881,12 @@ function renderTable(data) {
         let seatCardIdx = 0;
         (seat.hands || []).forEach((hand, hIdx) => {
             const cards = hand.cards.map((c, ci) => {
-                const delay = isNewDeal ? (seatCardIdx * 300) : 0;
+                const delay = seatCardIdx * 300;
                 seatCardIdx++;
-                return renderCardHTML(c, delay);
+                // Animer: nouveau deal (toutes) ou hit (derniere carte seulement)
+                const animateDeal = isNewDeal;
+                const animateHit = isNewCard && ci === hand.cards.length - 1;
+                return renderCardHTML(c, animateDeal || animateHit, animateDeal ? delay : 0);
             }).join('');
             const isBust = hand.score > 21;
             const isBJ = hand.result === 'bj';
