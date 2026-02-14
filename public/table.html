@@ -478,6 +478,64 @@
         /* SEAT AVATAR */
         .seat-avatar { font-size: 18px; margin-bottom: 1px; }
 
+        /* WIN/LOSS COUNTER */
+        .seat-wl {
+            font-family: 'Orbitron'; font-size: 8px; color: #888;
+            letter-spacing: 1px; margin-top: 1px;
+        }
+        .seat-wl .wl-w { color: #00ff00; }
+        .seat-wl .wl-l { color: #ff4444; }
+
+        /* CONNECTION PULSE - joueur actif */
+        .seat-online::before {
+            content: ''; position: absolute; top: 4px; right: 4px;
+            width: 6px; height: 6px; border-radius: 50%;
+            background: #0f0; box-shadow: 0 0 4px #0f0;
+            animation: onlinePulse 2s ease-in-out infinite;
+        }
+        @keyframes onlinePulse {
+            0%, 100% { opacity: 1; box-shadow: 0 0 4px #0f0; }
+            50% { opacity: 0.5; box-shadow: 0 0 8px #0f0; }
+        }
+
+        /* HISTORIQUE COMPACT - mini icons */
+        .seat-history {
+            display: flex; gap: 2px; justify-content: center; margin-top: 2px;
+        }
+        .hist-dot {
+            width: 6px; height: 6px; border-radius: 50%;
+        }
+        .hist-win { background: #00ff00; box-shadow: 0 0 3px #00ff00; }
+        .hist-loss { background: #ff4444; box-shadow: 0 0 3px #ff4444; }
+        .hist-push { background: #ffa500; box-shadow: 0 0 3px #ffa500; }
+        .hist-bj { background: #ffd700; box-shadow: 0 0 4px #ffd700; width: 8px; height: 8px; }
+
+        /* PHASE TRANSITION */
+        .phase-text {
+            transition: opacity 0.3s, transform 0.3s;
+        }
+        .phase-text.phase-changing {
+            animation: phaseChange 0.6s ease-out;
+        }
+        @keyframes phaseChange {
+            0% { opacity: 0; transform: scale(0.7) translateY(-8px); }
+            60% { transform: scale(1.1) translateY(0); }
+            100% { opacity: 1; transform: scale(1); }
+        }
+
+        /* SPECTATEUR MODE */
+        .spectator-badge {
+            position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%);
+            z-index: 5; font-family: 'Orbitron'; font-size: 9px; color: #aaa;
+            background: rgba(0,0,0,0.6); padding: 3px 12px; border-radius: 10px;
+            border: 1px solid rgba(255,255,255,0.15); letter-spacing: 2px;
+            animation: spectatorPulse 3s ease-in-out infinite;
+        }
+        @keyframes spectatorPulse {
+            0%, 100% { opacity: 0.6; }
+            50% { opacity: 1; }
+        }
+
         /* BOUTON TOURNOI */
         .topbar-tournoi {
             background: linear-gradient(135deg, #9b59b6, #8e44ad); border: 1px solid #9b59b6;
@@ -532,6 +590,7 @@
     <div class="felt">
         <div class="players-badge" id="playersBadge"><span class="count">0</span>/5</div>
         <div class="join-btn-float hidden" id="joinBtnFloat" onclick="joinFirstEmpty()">+ REJOINDRE</div>
+        <div class="spectator-badge" id="spectatorBadge" style="display:none;">&#128065; SPECTATEUR</div>
 
         <div class="dealer-zone">
             <div class="dealer-label">DEALER</div>
@@ -584,6 +643,12 @@ let lastDealtRound = -1;
 let lastTotalCards = 0;
 // Avatars disponibles
 const AVATARS = ['💀','👑','♠️','💎','🔥','🚀','🎯','🐺','⚡','🦅','🎰','🃏'];
+// Compteur wins/losses pour la session
+let sessionWins = 0, sessionLosses = 0;
+// Historique des 5 derniers resultats (pour mini-dots)
+let resultHistory = [];
+// Dernier status pour animation de transition
+let lastPhaseStatus = null;
 
 async function apiCall(endpoint, method = 'GET', body = null) {
     const options = { method, credentials: 'include', headers: { 'Content-Type': 'application/json' } };
@@ -693,6 +758,7 @@ async function loadLobby() {
 async function joinTableView(tableId) {
     currentTableId = tableId; currentBet = 0; previousStatus = null;
     chatMessages = []; lastChatTimestamp = Date.now() - 5000; lastAnimatedRound = -1; lastDealtRound = -1; lastTotalCards = 0;
+    sessionWins = 0; sessionLosses = 0; resultHistory = []; lastPhaseStatus = null;
     document.getElementById('lobby').classList.add('hidden');
     document.getElementById('tableView').classList.add('active');
     document.getElementById('chatToggle').style.display = 'flex';
@@ -750,6 +816,14 @@ async function pollTable() {
 function detectPhaseChange(data) {
     if (!previousStatus) return;
 
+    // Animation de transition de phase
+    if (previousStatus !== data.status) {
+        const phaseEl = document.getElementById('phaseLabel');
+        phaseEl.classList.remove('phase-changing');
+        void phaseEl.offsetWidth; // force reflow
+        phaseEl.classList.add('phase-changing');
+    }
+
     if (previousStatus !== 'finished' && data.status === 'finished') {
         const mySeat = data.seats.find(s => s.isMe);
         if (mySeat && mySeat.netGain !== undefined && mySeat.netGain !== null) {
@@ -759,11 +833,19 @@ function detectPhaseChange(data) {
                 showToast(hasBJ ? `BLACKJACK! +${gain} sats` : `GAGNE! +${gain} sats`, hasBJ ? 'bj' : 'win');
                 if (typeof confetti !== 'undefined') confetti({ particleCount: hasBJ ? 180 : 100, spread: 70, origin: { y: 0.5 }, colors: ['#ff6b00', '#ffa500', '#ffd700', '#00ff00'] });
                 if (mySeat.bet) lastBet = mySeat.bet;
+                // Compteur W/L + historique
+                sessionWins++;
+                resultHistory.push(hasBJ ? 'bj' : 'win');
             } else if (gain < 0) {
                 showToast(`PERDU ${gain} sats`, 'loss');
+                sessionLosses++;
+                resultHistory.push('loss');
             } else {
                 showToast('EGALITE', 'push');
+                resultHistory.push('push');
             }
+            // Garder seulement les 5 derniers
+            if (resultHistory.length > 5) resultHistory.shift();
             if (navigator.vibrate) navigator.vibrate(gain > 0 ? [200, 100, 200] : [80]);
         }
     }
@@ -809,15 +891,26 @@ function renderTable(data) {
     }
     if (isNewCard) { playCardSound(); if (navigator.vibrate) navigator.vibrate(15); }
 
-    // Dealer cards
+    // Badge spectateur (pas assis)
+    const specBadge = document.getElementById('spectatorBadge');
+    if (data.mySeat < 0 && data.status !== 'waiting') {
+        specBadge.style.display = 'block';
+    } else {
+        specBadge.style.display = 'none';
+    }
+
+    // Dealer cards - animation carte par carte pour dealer_turn
     const dCards = data.dealerCards || [];
+    const isDealerDrawing = previousStatus === 'playing' && data.status === 'dealer_turn';
     const dealerCardsHTML = dCards.map((c, i) => {
         // Animer: nouveau deal (toutes) ou nouvelle carte dealer (derniere seulement)
         const animateDeal = isNewDeal;
         const animateHit = isNewCard && i === dCards.length - 1;
-        const d = i * 300 + 200;
-        if (animateDeal && d > 0) setTimeout(playCardSound, d);
-        return renderCardHTML(c, animateDeal || animateHit, animateDeal ? d : 0);
+        // Dealer draw: animer chaque carte apres les 2 premieres avec delai croissant
+        const animateDealerDraw = isDealerDrawing && i >= 2;
+        const d = animateDeal ? (i * 300 + 200) : (animateDealerDraw ? ((i - 2) * 400) : 0);
+        if ((animateDeal || animateDealerDraw) && d > 0) setTimeout(playCardSound, d);
+        return renderCardHTML(c, animateDeal || animateHit || animateDealerDraw, d);
     }).join('');
     document.getElementById('dealerCards').innerHTML = dealerCardsHTML;
     const ds = document.getElementById('dealerScore');
@@ -875,6 +968,8 @@ function renderTable(data) {
             else if (seat.netGain > 0) cls.push('result-anim-win');
             else if (seat.netGain < 0) cls.push('result-anim-loss');
         }
+        // Indicateur connexion (pulse vert) - joueurs avec mise ou en jeu
+        if (seat.bet > 0 || !seat.finished) cls.push('seat-online');
         div.className = cls.join(' ');
 
         let handsHTML = '';
@@ -912,7 +1007,23 @@ function renderTable(data) {
         const nameDisplay = seat.isMe ? 'VOUS' : seat.playerName;
         const betDisplay = seat.bet > 0 ? `<div class="seat-bet-badge">${seat.bet} sats</div>` : '';
 
-        div.innerHTML = `${avatarDisplay}<div class="seat-name">${nameDisplay}</div>${betDisplay}${handsHTML}${gainHTML}${isActive ? '<div style="color:#ffa500;font-size:9px;font-family:Orbitron;animation:blink 1s infinite;margin-top:2px;">A JOUER</div>' : ''}`;
+        // Compteur W/L (seulement pour moi)
+        let wlHTML = '';
+        if (seat.isMe && (sessionWins > 0 || sessionLosses > 0)) {
+            wlHTML = `<div class="seat-wl"><span class="wl-w">W:${sessionWins}</span> <span class="wl-l">L:${sessionLosses}</span></div>`;
+        }
+
+        // Historique compact (5 derniers resultats, seulement pour moi)
+        let histHTML = '';
+        if (seat.isMe && resultHistory.length > 0) {
+            const dots = resultHistory.map(r => {
+                const cls = r === 'win' ? 'hist-win' : (r === 'loss' ? 'hist-loss' : (r === 'bj' ? 'hist-bj' : 'hist-push'));
+                return `<div class="hist-dot ${cls}"></div>`;
+            }).join('');
+            histHTML = `<div class="seat-history">${dots}</div>`;
+        }
+
+        div.innerHTML = `${avatarDisplay}<div class="seat-name">${nameDisplay}</div>${wlHTML}${histHTML}${betDisplay}${handsHTML}${gainHTML}${isActive ? '<div style="color:#ffa500;font-size:9px;font-family:Orbitron;animation:blink 1s infinite;margin-top:2px;">A JOUER</div>' : ''}`;
         return div;
     }
 
