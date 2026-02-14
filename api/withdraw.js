@@ -6,27 +6,56 @@ export const config = {
 };
 
 // Decoder le montant d'une invoice BOLT11 (en satoshis)
+// Format BOLT11: lnbc[montant][unite]1[donnees bech32][signature]
+// Le "1" est le separateur entre la partie lisible (hrp) et les donnees
+// Le separateur est le DERNIER "1" dans l'invoice
 function decodeInvoiceAmount(invoice) {
   try {
-    // Format: lnbc[montant][unite]1...
-    // unites: m=milli (10^-3), u=micro (10^-6), n=nano (10^-9), p=pico (10^-12)
-    const match = invoice.match(/^lnbc(\d+)([munp])?1/);
+    const lower = invoice.toLowerCase();
+
+    // Extraire le HRP (human-readable part) = tout avant le dernier "1"
+    const lastOneIdx = lower.lastIndexOf('1');
+    if (lastOneIdx < 4) return null; // "lnbc" minimum
+
+    const hrp = lower.substring(0, lastOneIdx);
+
+    // Verifier le prefixe
+    if (!hrp.startsWith('lnbc')) return null;
+
+    // Extraire montant + unite apres "lnbc"
+    const amountPart = hrp.substring(4); // tout apres "lnbc"
+
+    // Si pas de montant (invoice "any amount"), retourner null
+    if (!amountPart || amountPart.length === 0) return null;
+
+    // Format: [chiffres][unite optionnelle]
+    // unite: m=milli, u=micro, n=nano, p=pico
+    const match = amountPart.match(/^(\d+)([munp])?$/);
     if (!match) return null;
 
     const [, amountStr, unit] = match;
     const amount = BigInt(amountStr);
 
-    // Conversion en millisatoshis d'abord, puis en satoshis
+    if (amount <= 0n) return null;
+
+    // Conversion en millisatoshis puis en satoshis
+    // 1 BTC = 100_000_000 sat = 100_000_000_000 msat
     const multipliers = {
-      '': BigInt(100000000000), // BTC -> msat (1 BTC = 10^11 msat)
-      'm': BigInt(100000000),   // milliBTC -> msat
-      'u': BigInt(100000),      // microBTC -> msat
+      'm': BigInt(100000000),   // milliBTC -> msat (1 mBTC = 100_000 sat)
+      'u': BigInt(100000),      // microBTC -> msat (1 uBTC = 100 sat)
       'n': BigInt(100),         // nanoBTC -> msat
-      'p': BigInt(1)            // picoBTC -> msat
+      'p': BigInt(1)            // picoBTC -> msat (doit etre multiple de 10)
     };
 
-    const amountMsat = amount * (multipliers[unit] || multipliers['']);
-    return Number(amountMsat / BigInt(1000)); // Convertir en satoshis
+    let amountMsat;
+    if (unit) {
+      amountMsat = amount * multipliers[unit];
+    } else {
+      // Pas d'unite = BTC
+      amountMsat = amount * BigInt(100000000000);
+    }
+
+    return Number(amountMsat / BigInt(1000)); // Convertir msat -> sat
   } catch (e) {
     return null;
   }
@@ -58,9 +87,10 @@ export default async function handler(req) {
     return json(400, { error: 'Body JSON invalide' });
   }
 
-  const invoice = body.invoice?.trim();
+  // Normaliser l'invoice en minuscules (QR codes et wallets envoient souvent en majuscules)
+  const invoice = body.invoice?.trim()?.toLowerCase();
 
-  // Validation stricte de l'invoice
+  // Validation de l'invoice
   if (!invoice) {
     return json(400, { error: 'Invoice manquante' });
   }

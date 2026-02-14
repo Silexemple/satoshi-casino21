@@ -1643,8 +1643,8 @@ function startPaymentCheck() {
 }
 
 async function processWithdraw() {
-    const invoice = document.getElementById('withdrawInvoice').value.trim();
-    
+    const invoice = document.getElementById('withdrawInvoice').value.trim().toLowerCase();
+
     if (!invoice || !invoice.startsWith('lnbc')) {
         alert('Invoice invalide');
         return;
@@ -2049,19 +2049,25 @@ function resetRound() {
 // ============================================
 
 function decodeWithdrawInvoice() {
-    const invoice = document.getElementById('withdrawInvoice').value.trim();
+    const invoice = document.getElementById('withdrawInvoice').value.trim().toLowerCase();
     const el = document.getElementById('withdrawDecodedAmount');
     if (!invoice || !invoice.startsWith('lnbc')) {
         el.style.display = 'none';
         return;
     }
     try {
-        const match = invoice.match(/^lnbc(\d+)([munp])?1/);
+        // Extraire le HRP (tout avant le dernier "1")
+        const lastOne = invoice.lastIndexOf('1');
+        if (lastOne < 4) { el.style.display = 'none'; return; }
+        const hrp = invoice.substring(0, lastOne);
+        const amountPart = hrp.substring(4);
+        if (!amountPart) { el.style.display = 'none'; return; }
+        const match = amountPart.match(/^(\d+)([munp])?$/);
         if (!match) { el.style.display = 'none'; return; }
         const [, amountStr, unit] = match;
         const amount = BigInt(amountStr);
-        const multipliers = { '': 100000000000n, 'm': 100000000n, 'u': 100000n, 'n': 100n, 'p': 1n };
-        const msat = amount * (multipliers[unit] || multipliers['']);
+        const multipliers = { 'm': 100000000n, 'u': 100000n, 'n': 100n, 'p': 1n };
+        const msat = unit ? amount * multipliers[unit] : amount * 100000000000n;
         const sats = Number(msat / 1000n);
         if (sats > 0) {
             el.textContent = `Montant: ${sats} sats`;
