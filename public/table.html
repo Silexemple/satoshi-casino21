@@ -154,6 +154,7 @@
         .phase-text {
             font-family: 'Orbitron'; font-size: 13px; color: #ffd700;
             letter-spacing: 2px; text-shadow: 0 0 10px rgba(255,215,0,0.3);
+            transition: opacity 0.3s, transform 0.3s;
         }
         .timer-row {
             display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 2px;
@@ -511,9 +512,6 @@
         .hist-bj { background: #ffd700; box-shadow: 0 0 4px #ffd700; width: 8px; height: 8px; }
 
         /* PHASE TRANSITION */
-        .phase-text {
-            transition: opacity 0.3s, transform 0.3s;
-        }
         .phase-text.phase-changing {
             animation: phaseChange 0.6s ease-out;
         }
@@ -535,6 +533,59 @@
             0%, 100% { opacity: 0.6; }
             50% { opacity: 1; }
         }
+
+        /* STATS POPUP */
+        .stats-popup {
+            display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            z-index: 200; background: rgba(0,0,0,0.97); border: 2px solid #ff6b00;
+            border-radius: 14px; padding: 20px; width: 280px; max-height: 80vh;
+            overflow-y: auto;
+        }
+        .stats-popup.open { display: block; }
+        .stats-popup h3 {
+            font-family: 'Orbitron'; color: #ffa500; font-size: 14px;
+            text-align: center; margin-bottom: 12px; letter-spacing: 2px;
+        }
+        .stats-row {
+            display: flex; justify-content: space-between; padding: 6px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 13px;
+        }
+        .stats-label { color: #888; }
+        .stats-value { color: #ffd700; font-family: 'Orbitron'; font-size: 12px; }
+        .stats-value.positive { color: #00ff00; }
+        .stats-value.negative { color: #ff4444; }
+        .stats-close {
+            display: block; margin: 12px auto 0; padding: 6px 20px;
+            background: rgba(255,107,0,0.2); border: 1px solid #ff6b00;
+            color: #ff6b00; border-radius: 6px; cursor: pointer;
+            font-family: 'Orbitron'; font-size: 10px;
+        }
+
+        /* LEADERBOARD mini - sous le badge joueurs */
+        .leaderboard-mini {
+            position: absolute; top: 28px; right: 12px; z-index: 4;
+            background: rgba(0,0,0,0.6); border: 1px solid rgba(255,215,0,0.2);
+            border-radius: 8px; padding: 4px 8px; min-width: 100px;
+        }
+        .lb-title {
+            font-family: 'Orbitron'; font-size: 7px; color: #ffd700;
+            letter-spacing: 1px; text-align: center; margin-bottom: 2px;
+        }
+        .lb-entry {
+            font-size: 9px; color: #ccc; display: flex; justify-content: space-between;
+            gap: 6px; padding: 1px 0;
+        }
+        .lb-entry .lb-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 70px; }
+        .lb-entry .lb-score { color: #00ff00; font-family: 'Orbitron'; font-size: 8px; }
+        .lb-entry:first-child .lb-name { color: #ffd700; }
+
+        /* BOUTON STATS */
+        .topbar-stats {
+            background: none; border: 1px solid #ffd700; color: #ffd700;
+            padding: 3px 8px; border-radius: 4px; font-family: 'Orbitron';
+            cursor: pointer; font-size: 8px; letter-spacing: 1px;
+        }
+        .topbar-stats:hover { background: rgba(255,215,0,0.15); }
 
         /* BOUTON TOURNOI */
         .topbar-tournoi {
@@ -571,10 +622,19 @@
         <span class="conn-dot ok" id="connDot"></span>
         <span class="topbar-nick" id="nicknameDisplay" onclick="showNicknamePrompt()"></span>
     </div>
-    <div class="topbar-balance" id="balance"><span class="sat-icon">&#8383;</span>0</div>
+    <div style="display:flex;align-items:center;gap:8px;">
+        <button class="topbar-stats" onclick="showStats()">STATS</button>
+        <div class="topbar-balance" id="balance"><span class="sat-icon">&#8383;</span>0</div>
+    </div>
 </div>
 
 <div class="toast" id="toast"></div>
+
+<div class="stats-popup" id="statsPopup">
+    <h3>MES STATS</h3>
+    <div id="statsContent"></div>
+    <button class="stats-close" onclick="document.getElementById('statsPopup').classList.remove('open')">FERMER</button>
+</div>
 
 <div class="profile-popup" id="profilePopup">
     <label>PSEUDO</label>
@@ -589,6 +649,10 @@
 <div class="table-view" id="tableView">
     <div class="felt">
         <div class="players-badge" id="playersBadge"><span class="count">0</span>/5</div>
+        <div class="leaderboard-mini" id="leaderboardMini" style="display:none;">
+            <div class="lb-title">TOP DU JOUR</div>
+            <div id="lbEntries"></div>
+        </div>
         <div class="join-btn-float hidden" id="joinBtnFloat" onclick="joinFirstEmpty()">+ REJOINDRE</div>
         <div class="spectator-badge" id="spectatorBadge" style="display:none;">&#128065; SPECTATEUR</div>
 
@@ -649,6 +713,13 @@ let sessionWins = 0, sessionLosses = 0;
 let resultHistory = [];
 // Dernier status pour animation de transition
 let lastPhaseStatus = null;
+// Stats session complete
+let sessionTotalBet = 0, sessionTotalWon = 0, sessionRounds = 0, sessionBestStreak = 0, sessionCurrentStreak = 0;
+// Leaderboard cache
+let lbLastFetch = 0;
+// Titre original pour notification tab
+const originalTitle = document.title;
+let titleBlinking = false;
 
 async function apiCall(endpoint, method = 'GET', body = null) {
     const options = { method, credentials: 'include', headers: { 'Content-Type': 'application/json' } };
@@ -725,6 +796,117 @@ function playChipSound() {
     } catch(e) {}
 }
 
+// NOTIFICATION TAB ARRIERE-PLAN
+function notifyIfHidden(msg) {
+    if (document.hidden) {
+        document.title = `(!) ${msg} - SATS21`;
+        if (!titleBlinking) {
+            titleBlinking = true;
+            const blink = setInterval(() => {
+                if (!document.hidden) {
+                    document.title = originalTitle;
+                    titleBlinking = false;
+                    clearInterval(blink);
+                    return;
+                }
+                document.title = document.title.startsWith('(!)') ? 'SATS JACK 21' : `(!) ${msg}`;
+            }, 1500);
+        }
+        // Son de notification
+        try {
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain); gain.connect(audioCtx.destination);
+            osc.type = 'sine'; osc.frequency.value = 600;
+            gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.3);
+            osc.start(); osc.stop(audioCtx.currentTime + 0.3);
+            // Deuxieme note
+            const osc2 = audioCtx.createOscillator();
+            const gain2 = audioCtx.createGain();
+            osc2.connect(gain2); gain2.connect(audioCtx.destination);
+            osc2.type = 'sine'; osc2.frequency.value = 900;
+            gain2.gain.setValueAtTime(0.15, audioCtx.currentTime + 0.15);
+            gain2.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.4);
+            osc2.start(audioCtx.currentTime + 0.15); osc2.stop(audioCtx.currentTime + 0.4);
+        } catch(e) {}
+    }
+}
+// Restaurer le titre quand la tab redevient visible
+document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) { document.title = originalTitle; titleBlinking = false; }
+});
+
+// STATS DASHBOARD
+async function showStats() {
+    const popup = document.getElementById('statsPopup');
+    const content = document.getElementById('statsContent');
+
+    // Stats de session
+    const netGain = sessionTotalWon - (sessionTotalBet > sessionTotalWon ? sessionTotalBet - sessionTotalWon : 0);
+    const winRate = sessionRounds > 0 ? Math.round((sessionWins / sessionRounds) * 100) : 0;
+
+    let html = `
+        <div class="stats-row"><span class="stats-label">Rounds joues</span><span class="stats-value">${sessionRounds}</span></div>
+        <div class="stats-row"><span class="stats-label">Victoires</span><span class="stats-value positive">${sessionWins}</span></div>
+        <div class="stats-row"><span class="stats-label">Defaites</span><span class="stats-value negative">${sessionLosses}</span></div>
+        <div class="stats-row"><span class="stats-label">Taux victoire</span><span class="stats-value">${winRate}%</span></div>
+        <div class="stats-row"><span class="stats-label">Total mise</span><span class="stats-value">${sessionTotalBet} sats</span></div>
+        <div class="stats-row"><span class="stats-label">Total gagne</span><span class="stats-value positive">+${sessionTotalWon} sats</span></div>
+        <div class="stats-row"><span class="stats-label">Meilleur streak</span><span class="stats-value">${sessionBestStreak} victoires</span></div>
+    `;
+
+    // Charger l'historique des transactions du serveur
+    try {
+        const data = await apiCall('/api/transactions');
+        if (data.transactions && data.transactions.length > 0) {
+            let totalAllTime = 0;
+            let winsAllTime = 0, lossAllTime = 0;
+            data.transactions.forEach(tx => {
+                totalAllTime += tx.amount || 0;
+                if (tx.type === 'win') winsAllTime++;
+                else if (tx.type === 'loss') lossAllTime++;
+            });
+            const cls = totalAllTime >= 0 ? 'positive' : 'negative';
+            const sign = totalAllTime >= 0 ? '+' : '';
+            html += `
+                <div style="margin-top:10px;padding-top:8px;border-top:1px solid rgba(255,107,0,0.3);">
+                    <div style="font-family:Orbitron;font-size:9px;color:#ff6b00;margin-bottom:6px;letter-spacing:1px;">HISTORIQUE COMPLET</div>
+                </div>
+                <div class="stats-row"><span class="stats-label">Total W/L</span><span class="stats-value">${winsAllTime}/${lossAllTime}</span></div>
+                <div class="stats-row"><span class="stats-label">Gains nets</span><span class="stats-value ${cls}">${sign}${totalAllTime} sats</span></div>
+            `;
+        }
+    } catch(e) {}
+
+    content.innerHTML = html;
+    popup.classList.add('open');
+}
+
+// LEADERBOARD
+async function fetchLeaderboard() {
+    if (!currentTableId) return;
+    const now = Date.now();
+    if (now - lbLastFetch < 15000) return; // Cache 15s
+    lbLastFetch = now;
+    try {
+        const data = await apiCall(`/api/table/leaderboard?tableId=${currentTableId}`);
+        const container = document.getElementById('lbEntries');
+        const lbDiv = document.getElementById('leaderboardMini');
+        if (!data.leaderboard || data.leaderboard.length === 0) {
+            lbDiv.style.display = 'none';
+            return;
+        }
+        lbDiv.style.display = 'block';
+        container.innerHTML = data.leaderboard.map(e =>
+            `<div class="lb-entry"><span class="lb-name">${e.avatar || ''} ${e.name}</span><span class="lb-score">+${e.score}</span></div>`
+        ).join('');
+    } catch(e) {
+        document.getElementById('leaderboardMini').style.display = 'none';
+    }
+}
+
 // TOAST
 function showToast(text, type, duration = 2800) {
     const toast = document.getElementById('toast');
@@ -759,6 +941,8 @@ async function joinTableView(tableId) {
     currentTableId = tableId; currentBet = 0; previousStatus = null;
     chatMessages = []; lastChatTimestamp = Date.now() - 5000; lastAnimatedRound = -1; lastDealtRound = -1; lastTotalCards = 0;
     sessionWins = 0; sessionLosses = 0; resultHistory = []; lastPhaseStatus = null;
+    sessionTotalBet = 0; sessionTotalWon = 0; sessionRounds = 0; sessionBestStreak = 0; sessionCurrentStreak = 0;
+    lbLastFetch = 0; document.title = originalTitle;
     document.getElementById('lobby').classList.add('hidden');
     document.getElementById('tableView').classList.add('active');
     document.getElementById('chatToggle').style.display = 'flex';
@@ -768,11 +952,31 @@ async function joinTableView(tableId) {
     document.getElementById('backBtn').onclick = (e) => { e.preventDefault(); leaveTable(); };
     addChatSystem('Bienvenue a la table!');
     await pollTable();
-    pollInterval = setInterval(pollTable, 1500);
+    schedulePoll();
+}
+
+// Polling adaptatif: rapide quand c'est mon tour, lent en attente
+function getAdaptivePollDelay() {
+    if (!lastTableState) return 1500;
+    if (lastTableState.isMyTurn) return 500; // Tres rapide: mon tour
+    if (lastTableState.status === 'playing') return 1000; // Rapide: en jeu
+    if (lastTableState.status === 'betting') return 1200; // Moyen: mises
+    if (lastTableState.status === 'dealer_turn') return 800; // Rapide: dealer joue
+    if (lastTableState.status === 'finished') return 2000; // Lent: round fini
+    return 3000; // Tres lent: en attente
+}
+
+function schedulePoll() {
+    if (pollInterval) clearTimeout(pollInterval);
+    if (!currentTableId) return;
+    pollInterval = setTimeout(async () => {
+        await pollTable();
+        schedulePoll();
+    }, getAdaptivePollDelay());
 }
 
 function backToLobby() {
-    if (pollInterval) clearInterval(pollInterval);
+    if (pollInterval) clearTimeout(pollInterval);
     currentTableId = null; lastTableState = null; currentBet = 0;
     previousStatus = null; pollErrors = 0; chatOpen = false;
     document.getElementById('lobby').classList.remove('hidden');
@@ -782,6 +986,9 @@ function backToLobby() {
     document.getElementById('backBtn').href = '/';
     document.getElementById('backBtn').textContent = 'SOLO';
     document.getElementById('backBtn').onclick = null;
+    document.getElementById('leaderboardMini').style.display = 'none';
+    document.getElementById('statsPopup').classList.remove('open');
+    document.title = originalTitle;
     loadLobby();
 }
 
@@ -807,6 +1014,8 @@ async function pollTable() {
         detectPhaseChange(data);
         previousStatus = data.status;
         renderTable(data);
+        // Leaderboard (cache 15s, ne bloque pas le render)
+        fetchLeaderboard();
     } catch (e) {
         pollErrors++;
         if (pollErrors > 3) document.getElementById('connDot').className = 'conn-dot error';
@@ -828,25 +1037,38 @@ function detectPhaseChange(data) {
         const mySeat = data.seats.find(s => s.isMe);
         if (mySeat && mySeat.netGain !== undefined && mySeat.netGain !== null) {
             const gain = mySeat.netGain;
+            sessionRounds++;
             if (gain > 0) {
                 const hasBJ = mySeat.hands && mySeat.hands.some(h => h.result === 'bj');
                 showToast(hasBJ ? `BLACKJACK! +${gain} sats` : `GAGNE! +${gain} sats`, hasBJ ? 'bj' : 'win');
-                if (typeof confetti !== 'undefined') confetti({ particleCount: hasBJ ? 180 : 100, spread: 70, origin: { y: 0.5 }, colors: ['#ff6b00', '#ffa500', '#ffd700', '#00ff00'] });
+                // Confetti ameliore avec symboles sats
+                if (typeof confetti !== 'undefined') {
+                    confetti({ particleCount: hasBJ ? 180 : 100, spread: 70, origin: { y: 0.5 }, colors: ['#ff6b00', '#ffa500', '#ffd700', '#00ff00'] });
+                    // Deuxieme vague decalee pour effet pluie de sats
+                    if (hasBJ) setTimeout(() => confetti({ particleCount: 60, spread: 100, origin: { y: 0.3, x: 0.3 }, colors: ['#ffd700', '#ff6b00'] }), 300);
+                    if (hasBJ) setTimeout(() => confetti({ particleCount: 60, spread: 100, origin: { y: 0.3, x: 0.7 }, colors: ['#ffd700', '#ff6b00'] }), 500);
+                }
                 if (mySeat.bet) lastBet = mySeat.bet;
-                // Compteur W/L + historique
-                sessionWins++;
+                sessionWins++; sessionTotalWon += gain;
+                sessionCurrentStreak++;
+                if (sessionCurrentStreak > sessionBestStreak) sessionBestStreak = sessionCurrentStreak;
                 resultHistory.push(hasBJ ? 'bj' : 'win');
             } else if (gain < 0) {
                 showToast(`PERDU ${gain} sats`, 'loss');
                 sessionLosses++;
+                sessionCurrentStreak = 0;
                 resultHistory.push('loss');
             } else {
                 showToast('EGALITE', 'push');
                 resultHistory.push('push');
             }
-            // Garder seulement les 5 derniers
+            // Compter le total mise (somme des bets de toutes les mains, inclut double/split)
+            const totalBetThisRound = (mySeat.hands || []).reduce((sum, h) => sum + (h.bet || 0), 0);
+            sessionTotalBet += totalBetThisRound || mySeat.bet || 0;
             if (resultHistory.length > 5) resultHistory.shift();
             if (navigator.vibrate) navigator.vibrate(gain > 0 ? [200, 100, 200] : [80]);
+            // Notification tab arriere-plan
+            notifyIfHidden(gain > 0 ? `+${gain} sats!` : (gain < 0 ? `${gain} sats` : 'Egalite'));
         }
     }
 
@@ -855,6 +1077,7 @@ function detectPhaseChange(data) {
     if (data.isMyTurn && (!lastTableState || !lastTableState.isMyTurn)) {
         addChatSystem('A vous de jouer!');
         if (navigator.vibrate) navigator.vibrate(50);
+        notifyIfHidden('A vous de jouer!');
     }
     if (previousStatus !== 'betting' && data.status === 'betting') addChatSystem('Phase de mise ouverte!');
     if (previousStatus === 'finished' && data.status === 'waiting') addChatSystem('Nouveau round - placez vos mises!');
@@ -1227,6 +1450,10 @@ window.onload = async () => {
         const nick = document.getElementById('nicknameDisplay');
         if (popup.classList.contains('open') && !popup.contains(e.target) && e.target !== nick) {
             popup.classList.remove('open');
+        }
+        const statsPopup = document.getElementById('statsPopup');
+        if (statsPopup.classList.contains('open') && !statsPopup.contains(e.target) && !e.target.classList.contains('topbar-stats')) {
+            statsPopup.classList.remove('open');
         }
     });
 };

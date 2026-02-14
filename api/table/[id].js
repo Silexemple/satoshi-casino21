@@ -485,6 +485,16 @@ async function creditPlayers(table) {
     }
   }
   await kv.incrby('house:bankroll', houseChange);
+
+  // Mettre a jour le leaderboard du jour
+  const today = new Date().toISOString().slice(0, 10);
+  const lbKey = `leaderboard:${table.id}:${today}`;
+  for (const seat of table.seats) {
+    if (!seat || !seat.netGain || seat.netGain <= 0) continue;
+    const member = `${seat.playerName || 'Joueur'}|${seat.avatar || ''}`;
+    await kv.zincrby(lbKey, seat.netGain, member);
+  }
+  await kv.expire(lbKey, 86400);
 }
 
 export { checkTimeouts, startDealing, advanceToNextPlayer, dealerPlay, settleRound, tableStateForClient, creditPlayers, resetTableForNextRound, BETTING_TIMEOUT, TURN_TIMEOUT };
