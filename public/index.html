@@ -2056,13 +2056,7 @@ function decodeWithdrawInvoice() {
         return;
     }
     try {
-        // Extraire le HRP (tout avant le dernier "1")
-        const lastOne = invoice.lastIndexOf('1');
-        if (lastOne < 4) { el.style.display = 'none'; return; }
-        const hrp = invoice.substring(0, lastOne);
-        const amountPart = hrp.substring(4);
-        if (!amountPart) { el.style.display = 'none'; return; }
-        const match = amountPart.match(/^(\d+)([munp])?$/);
+        const match = invoice.match(/^lnbc(\d+)([munp])?1/);
         if (!match) { el.style.display = 'none'; return; }
         const [, amountStr, unit] = match;
         const amount = BigInt(amountStr);

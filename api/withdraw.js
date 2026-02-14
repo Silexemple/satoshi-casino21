@@ -6,31 +6,14 @@ export const config = {
 };
 
 // Decoder le montant d'une invoice BOLT11 (en satoshis)
-// Format BOLT11: lnbc[montant][unite]1[donnees bech32][signature]
-// Le "1" est le separateur entre la partie lisible (hrp) et les donnees
-// Le separateur est le DERNIER "1" dans l'invoice
+// Format BOLT11: lnbc[montant][unite]1[donnees bech32][checksum]
+// Le "1" separateur est celui juste apres le montant+unite
 function decodeInvoiceAmount(invoice) {
   try {
     const lower = invoice.toLowerCase();
 
-    // Extraire le HRP (human-readable part) = tout avant le dernier "1"
-    const lastOneIdx = lower.lastIndexOf('1');
-    if (lastOneIdx < 4) return null; // "lnbc" minimum
-
-    const hrp = lower.substring(0, lastOneIdx);
-
-    // Verifier le prefixe
-    if (!hrp.startsWith('lnbc')) return null;
-
-    // Extraire montant + unite apres "lnbc"
-    const amountPart = hrp.substring(4); // tout apres "lnbc"
-
-    // Si pas de montant (invoice "any amount"), retourner null
-    if (!amountPart || amountPart.length === 0) return null;
-
-    // Format: [chiffres][unite optionnelle]
-    // unite: m=milli, u=micro, n=nano, p=pico
-    const match = amountPart.match(/^(\d+)([munp])?$/);
+    // Regex: lnbc + chiffres + unite optionnelle + separateur "1"
+    const match = lower.match(/^lnbc(\d+)([munp])?1/);
     if (!match) return null;
 
     const [, amountStr, unit] = match;
@@ -44,18 +27,18 @@ function decodeInvoiceAmount(invoice) {
       'm': BigInt(100000000),   // milliBTC -> msat (1 mBTC = 100_000 sat)
       'u': BigInt(100000),      // microBTC -> msat (1 uBTC = 100 sat)
       'n': BigInt(100),         // nanoBTC -> msat
-      'p': BigInt(1)            // picoBTC -> msat (doit etre multiple de 10)
+      'p': BigInt(1)            // picoBTC -> msat
     };
 
     let amountMsat;
     if (unit) {
       amountMsat = amount * multipliers[unit];
     } else {
-      // Pas d'unite = BTC
+      // Pas d'unite = BTC entier
       amountMsat = amount * BigInt(100000000000);
     }
 
-    return Number(amountMsat / BigInt(1000)); // Convertir msat -> sat
+    return Number(amountMsat / BigInt(1000)); // msat -> sat
   } catch (e) {
     return null;
   }
