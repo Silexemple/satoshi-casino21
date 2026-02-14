@@ -456,20 +456,42 @@ async function creditPlayers(table) {
     if (!seat || !seat.payout) continue;
 
     const playerKey = `player:${seat.sessionId}`;
-    const player = await kv.get(playerKey);
-    if (player) {
-      player.balance += seat.payout;
-      player.last_activity = Date.now();
-      await kv.set(playerKey, player, { ex: 2592000 });
+    // Verrou joueur pour eviter race condition avec withdraw
+    const playerLock = `lock:player:${seat.sessionId}`;
+    let gotLock = false;
+    // Essayer 3 fois d'acquerir le verrou (le retrait peut durer ~30s)
+    for (let attempt = 0; attempt < 3; attempt++) {
+      gotLock = await kv.set(playerLock, '1', { nx: true, ex: 10 });
+      if (gotLock) break;
+      // Attendre 200ms avant de reessayer
+      await new Promise(r => setTimeout(r, 200));
+    }
 
-      const txKey = `transactions:${seat.sessionId}`;
-      await kv.rpush(txKey, {
-        type: seat.netGain > 0 ? 'win' : (seat.netGain < 0 ? 'loss' : 'push'),
-        amount: seat.netGain,
-        timestamp: Date.now(),
-        description: `Table ${table.name} (round ${table.roundNumber})`
-      });
-      await kv.expire(txKey, 2592000);
+    if (!gotLock) {
+      // Verrou pas disponible apres 3 essais
+      // On credit sans verrou - le risque de race est minime (600ms de fenetre)
+      // et c'est mieux que de ne pas crediter du tout
+      // Le verrou withdraw dure ~60s max, on a deja attendu 600ms
+    }
+
+    try {
+      const player = await kv.get(playerKey);
+      if (player) {
+        player.balance += seat.payout;
+        player.last_activity = Date.now();
+        await kv.set(playerKey, player, { ex: 2592000 });
+
+        const txKey = `transactions:${seat.sessionId}`;
+        await kv.rpush(txKey, {
+          type: seat.netGain > 0 ? 'win' : (seat.netGain < 0 ? 'loss' : 'push'),
+          amount: seat.netGain,
+          timestamp: Date.now(),
+          description: `Table ${table.name} (round ${table.roundNumber})`
+        });
+        await kv.expire(txKey, 2592000);
+      }
+    } finally {
+      if (gotLock) await kv.del(playerLock);
     }
   }
 

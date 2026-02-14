@@ -87,8 +87,9 @@ export default async function handler(req) {
   }
 
   // Verrou joueur pour eviter les race conditions
+  // TTL 60s > timeout LNbits 30s pour eviter expiration pendant le call
   const lockKey = `lock:player:${sessionId}`;
-  const lock = await kv.set(lockKey, Date.now(), { nx: true, ex: 30 });
+  const lock = await kv.set(lockKey, Date.now(), { nx: true, ex: 60 });
 
   if (!lock) {
     return json(423, { error: 'Une autre operation est en cours' });
@@ -170,20 +171,60 @@ export default async function handler(req) {
         signal: controller.signal
       });
     } catch (fetchError) {
-      // REFUND ATOMIQUE: re-lire le player frais et ajouter le montant
+      if (fetchError.name === 'AbortError') {
+        // TIMEOUT: LNbits n'a pas repondu a temps
+        // Le paiement a PEUT-ETRE ete envoye - on ne peut pas rembourser aveuglément
+        // Marquer comme "pending_verification" pour verification manuelle
+        await kv.set(`attempt:${attemptId}`, {
+          invoice: invoice.substring(0, 50),
+          amount: amountSat,
+          status: 'timeout_pending',
+          timestamp: Date.now()
+        }, { ex: 604800 }); // garder 7 jours
+
+        // Essayer de verifier le statut du paiement via LNbits
+        try {
+          // Chercher le paiement par l'invoice dans les paiements recents
+          const checkResp = await fetch(`${lnbitsUrl}/api/v1/payments?limit=5`, {
+            headers: { 'X-Api-Key': adminKey }
+          });
+          if (checkResp.ok) {
+            const payments = await checkResp.json();
+            const found = Array.isArray(payments) && payments.find(p =>
+              p.bolt11 === invoice && p.pending === false
+            );
+            if (!found) {
+              // Paiement non trouve = probablement pas parti, on peut rembourser
+              await atomicRefund(playerKey, amountSat);
+              debited = false;
+              await kv.set(`attempt:${attemptId}`, {
+                invoice: invoice.substring(0, 50),
+                amount: amountSat,
+                status: 'refunded_after_timeout',
+                timestamp: Date.now()
+              }, { ex: 3600 });
+              return json(504, { error: 'Timeout LNbits - paiement non envoye. Solde rembourse.' });
+            }
+          }
+        } catch(checkErr) {
+          // Impossible de verifier - on ne rembourse PAS pour eviter la double depense
+        }
+
+        // Pas pu confirmer que le paiement n'est pas parti -> on garde le debit
+        // Le joueur doit contacter le support
+        return json(504, { error: 'Timeout LNbits - statut du paiement incertain. Contactez le support si le paiement n\'est pas recu. Ref: ' + attemptId });
+      }
+
+      // Erreur reseau (pas timeout) - on peut rembourser
       await atomicRefund(playerKey, amountSat);
       debited = false;
       await kv.set(`attempt:${attemptId}`, {
         invoice: invoice.substring(0, 50),
         amount: amountSat,
         status: 'refunded',
-        error: fetchError.name === 'AbortError' ? 'timeout' : 'network',
+        error: 'network',
         timestamp: Date.now()
       }, { ex: 3600 });
-
-      if (fetchError.name === 'AbortError') {
-        return json(504, { error: 'Timeout - LNbits ne repond pas. Solde rembourse.' });
-      }
       return json(502, { error: 'Erreur reseau LNbits. Solde rembourse.' });
     } finally {
       clearTimeout(timeoutId);
