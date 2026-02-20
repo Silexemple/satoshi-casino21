@@ -23,7 +23,7 @@ function derToCompact(der) {
   if (der[i++] !== 0x02) throw new Error('Expected INTEGER for s');
   const sLen = der[i++];
   const s = der.slice(i, i + sLen);
-  // Strip leading 0x00 padding (DER positive-int convention) and right-align to 32 bytes
+  // Strip leading 0x00 DER padding, right-align to 32 bytes
   const rClean = r[0] === 0 ? r.slice(1) : r;
   const sClean = s[0] === 0 ? s.slice(1) : s;
   const compact = new Uint8Array(64);
@@ -35,46 +35,63 @@ function derToCompact(der) {
 function errResp(reason) {
   return new Response(
     JSON.stringify({ status: 'ERROR', reason }),
-    { status: 400, headers: { 'Content-Type': 'application/json' } }
+    { status: 200, headers: { 'Content-Type': 'application/json' } }
   );
 }
 
 export default async function handler(req) {
   const url = new URL(req.url);
-  const k1 = url.searchParams.get('k1');
+  const k1  = url.searchParams.get('k1');
   const sig = url.searchParams.get('sig');
-  const key = url.searchParams.get('key'); // linking key = compressed pubkey hex
+  const key = url.searchParams.get('key');
   const tag = url.searchParams.get('tag');
 
   if (tag !== 'login') return errResp('Invalid tag');
-  if (!k1 || !sig || !key) return errResp('Missing parameters');
+  if (!k1 || !/^[0-9a-f]{64}$/i.test(k1)) return errResp('Invalid k1 format');
 
-  // Validate formats
-  if (!/^[0-9a-f]{64}$/i.test(k1)) return errResp('Invalid k1 format');
+  // ── Etape 1 (LUD-04) : wallet fait un GET sans sig/key pour obtenir les infos du service ──
+  if (!sig && !key) {
+    const challenge = await kv.get(`lnauth:k1:${k1}`);
+    if (!challenge) return errResp('Unknown or expired challenge');
+
+    const callbackBase = `https://${url.hostname}/api/auth/callback`;
+    return new Response(JSON.stringify({
+      tag: 'login',
+      callback: callbackBase,
+      k1,
+      action: 'login'
+    }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+
+  // ── Etape 2 (LUD-04) : wallet soumet la signature ──
+  if (!sig || !key) return errResp('Missing parameters');
   if (!/^[0-9a-f]+$/i.test(sig)) return errResp('Invalid signature format');
   if (!/^[0-9a-f]{66}$/i.test(key)) return errResp('Invalid public key format');
 
-  // Look up k1 challenge
   const challenge = await kv.get(`lnauth:k1:${k1}`);
   if (!challenge) return errResp('Unknown or expired challenge');
   if (challenge.status !== 'pending') return errResp('Challenge already used');
 
-  // Verify secp256k1 signature
-  // LNAuth wallets sign k1 bytes directly (k1 is the 32-byte message hash)
-  // Wallets send DER-encoded sig; v3 only accepts compact (64 bytes) — convert first
+  // Verification secp256k1
+  // - Les wallets signent k1 directement (k1 = message hash 32 bytes)
+  // - Format signature : DER -> convertir en compact 64 bytes pour noble v3
+  // - verifyAsync + prehash:false : evite d'appeler sha256 sync (undefined en Edge)
   try {
-    const k1Bytes = hexToBytes(k1);
-    const sigDer = hexToBytes(sig);
+    const k1Bytes  = hexToBytes(k1);
+    const sigDer   = hexToBytes(sig);
     const sigCompact = derToCompact(sigDer);
-    const pubKeyBytes = hexToBytes(key);
+    const pubKey   = hexToBytes(key);
 
-    const isValid = secp.verify(sigCompact, k1Bytes, pubKeyBytes);
+    const isValid = await secp.verifyAsync(sigCompact, k1Bytes, pubKey, { prehash: false });
     if (!isValid) return errResp('Signature invalide');
   } catch (e) {
     return errResp('Erreur verification signature');
   }
 
-  // Create or refresh player record
+  // Creer ou rafraichir le compte joueur
   const playerKey = `player:${key}`;
   const existing = await kv.get(playerKey);
   if (!existing) {
@@ -90,7 +107,7 @@ export default async function handler(req) {
     await kv.set(playerKey, existing, { ex: 2592000 });
   }
 
-  // Mark k1 as authenticated (wallet has proven ownership)
+  // Marquer k1 comme authentifie (usage unique)
   await kv.set(`lnauth:k1:${k1}`, {
     status: 'authenticated',
     linkingKey: key,
