@@ -61,7 +61,7 @@ export default async function handler(req) {
         'Content-Type': 'application/json',
         'Set-Cookie': cookie.serialize('session_id', sessionId, {
           httpOnly: true,
-          secure: true,
+          secure: process.env.NODE_ENV === 'production',
           sameSite: 'lax',
           maxAge: 30 * 24 * 60 * 60,
           path: '/'

@@ -39,14 +39,13 @@ export default async function handler(req) {
   if (challenge.status !== 'pending') return errResp('Challenge already used');
 
   // Verify secp256k1 signature: sig over SHA256(k1_bytes)
+  // @noble/secp256k1 v3 defaults to prehash:true — pass raw k1Bytes, library handles SHA256
   try {
     const k1Bytes = hexToBytes(k1);
-    const hashBuf = await crypto.subtle.digest('SHA-256', k1Bytes);
-    const msgHash = new Uint8Array(hashBuf);
     const sigBytes = hexToBytes(sig);
     const pubKeyBytes = hexToBytes(key);
 
-    const isValid = secp.verify(sigBytes, msgHash, pubKeyBytes);
+    const isValid = secp.verify(sigBytes, k1Bytes, pubKeyBytes);
     if (!isValid) return errResp('Signature invalide');
   } catch (e) {
     return errResp('Erreur verification signature');
