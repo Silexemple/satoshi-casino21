@@ -27,6 +27,10 @@ export default async function handler(req) {
       return json(400, { error: 'Inscriptions fermees' });
     }
 
+    // Resoudre session -> linkingKey (necessaire pour le check doublon cross-session)
+    const linkingKey = await kv.get(`session:${sessionId}`);
+    if (!linkingKey) return json(401, { error: 'Session invalide' });
+
     // Check already registered (par sessionId OU linkingKey pour eviter les doublons cross-session)
     if (tournament.players.some(p => p.sessionId === sessionId || p.linkingKey === linkingKey)) {
       return json(400, { error: 'Deja inscrit' });
@@ -35,10 +39,6 @@ export default async function handler(req) {
     if (tournament.players.length >= tournament.maxPlayers) {
       return json(400, { error: 'Tournoi plein' });
     }
-
-    // Resoudre session -> linkingKey
-    const linkingKey = await kv.get(`session:${sessionId}`);
-    if (!linkingKey) return json(401, { error: 'Session invalide' });
 
     // Check balance
     const playerKey = `player:${linkingKey}`;
