@@ -43,13 +43,18 @@ export default async function handler(req) {
     // Vérifier que c'est bien le tour de ce joueur
     const seatIdx = table.seats.findIndex(s => s && s.sessionId === sessionId);
     if (seatIdx < 0) {
-      return json(400, { error: 'Vous n\'êtes pas à cette table' });
+      return json(400, { error: 'Vous n\'etes pas a cette table' });
     }
     if (seatIdx !== table.currentSeatIdx) {
       return json(400, { error: 'Ce n\'est pas votre tour' });
     }
 
     const seat = table.seats[seatIdx];
+    // Resoudre linkingKey pour acces au solde
+    const linkingKey = seat.linkingKey || await kv.get(`session:${sessionId}`);
+    if (!linkingKey) return json(401, { error: 'Session invalide' });
+    const resolvedPlayerKey = `player:${linkingKey}`;
+
     const hand = seat.hands[seat.currentHandIdx];
 
     if (!hand || hand.finished) {
@@ -73,7 +78,7 @@ export default async function handler(req) {
       const insuranceCost = Math.floor(hand.bet / 2);
 
       if (accept) {
-        const playerKey = `player:${sessionId}`;
+        const playerKey = resolvedPlayerKey;
         const player = await kv.get(playerKey);
         if (!player || player.balance < insuranceCost) {
           return json(400, { error: 'Solde insuffisant pour l\'assurance' });
@@ -89,7 +94,7 @@ export default async function handler(req) {
       if (isBlackjack(table.dealerHand)) {
         // Insurance gagne 2:1
         if (seat.insuranceBet > 0) {
-          const playerKey = `player:${sessionId}`;
+          const playerKey = resolvedPlayerKey;
           const player = await kv.get(playerKey);
           if (player) {
             const insurancePayout = seat.insuranceBet * 3;
@@ -120,7 +125,7 @@ export default async function handler(req) {
 
       // Rembourser la moitié de la mise
       const refund = Math.floor(hand.bet / 2);
-      const playerKey = `player:${sessionId}`;
+      const playerKey = resolvedPlayerKey;
       const player = await kv.get(playerKey);
       if (player) {
         player.balance += refund;
@@ -163,7 +168,7 @@ export default async function handler(req) {
       }
 
       // Vérifier le solde
-      const playerKey = `player:${sessionId}`;
+      const playerKey = resolvedPlayerKey;
       const player = await kv.get(playerKey);
       if (!player || player.balance < hand.bet) {
         return json(400, { error: 'Solde insuffisant pour doubler' });
@@ -193,7 +198,7 @@ export default async function handler(req) {
         return json(400, { error: 'Maximum 4 mains' });
       }
 
-      const playerKey = `player:${sessionId}`;
+      const playerKey = resolvedPlayerKey;
       const player = await kv.get(playerKey);
       const originalBet = seat.bet; // bet initial de la table
 

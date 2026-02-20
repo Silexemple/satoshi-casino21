@@ -6,13 +6,9 @@ export const config = {
 };
 
 // Decoder le montant d'une invoice BOLT11 (en satoshis)
-// Format BOLT11: lnbc[montant][unite]1[donnees bech32][checksum]
-// Le "1" separateur est celui juste apres le montant+unite
 function decodeInvoiceAmount(invoice) {
   try {
     const lower = invoice.toLowerCase();
-
-    // Regex: lnbc + chiffres + unite optionnelle + separateur "1"
     const match = lower.match(/^lnbc(\d+)([munp])?1/);
     if (!match) return null;
 
@@ -21,24 +17,21 @@ function decodeInvoiceAmount(invoice) {
 
     if (amount <= 0n) return null;
 
-    // Conversion en millisatoshis puis en satoshis
-    // 1 BTC = 100_000_000 sat = 100_000_000_000 msat
     const multipliers = {
-      'm': BigInt(100000000),   // milliBTC -> msat (1 mBTC = 100_000 sat)
-      'u': BigInt(100000),      // microBTC -> msat (1 uBTC = 100 sat)
-      'n': BigInt(100),         // nanoBTC -> msat
-      'p': BigInt(1)            // picoBTC -> msat
+      'm': BigInt(100000000),
+      'u': BigInt(100000),
+      'n': BigInt(100),
+      'p': BigInt(1)
     };
 
     let amountMsat;
     if (unit) {
       amountMsat = amount * multipliers[unit];
     } else {
-      // Pas d'unite = BTC entier
       amountMsat = amount * BigInt(100000000000);
     }
 
-    return Number(amountMsat / BigInt(1000)); // msat -> sat
+    return Number(amountMsat / BigInt(1000));
   } catch (e) {
     return null;
   }
@@ -54,8 +47,15 @@ export default async function handler(req) {
     return json(401, { error: 'Session invalide' });
   }
 
-  // Rate limiting - max 1 retrait par minute
-  const rateLimitKey = `ratelimit:withdraw:${sessionId}`;
+  // Resolve session -> linkingKey
+  const linkingKey = await kv.get(`session:${sessionId}`);
+  if (!linkingKey) return json(401, { error: 'Session invalide' });
+
+  const playerKey = `player:${linkingKey}`;
+  const txKey = `transactions:${linkingKey}`;
+
+  // Rate limiting - max 1 retrait par minute (per linkingKey = per identity)
+  const rateLimitKey = `ratelimit:withdraw:${linkingKey}`;
   const lastWithdraw = await kv.get(rateLimitKey);
 
   if (lastWithdraw && (Date.now() - lastWithdraw) < 60000) {
@@ -70,10 +70,8 @@ export default async function handler(req) {
     return json(400, { error: 'Body JSON invalide' });
   }
 
-  // Normaliser l'invoice en minuscules (QR codes et wallets envoient souvent en majuscules)
   const invoice = body.invoice?.trim()?.toLowerCase();
 
-  // Validation de l'invoice
   if (!invoice) {
     return json(400, { error: 'Invoice manquante' });
   }
@@ -86,32 +84,27 @@ export default async function handler(req) {
     return json(400, { error: 'Invoice invalide (longueur incorrecte)' });
   }
 
-  // Decoder et verifier le montant
   const amountSat = decodeInvoiceAmount(invoice);
 
   if (amountSat === null || amountSat <= 0) {
     return json(400, { error: 'Invoice sans montant ou montant invalide. Utilisez une invoice avec montant fixe.' });
   }
 
-  // Limite de retrait
-  const MAX_WITHDRAW = 1000000; // 1M sats max par retrait
+  const MAX_WITHDRAW = 1000000;
   if (amountSat > MAX_WITHDRAW) {
     return json(400, { error: `Montant maximum de retrait: ${MAX_WITHDRAW} sats` });
   }
 
-  // Verrou joueur pour eviter les race conditions
-  // TTL 60s > timeout LNbits 30s pour eviter expiration pendant le call
-  const lockKey = `lock:player:${sessionId}`;
+  // Verrou joueur (par linkingKey = par identite)
+  const lockKey = `lock:player:${linkingKey}`;
   const lock = await kv.set(lockKey, Date.now(), { nx: true, ex: 60 });
 
   if (!lock) {
     return json(423, { error: 'Une autre operation est en cours' });
   }
 
-  // Variable pour tracker si le debit a ete fait (pour savoir si on doit refund)
   let debited = false;
-  const playerKey = `player:${sessionId}`;
-  const attemptId = `withdraw:${sessionId}:${Date.now()}`;
+  const attemptId = `withdraw:${linkingKey}:${Date.now()}`;
 
   try {
     const player = await kv.get(playerKey);
@@ -130,7 +123,6 @@ export default async function handler(req) {
       return json(400, { error: `Solde insuffisant. Disponible: ${currentBalance} sats, Demande: ${amountSat} sats` });
     }
 
-    // Verifier les variables d'environnement
     const lnbitsUrl = process.env.LNBITS_URL?.replace(/\/$/, '');
     const adminKey = process.env.LNBITS_ADMIN_KEY;
 
@@ -142,7 +134,7 @@ export default async function handler(req) {
       return json(500, { error: 'LNBITS_ADMIN_KEY non configuree' });
     }
 
-    // Verifier l'idempotence - eviter les doubles paiements
+    // Idempotence - eviter les doubles paiements
     const processedKey = `processed:${invoice}`;
     const alreadyProcessed = await kv.get(processedKey);
 
@@ -150,14 +142,12 @@ export default async function handler(req) {
       return json(409, { error: 'Cette invoice a deja ete payee', payment_hash: alreadyProcessed.payment_hash });
     }
 
-    // DEBIT: on debite via l'objet player sous verrou
-    // En cas d'echec, le refund re-lira le player frais (atomicRefund)
+    // Debiter le joueur
     player.balance = currentBalance - amountSat;
     player.last_activity = Date.now();
     await kv.set(playerKey, player, { ex: 2592000 });
     debited = true;
 
-    // Logger la tentative (pour audit)
     await kv.set(`attempt:${attemptId}`, {
       invoice: invoice.substring(0, 50),
       amount: amountSat,
@@ -165,7 +155,6 @@ export default async function handler(req) {
       timestamp: Date.now()
     }, { ex: 3600 });
 
-    // Appel LNbits avec timeout
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 30000);
 
@@ -185,19 +174,14 @@ export default async function handler(req) {
       });
     } catch (fetchError) {
       if (fetchError.name === 'AbortError') {
-        // TIMEOUT: LNbits n'a pas repondu a temps
-        // Le paiement a PEUT-ETRE ete envoye - on ne peut pas rembourser aveuglément
-        // Marquer comme "pending_verification" pour verification manuelle
         await kv.set(`attempt:${attemptId}`, {
           invoice: invoice.substring(0, 50),
           amount: amountSat,
           status: 'timeout_pending',
           timestamp: Date.now()
-        }, { ex: 604800 }); // garder 7 jours
+        }, { ex: 604800 });
 
-        // Essayer de verifier le statut du paiement via LNbits
         try {
-          // Chercher le paiement par l'invoice dans les paiements recents
           const checkResp = await fetch(`${lnbitsUrl}/api/v1/payments?limit=5`, {
             headers: { 'X-Api-Key': adminKey }
           });
@@ -207,7 +191,6 @@ export default async function handler(req) {
               p.bolt11 === invoice && p.pending === false
             );
             if (!found) {
-              // Paiement non trouve = probablement pas parti, on peut rembourser
               await atomicRefund(playerKey, amountSat);
               debited = false;
               await kv.set(`attempt:${attemptId}`, {
@@ -219,16 +202,11 @@ export default async function handler(req) {
               return json(504, { error: 'Timeout LNbits - paiement non envoye. Solde rembourse.' });
             }
           }
-        } catch(checkErr) {
-          // Impossible de verifier - on ne rembourse PAS pour eviter la double depense
-        }
+        } catch(checkErr) {}
 
-        // Pas pu confirmer que le paiement n'est pas parti -> on garde le debit
-        // Le joueur doit contacter le support
         return json(504, { error: 'Timeout LNbits - statut du paiement incertain. Contactez le support si le paiement n\'est pas recu. Ref: ' + attemptId });
       }
 
-      // Erreur reseau (pas timeout) - on peut rembourser
       await atomicRefund(playerKey, amountSat);
       debited = false;
       await kv.set(`attempt:${attemptId}`, {
@@ -243,22 +221,18 @@ export default async function handler(req) {
       clearTimeout(timeoutId);
     }
 
-    // Lire la reponse
     const responseText = await response.text();
 
     let payment;
     try {
       payment = JSON.parse(responseText);
     } catch (e) {
-      // REFUND ATOMIQUE: reponse illisible = paiement echoue
       await atomicRefund(playerKey, amountSat);
       debited = false;
       return json(502, { error: 'Reponse LNbits invalide. Solde rembourse.' });
     }
 
-    // Verifier le succes du paiement
     if (!response.ok) {
-      // REFUND ATOMIQUE: paiement refuse par LNbits
       await atomicRefund(playerKey, amountSat);
       debited = false;
 
@@ -275,7 +249,6 @@ export default async function handler(req) {
     }
 
     if (!payment.payment_hash) {
-      // REFUND ATOMIQUE: reponse sans payment_hash
       await atomicRefund(playerKey, amountSat);
       debited = false;
       return json(502, { error: 'Reponse LNbits invalide (payment_hash manquant). Solde rembourse.' });
@@ -283,7 +256,6 @@ export default async function handler(req) {
 
     // === PAIEMENT REUSSI ===
 
-    // FIX BUG 2: sauvegarder total_withdrawn (re-lire player frais pour ne pas ecraser)
     const freshPlayer = await kv.get(playerKey);
     if (freshPlayer) {
       freshPlayer.total_withdrawn = (freshPlayer.total_withdrawn || 0) + amountSat;
@@ -291,18 +263,14 @@ export default async function handler(req) {
       await kv.set(playerKey, freshPlayer, { ex: 2592000 });
     }
 
-    // Marquer comme traite pour idempotence (7 jours)
     await kv.set(processedKey, {
       payment_hash: payment.payment_hash,
       amount: amountSat,
       timestamp: Date.now()
     }, { ex: 604800 });
 
-    // Mettre a jour le rate limit
     await kv.set(rateLimitKey, Date.now(), { ex: 120 });
 
-    // Logger la transaction
-    const txKey = `transactions:${sessionId}`;
     await kv.rpush(txKey, {
       type: 'withdraw',
       amount: amountSat,
@@ -315,10 +283,8 @@ export default async function handler(req) {
     });
     await kv.expire(txKey, 2592000);
 
-    // Nettoyer la tentative
     await kv.del(`attempt:${attemptId}`);
 
-    // Lire le solde reel apres tout (peut avoir change entre-temps)
     const finalPlayer = await kv.get(playerKey);
     const finalBalance = finalPlayer ? finalPlayer.balance : (currentBalance - amountSat);
 
@@ -333,16 +299,14 @@ export default async function handler(req) {
   } catch (error) {
     console.error('Erreur retrait:', error);
 
-    // Si le debit a ete fait mais le paiement a echoue, rembourser
     if (debited) {
       try {
         await atomicRefund(playerKey, amountSat);
       } catch (refundError) {
-        // Log critique: refund echoue, le joueur a perdu des sats
-        console.error('CRITIQUE: refund echoue!', refundError, { sessionId, amountSat, attemptId });
+        console.error('CRITIQUE: refund echoue!', refundError, { linkingKey, amountSat, attemptId });
         await kv.set(`refund_failed:${attemptId}`, {
-          sessionId, amount: amountSat, timestamp: Date.now(), error: refundError.message
-        }, { ex: 604800 }); // garder 7 jours pour correction manuelle
+          linkingKey, amount: amountSat, timestamp: Date.now(), error: refundError.message
+        }, { ex: 604800 });
       }
     }
 
@@ -360,13 +324,10 @@ export default async function handler(req) {
     return json(statusCode, { error: errorMessage });
 
   } finally {
-    // Toujours liberer le verrou
     await kv.del(lockKey);
   }
 }
 
-// FIX BUG 1: Refund atomique - re-lit le player frais et ajoute le montant
-// Au lieu d'ecraser avec l'ancien objet (qui peut etre stale)
 async function atomicRefund(playerKey, amount) {
   const player = await kv.get(playerKey);
   if (player) {

@@ -49,15 +49,23 @@ export default async function handler(req) {
     const targetSeat = table.seats[targetSeatIdx];
     if (!targetSeat) return json(400, { error: 'Siege vide' });
 
+    // Resoudre les linkingKeys des deux joueurs
+    const senderSeat = table.seats[senderIdx];
+    const senderLk = senderSeat.linkingKey || await kv.get(`session:${sessionId}`);
+    if (!senderLk) return json(401, { error: 'Session invalide' });
+
+    const receiverLk = targetSeat.linkingKey || await kv.get(`session:${targetSeat.sessionId}`);
+    if (!receiverLk) return json(400, { error: 'Destinataire non trouve' });
+
     // Check sender balance
-    const senderKey = `player:${sessionId}`;
+    const senderKey = `player:${senderLk}`;
     const sender = await kv.get(senderKey);
     if (!sender || sender.balance < amount) {
       return json(400, { error: 'Solde insuffisant' });
     }
 
     // Check receiver exists
-    const receiverKey = `player:${targetSeat.sessionId}`;
+    const receiverKey = `player:${receiverLk}`;
     const receiver = await kv.get(receiverKey);
     if (!receiver) return json(400, { error: 'Destinataire non trouve' });
 
@@ -70,9 +78,9 @@ export default async function handler(req) {
       kv.set(receiverKey, receiver, { ex: 2592000 })
     ]);
 
-    // Log transactions
-    const senderTxKey = `transactions:${sessionId}`;
-    const receiverTxKey = `transactions:${targetSeat.sessionId}`;
+    // Log transactions (keyed by linkingKey for cross-session history)
+    const senderTxKey = `transactions:${senderLk}`;
+    const receiverTxKey = `transactions:${receiverLk}`;
     await Promise.all([
       kv.rpush(senderTxKey, {
         type: 'tip_sent',

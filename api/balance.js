@@ -11,9 +11,12 @@ export default async function handler(req) {
     return json(401, { error: 'Session invalide' });
   }
 
-  const player = await kv.get(`player:${sessionId}`);
+  const linkingKey = await kv.get(`session:${sessionId}`);
+  if (!linkingKey) return json(401, { error: 'Session invalide' });
+
+  const player = await kv.get(`player:${linkingKey}`);
   if (!player) {
-    return json(404, { error: 'Joueur non trouvé' });
+    return json(404, { error: 'Joueur non trouve' });
   }
 
   return json(200, { balance: player.balance });

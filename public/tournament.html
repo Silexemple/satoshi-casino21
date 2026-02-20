@@ -504,7 +504,16 @@ async function apiCall(endpoint, method = 'GET', body = null) {
 
 async function init() {
     try {
-        const data = await apiCall('/api/session');
+        const response = await fetch('/api/session', {
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        if (response.status === 401) {
+            window.location.href = '/'; // Rediriger vers la page de connexion LNAuth
+            return;
+        }
+        if (!response.ok) throw new Error('Session error');
+        const data = await response.json();
         balance = data.balance;
         document.getElementById('balance').textContent = balance;
     } catch (e) { console.error('Session error:', e); }

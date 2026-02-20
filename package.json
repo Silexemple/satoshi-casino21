@@ -9,7 +9,9 @@
     "test": "node tests/game-logic.test.js"
   },
   "dependencies": {
+    "@noble/secp256k1": "^3.0.0",
     "@vercel/kv": "^1.0.1",
+    "bech32": "^2.0.0",
     "cookie": "^0.6.0"
   },
   "devDependencies": {

@@ -36,8 +36,12 @@ export default async function handler(req) {
       return json(400, { error: 'Tournoi plein' });
     }
 
+    // Resoudre session -> linkingKey
+    const linkingKey = await kv.get(`session:${sessionId}`);
+    if (!linkingKey) return json(401, { error: 'Session invalide' });
+
     // Check balance
-    const playerKey = `player:${sessionId}`;
+    const playerKey = `player:${linkingKey}`;
     const player = await kv.get(playerKey);
     if (!player) return json(404, { error: 'Joueur non trouve' });
 
@@ -49,9 +53,10 @@ export default async function handler(req) {
     player.balance -= tournament.buyIn;
     await kv.set(playerKey, player, { ex: 2592000 });
 
-    // Register player
+    // Register player (stocker linkingKey pour distribution des prix)
     tournament.players.push({
       sessionId,
+      linkingKey,
       nickname: player.nickname || `Joueur ${tournament.players.length + 1}`,
       chips: tournament.startingChips,
       roundsPlayed: 0,
@@ -76,7 +81,7 @@ export default async function handler(req) {
     await kv.set(tKey, tournament, { ex: 86400 });
 
     // Log transaction
-    const txKey = `transactions:${sessionId}`;
+    const txKey = `transactions:${linkingKey}`;
     await kv.rpush(txKey, {
       type: 'tournament_buyin',
       amount: -tournament.buyIn,

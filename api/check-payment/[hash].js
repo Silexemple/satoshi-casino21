@@ -21,11 +21,10 @@ export default async function handler(req) {
 
   const invoice = await kv.get(`invoice:${paymentHash}`);
   if (!invoice || invoice.session_id !== sessionId) {
-    return json(404, { error: 'Invoice non trouvée' });
+    return json(404, { error: 'Invoice non trouvee' });
   }
 
   try {
-    // Lock pour éviter le double crédit (polling concurrent)
     const lockKey = `lock:payment:${paymentHash}`;
     const lockAcquired = await kv.set(lockKey, '1', { nx: true, ex: 10 });
     if (!lockAcquired) {
@@ -52,10 +51,18 @@ export default async function handler(req) {
       const status = await response.json();
 
       if (status.paid) {
-        let player = await kv.get(`player:${sessionId}`);
+        // Use linking_key stored in invoice (survives session expiry)
+        const linkingKey = freshInvoice.linking_key;
+        if (!linkingKey) {
+          await kv.del(lockKey);
+          return json(500, { error: 'Impossible de crediter: cle de joueur introuvable' });
+        }
 
-        // Si le player a expire, recreer un profil minimal pour ne pas perdre le depot
+        const playerKey = `player:${linkingKey}`;
+        let player = await kv.get(playerKey);
+
         if (!player) {
+          // Joueur recree si son profil a expire pendant le depot
           player = {
             balance: 0,
             nickname: null,
@@ -67,14 +74,14 @@ export default async function handler(req) {
         const newBalance = player.balance + freshInvoice.amount;
         player.balance = newBalance;
         player.last_activity = Date.now();
-        await kv.set(`player:${sessionId}`, player, { ex: 2592000 });
+        await kv.set(playerKey, player, { ex: 2592000 });
 
-        const txKey = `transactions:${sessionId}`;
+        const txKey = `transactions:${linkingKey}`;
         await kv.rpush(txKey, {
           type: 'deposit',
           amount: freshInvoice.amount,
           timestamp: Date.now(),
-          description: `Dépôt Lightning ${paymentHash.substring(0, 8)}`
+          description: `Depot Lightning ${paymentHash.substring(0, 8)}`
         });
         await kv.expire(txKey, 2592000);
 
@@ -93,7 +100,7 @@ export default async function handler(req) {
     return json(200, { paid: false });
 
   } catch (error) {
-    console.error('Erreur vérification invoice:', error);
-    return json(500, { error: 'Erreur vérification' });
+    console.error('Erreur verification invoice:', error);
+    return json(500, { error: 'Erreur verification' });
   }
 }

@@ -15,12 +15,15 @@ export default async function handler(req) {
     return json(401, { error: 'Session invalide' });
   }
 
-  const player = await kv.get(`player:${sessionId}`);
+  const linkingKey = await kv.get(`session:${sessionId}`);
+  if (!linkingKey) return json(401, { error: 'Session invalide' });
+
+  const player = await kv.get(`player:${linkingKey}`);
   if (!player) {
-    return json(404, { error: 'Joueur non trouvé' });
+    return json(404, { error: 'Joueur non trouve' });
   }
 
-  const txKey = `transactions:${sessionId}`;
+  const txKey = `transactions:${linkingKey}`;
   const len = await kv.llen(txKey);
   const start = Math.max(0, len - 50);
   const transactions = await kv.lrange(txKey, start, -1);

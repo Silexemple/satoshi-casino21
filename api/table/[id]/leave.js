@@ -39,7 +39,14 @@ export default async function handler(req) {
     // Rembourser la mise si le joueur quitte pendant la phase de mises
     let refunded = 0;
     if (['betting', 'waiting'].includes(table.status) && seat.bet > 0) {
-      const playerKey = `player:${sessionId}`;
+      const lk = seat.linkingKey || await kv.get(`session:${sessionId}`);
+      if (!lk) {
+        table.seats[seatIdx] = null;
+        table.lastUpdate = Date.now();
+        await kv.set(tableKey, table, { ex: 86400 });
+        return json(200, { success: true, refunded: 0 });
+      }
+      const playerKey = `player:${lk}`;
       const player = await kv.get(playerKey);
       if (player) {
         player.balance += seat.bet;

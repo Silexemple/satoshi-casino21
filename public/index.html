@@ -1033,6 +1033,17 @@
     </div>
 </div>
 
+<div class="modal" id="lnauthModal" style="z-index:10000;">
+    <div class="modal-content" style="max-width:380px;">
+        <div class="modal-title">⚡ CONNEXION LIGHTNING</div>
+        <p style="color:#aaa;font-size:14px;margin-bottom:12px;">Scannez avec votre wallet Bitcoin Lightning pour vous connecter</p>
+        <div id="lnauthQR" style="background:#fff;padding:12px;border-radius:8px;margin:0 auto 12px;width:fit-content;min-height:80px;display:flex;align-items:center;justify-content:center;"></div>
+        <div id="lnauthLNURL" style="font-size:9px;color:#555;word-break:break-all;margin:8px 0;max-height:40px;overflow:hidden;"></div>
+        <button class="copy-lnurl-btn" onclick="copyLNURL()" style="margin-bottom:8px;">📋 COPIER LNURL</button>
+        <div id="lnauthStatus" style="color:#ffa500;font-size:13px;margin-top:8px;">Generation en cours...</div>
+    </div>
+</div>
+
 <div class="modal" id="nicknameModal">
     <div class="modal-content">
         <div class="modal-title">VOTRE PSEUDO</div>
@@ -1517,9 +1528,28 @@ async function apiCall(endpoint, method = 'GET', body = null) {
 
 let playerNickname = null;
 
+let currentK1 = null;
+let lnauthPollInterval = null;
+let currentLNURL = '';
+
 async function initSession() {
     try {
-        const data = await apiCall('/api/session');
+        const response = await fetch('/api/session', {
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' }
+        });
+
+        if (response.status === 401) {
+            const data = await response.json();
+            if (data.auth_required) {
+                showLNAuthModal();
+                return;
+            }
+        }
+
+        if (!response.ok) throw new Error('Session error');
+
+        const data = await response.json();
         balance = data.balance;
         playerNickname = data.nickname;
         updateNicknameDisplay();
@@ -1527,6 +1557,79 @@ async function initSession() {
     } catch (error) {
         console.error('Erreur init session:', error);
     }
+}
+
+async function showLNAuthModal() {
+    document.getElementById('lnauthModal').classList.add('active');
+    await generateLNAuthChallenge();
+}
+
+async function generateLNAuthChallenge() {
+    document.getElementById('lnauthStatus').textContent = 'Generation du QR code...';
+    document.getElementById('lnauthQR').innerHTML = '';
+    try {
+        const resp = await fetch('/api/auth/generate', { credentials: 'include' });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.error || 'Erreur');
+
+        currentK1 = data.k1;
+        currentLNURL = data.lnurl;
+
+        // Afficher le QR code
+        document.getElementById('lnauthQR').innerHTML = '';
+        new QRCode(document.getElementById('lnauthQR'), {
+            text: data.lnurl,
+            width: 250,
+            height: 250,
+            colorDark: '#000000',
+            colorLight: '#ffffff'
+        });
+        document.getElementById('lnauthLNURL').textContent = data.lnurl;
+        document.getElementById('lnauthStatus').textContent = 'En attente de connexion...';
+
+        // Demarrer le polling
+        if (lnauthPollInterval) clearInterval(lnauthPollInterval);
+        lnauthPollInterval = setInterval(pollLNAuthStatus, 2000);
+    } catch (e) {
+        document.getElementById('lnauthStatus').textContent = 'Erreur: ' + e.message;
+    }
+}
+
+async function pollLNAuthStatus() {
+    if (!currentK1) return;
+    try {
+        const resp = await fetch(`/api/auth/status?k1=${currentK1}`, { credentials: 'include' });
+        const data = await resp.json();
+
+        if (data.status === 'authenticated') {
+            clearInterval(lnauthPollInterval);
+            lnauthPollInterval = null;
+            closeModal('lnauthModal');
+            balance = data.balance;
+            playerNickname = data.nickname;
+            updateNicknameDisplay();
+            updateDisplay();
+            checkExistingGame();
+        } else if (data.status === 'expired') {
+            // Challenge expire, en generer un nouveau
+            await generateLNAuthChallenge();
+        }
+    } catch (e) {
+        // Ignorer les erreurs de polling
+    }
+}
+
+async function copyLNURL() {
+    if (!currentLNURL) return;
+    try {
+        await navigator.clipboard.writeText(currentLNURL);
+        const btn = document.querySelector('#lnauthModal .copy-lnurl-btn');
+        if (btn) {
+            const old = btn.textContent;
+            btn.textContent = '✅ COPIE!';
+            setTimeout(() => { btn.textContent = old; }, 2000);
+        }
+    } catch (e) {}
 }
 
 function updateNicknameDisplay() {

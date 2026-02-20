@@ -426,9 +426,10 @@ export default async function handler(req) {
   const clientState = tableStateForClient(table, sessionId);
 
   // Include player balance to avoid extra API call
-  const player = await kv.get(`player:${sessionId}`);
-  if (player) {
-    clientState.balance = player.balance;
+  const linkingKey = await kv.get(`session:${sessionId}`);
+  if (linkingKey) {
+    const player = await kv.get(`player:${linkingKey}`);
+    if (player) clientState.balance = player.balance;
   }
 
   // Include recent chat messages
@@ -455,23 +456,18 @@ async function creditPlayers(table) {
   for (const seat of table.seats) {
     if (!seat || !seat.payout) continue;
 
-    const playerKey = `player:${seat.sessionId}`;
-    // Verrou joueur pour eviter race condition avec withdraw
-    const playerLock = `lock:player:${seat.sessionId}`;
+    // Resolve linkingKey: use stored one from join, fallback to session lookup
+    const lk = seat.linkingKey || await kv.get(`session:${seat.sessionId}`);
+    if (!lk) continue; // Session expired, skip credit
+
+    const playerKey = `player:${lk}`;
+    // Verrou joueur par linkingKey (stable cross-session)
+    const playerLock = `lock:player:${lk}`;
     let gotLock = false;
-    // Essayer 3 fois d'acquerir le verrou (le retrait peut durer ~30s)
     for (let attempt = 0; attempt < 3; attempt++) {
       gotLock = await kv.set(playerLock, '1', { nx: true, ex: 10 });
       if (gotLock) break;
-      // Attendre 200ms avant de reessayer
       await new Promise(r => setTimeout(r, 200));
-    }
-
-    if (!gotLock) {
-      // Verrou pas disponible apres 3 essais
-      // On credit sans verrou - le risque de race est minime (600ms de fenetre)
-      // et c'est mieux que de ne pas crediter du tout
-      // Le verrou withdraw dure ~60s max, on a deja attendu 600ms
     }
 
     try {
@@ -481,7 +477,7 @@ async function creditPlayers(table) {
         player.last_activity = Date.now();
         await kv.set(playerKey, player, { ex: 2592000 });
 
-        const txKey = `transactions:${seat.sessionId}`;
+        const txKey = `transactions:${lk}`;
         await kv.rpush(txKey, {
           type: seat.netGain > 0 ? 'win' : (seat.netGain < 0 ? 'loss' : 'push'),
           amount: seat.netGain,

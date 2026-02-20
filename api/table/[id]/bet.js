@@ -54,8 +54,12 @@ export default async function handler(req) {
       return json(400, { error: `Mise invalide (${table.minBet}-${table.maxBet} sats)` });
     }
 
-    // Vérifier le solde du joueur
-    const playerKey = `player:${sessionId}`;
+    // Resoudre session -> linkingKey
+    const linkingKey = seat.linkingKey || await kv.get(`session:${sessionId}`);
+    if (!linkingKey) return json(401, { error: 'Session invalide' });
+
+    // Verifier le solde du joueur
+    const playerKey = `player:${linkingKey}`;
     const player = await kv.get(playerKey);
     if (!player || player.balance < amount) {
       return json(400, { error: 'Solde insuffisant' });

@@ -42,14 +42,19 @@ export default async function handler(req) {
       return json(400, { error: 'Siège occupé' });
     }
 
-    // Vérifier que le joueur existe
-    const player = await kv.get(`player:${sessionId}`);
-    if (!player) return json(404, { error: 'Joueur non trouvé' });
+    // Resoudre session -> linkingKey
+    const linkingKey = await kv.get(`session:${sessionId}`);
+    if (!linkingKey) return json(401, { error: 'Session invalide' });
 
-    // Asseoir le joueur (utiliser nickname et avatar si définis)
+    // Verifier que le joueur existe
+    const player = await kv.get(`player:${linkingKey}`);
+    if (!player) return json(404, { error: 'Joueur non trouve' });
+
+    // Asseoir le joueur (stocker linkingKey pour credit des gains)
     table.seats[seatIdx] = {
       seatIdx,
       sessionId,
+      linkingKey,
       playerName: player.nickname || `Joueur ${seatIdx + 1}`,
       avatar: player.avatar || null,
       bet: 0,

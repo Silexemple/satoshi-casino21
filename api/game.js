@@ -27,11 +27,19 @@ export default async function handler(req) {
     return json(401, { error: 'Session invalide' });
   }
 
+  // Resolve session -> linkingKey
+  const linkingKey = await kv.get(`session:${sessionId}`);
+  if (!linkingKey) return json(401, { error: 'Session invalide' });
+
+  const playerKey = `player:${linkingKey}`;
+  const txKey = `transactions:${linkingKey}`;
+  const gameKey = `game_state:${sessionId}`; // ephemeral, keyed by session is fine
+
   // GET: reprendre une partie en cours
   if (req.method === 'GET') {
-    const gs = await kv.get(`game_state:${sessionId}`);
-    const player = await kv.get(`player:${sessionId}`);
-    if (!player) return json(404, { error: 'Joueur non trouvé' });
+    const gs = await kv.get(gameKey);
+    const player = await kv.get(playerKey);
+    if (!player) return json(404, { error: 'Joueur non trouve' });
     if (!gs || gs.status !== 'playing') {
       return json(200, { status: 'idle', balance: player.balance });
     }
@@ -47,14 +55,14 @@ export default async function handler(req) {
   const rlCount = await kv.incr(rlKey);
   if (rlCount === 1) await kv.expire(rlKey, 60);
   if (rlCount > 60) {
-    return json(429, { error: 'Trop de requêtes, attendez un instant' });
+    return json(429, { error: 'Trop de requetes, attendez un instant' });
   }
 
-  // Lock pour éviter les race conditions
+  // Lock pour eviter les race conditions
   const lockKey = `lock:game:${sessionId}`;
   const lockAcquired = await kv.set(lockKey, '1', { nx: true, ex: 10 });
   if (!lockAcquired) {
-    return json(429, { error: 'Action en cours, réessayez' });
+    return json(429, { error: 'Action en cours, reessayez' });
   }
 
   try {
@@ -65,12 +73,10 @@ export default async function handler(req) {
       return json(400, { error: 'Action invalide' });
     }
 
-    const playerKey = `player:${sessionId}`;
-    const gameKey = `game_state:${sessionId}`;
     const player = await kv.get(playerKey);
 
     if (!player) {
-      return json(404, { error: 'Joueur non trouvé' });
+      return json(404, { error: 'Joueur non trouve' });
     }
 
     // ===================== DEAL =====================
@@ -116,12 +122,12 @@ export default async function handler(req) {
           player.balance += bet;
           gs.status = 'finished';
           gs.playerHands[0].result = 'push';
-          await save(playerKey, player, gameKey, gs, sessionId, 'push', 0);
+          await save(playerKey, player, gameKey, gs, txKey, 'push', 0);
           return json(200, finishResponse(gs, player, 'push'));
         } else {
           gs.status = 'finished';
           gs.playerHands[0].result = 'loss';
-          await save(playerKey, player, gameKey, gs, sessionId, 'loss', -bet);
+          await save(playerKey, player, gameKey, gs, txKey, 'loss', -bet);
           return json(200, finishResponse(gs, player, 'loss'));
         }
       }
@@ -134,7 +140,7 @@ export default async function handler(req) {
         player.balance += bjPayout - rake;
         gs.status = 'finished';
         gs.playerHands[0].result = 'bj';
-        await save(playerKey, player, gameKey, gs, sessionId, 'bj', netGain - rake);
+        await save(playerKey, player, gameKey, gs, txKey, 'bj', netGain - rake);
         await kv.incrby('house:bankroll', rake);
         return json(200, finishResponse(gs, player, 'bj'));
       }
@@ -200,13 +206,13 @@ export default async function handler(req) {
           gs.status = 'finished';
           gs.playerHands[0].result = 'push';
           const netGain = gs.insuranceBet > 0 ? gs.insuranceBet * 2 : 0;
-          await save(playerKey, player, gameKey, gs, sessionId, 'push', netGain);
+          await save(playerKey, player, gameKey, gs, txKey,'push', netGain);
           return json(200, finishResponse(gs, player, 'push'));
         } else {
           gs.status = 'finished';
           gs.playerHands[0].result = 'loss';
           const netGain = gs.insuranceBet > 0 ? (gs.insuranceBet * 2 - gs.bet) : -gs.bet;
-          await save(playerKey, player, gameKey, gs, sessionId, 'loss', netGain);
+          await save(playerKey, player, gameKey, gs, txKey,'loss', netGain);
           return json(200, finishResponse(gs, player, 'loss'));
         }
       }
@@ -225,7 +231,7 @@ export default async function handler(req) {
         player.balance += bjPayout - rake;
         gs.status = 'finished';
         gs.playerHands[0].result = 'bj';
-        await save(playerKey, player, gameKey, gs, sessionId, 'bj', netGain - rake);
+        await save(playerKey, player, gameKey, gs, txKey, 'bj', netGain - rake);
         if (rake > 0) await kv.incrby('house:bankroll', rake);
         return json(200, finishResponse(gs, player, 'bj'));
       }
@@ -257,7 +263,7 @@ export default async function handler(req) {
       gs.status = 'finished';
 
       const netGain = -(hand.bet - refund);
-      await save(playerKey, player, gameKey, gs, sessionId, 'surrender', netGain);
+      await save(playerKey, player, gameKey, gs, txKey,'surrender', netGain);
       return json(200, finishResponse(gs, player, 'surrender'));
     }
 
@@ -276,12 +282,12 @@ export default async function handler(req) {
           player.balance += gs.bet;
           gs.status = 'finished';
           gs.playerHands[0].result = 'push';
-          await save(playerKey, player, gameKey, gs, sessionId, 'push', 0);
+          await save(playerKey, player, gameKey, gs, txKey, 'push', 0);
           return json(200, finishResponse(gs, player, 'push'));
         } else {
           gs.status = 'finished';
           gs.playerHands[0].result = 'loss';
-          await save(playerKey, player, gameKey, gs, sessionId, 'loss', -gs.bet);
+          await save(playerKey, player, gameKey, gs, txKey,'loss', -gs.bet);
           return json(200, finishResponse(gs, player, 'loss'));
         }
       }
@@ -293,7 +299,7 @@ export default async function handler(req) {
         player.balance += bjPayout - rake;
         gs.status = 'finished';
         gs.playerHands[0].result = 'bj';
-        await save(playerKey, player, gameKey, gs, sessionId, 'bj', netGain - rake);
+        await save(playerKey, player, gameKey, gs, txKey, 'bj', netGain - rake);
         if (rake > 0) await kv.incrby('house:bankroll', rake);
         return json(200, finishResponse(gs, player, 'bj'));
       }
@@ -308,11 +314,11 @@ export default async function handler(req) {
       if (score > 21) {
         hand.finished = true;
         hand.result = 'bust';
-        return await advanceOrFinish(gs, player, playerKey, gameKey, sessionId);
+        return await advanceOrFinish(gs, player, playerKey, gameKey, txKey);
       }
       if (score === 21) {
         hand.finished = true;
-        return await advanceOrFinish(gs, player, playerKey, gameKey, sessionId);
+        return await advanceOrFinish(gs, player, playerKey, gameKey, txKey);
       }
 
       await kv.set(gameKey, gs, { ex: 3600 });
@@ -321,7 +327,7 @@ export default async function handler(req) {
 
     if (action === 'stand') {
       hand.finished = true;
-      return await advanceOrFinish(gs, player, playerKey, gameKey, sessionId);
+      return await advanceOrFinish(gs, player, playerKey, gameKey, txKey);
     }
 
     if (action === 'double') {
@@ -342,7 +348,7 @@ export default async function handler(req) {
         hand.result = 'bust';
       }
 
-      return await advanceOrFinish(gs, player, playerKey, gameKey, sessionId);
+      return await advanceOrFinish(gs, player, playerKey, gameKey, txKey);
     }
 
     if (action === 'split') {
@@ -378,7 +384,7 @@ export default async function handler(req) {
 
       if (handScore(gs.playerHands[gs.currentHandIdx].cards) === 21) {
         gs.playerHands[gs.currentHandIdx].finished = true;
-        return await advanceOrFinish(gs, player, playerKey, gameKey, sessionId);
+        return await advanceOrFinish(gs, player, playerKey, gameKey, txKey);
       }
 
       await kv.set(playerKey, player, { ex: 2592000 });
@@ -396,7 +402,7 @@ export default async function handler(req) {
 
 // --- Avancer à la main suivante ou finir ---
 
-async function advanceOrFinish(gs, player, playerKey, gameKey, sessionId) {
+async function advanceOrFinish(gs, player, playerKey, gameKey, txKey) {
   let nextIdx = gs.currentHandIdx + 1;
   while (nextIdx < gs.playerHands.length && gs.playerHands[nextIdx].finished) {
     nextIdx++;
@@ -407,7 +413,7 @@ async function advanceOrFinish(gs, player, playerKey, gameKey, sessionId) {
 
     if (handScore(gs.playerHands[nextIdx].cards) === 21) {
       gs.playerHands[nextIdx].finished = true;
-      return await advanceOrFinish(gs, player, playerKey, gameKey, sessionId);
+      return await advanceOrFinish(gs, player, playerKey, gameKey, txKey);
     }
 
     await kv.set(playerKey, player, { ex: 2592000 });
@@ -454,7 +460,7 @@ async function advanceOrFinish(gs, player, playerKey, gameKey, sessionId) {
     await kv.incrby('house:bankroll', rake);
   }
 
-  await save(playerKey, player, gameKey, gs, sessionId, globalResult, netGain);
+  await save(playerKey, player, gameKey, gs, txKey,globalResult, netGain);
 
   return json(200, finishResponse(gs, player, globalResult));
 }
@@ -512,14 +518,13 @@ function finishResponse(gs, player, globalResult) {
   };
 }
 
-async function save(playerKey, player, gameKey, gs, sessionId, result, netGain) {
+async function save(playerKey, player, gameKey, gs, txKey, result, netGain) {
   await Promise.all([
     kv.set(playerKey, player, { ex: 2592000 }),
     kv.set(gameKey, gs, { ex: 3600 })
   ]);
 
-  if (result) {
-    const txKey = `transactions:${sessionId}`;
+  if (result && txKey) {
     await kv.rpush(txKey, {
       type: result,
       amount: netGain,

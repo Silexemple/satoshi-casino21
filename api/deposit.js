@@ -23,6 +23,9 @@ export default async function handler(req) {
     return json(429, { error: 'Trop de demandes de depot, attendez un instant' });
   }
 
+  const linkingKey = await kv.get(`session:${sessionId}`);
+  if (!linkingKey) return json(401, { error: 'Session invalide' });
+
   const body = await req.json();
   const amount = parseInt(body.amount);
 
@@ -33,9 +36,9 @@ export default async function handler(req) {
     return json(400, { error: `Montant invalide (100-${MAX_DEPOSIT} sats)` });
   }
 
-  const player = await kv.get(`player:${sessionId}`);
+  const player = await kv.get(`player:${linkingKey}`);
   if (!player) {
-    return json(404, { error: 'Joueur non trouvé' });
+    return json(404, { error: 'Joueur non trouve' });
   }
 
   if (player.balance + amount > MAX_BALANCE) {
@@ -52,7 +55,7 @@ export default async function handler(req) {
       body: JSON.stringify({
         out: false,
         amount: amount,
-        memo: `Satoshi BJ - Dépôt ${amount} sats`,
+        memo: `Satoshi BJ - Depot ${amount} sats`,
         expiry: 3600
       })
     });
@@ -63,8 +66,10 @@ export default async function handler(req) {
 
     const invoice = await response.json();
 
+    // Store linking_key so we can credit even if session expires before payment
     await kv.set(`invoice:${invoice.payment_hash}`, {
       session_id: sessionId,
+      linking_key: linkingKey,
       amount: amount,
       payment_request: invoice.payment_request,
       created_at: Date.now()
@@ -76,7 +81,7 @@ export default async function handler(req) {
     });
 
   } catch (error) {
-    console.error('Erreur création invoice:', error);
-    return json(500, { error: 'Erreur création invoice' });
+    console.error('Erreur creation invoice:', error);
+    return json(500, { error: 'Erreur creation invoice' });
   }
 }

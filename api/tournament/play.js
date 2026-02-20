@@ -21,13 +21,24 @@ export default async function handler(req) {
 
   if (!tournamentId) return json(400, { error: 'ID tournoi manquant' });
 
+  // Resoudre linkingKey une seule fois
+  const currentLinkingKey = await kv.get(`session:${sessionId}`);
+
+  // Chercher le joueur par sessionId OU linkingKey (pour compatibilite re-login)
+  function findPlayer(players) {
+    return players.findIndex(p =>
+      p.sessionId === sessionId ||
+      (currentLinkingKey && p.linkingKey === currentLinkingKey)
+    );
+  }
+
   // Status check - no lock needed, read-only
   if (action === 'status') {
     const tKey = `tournament:${tournamentId}`;
     const tournament = await kv.get(tKey);
     if (!tournament) return json(404, { error: 'Tournoi non trouve' });
 
-    const pIdx = tournament.players.findIndex(p => p.sessionId === sessionId);
+    const pIdx = findPlayer(tournament.players);
     const tPlayer = pIdx >= 0 ? tournament.players[pIdx] : null;
 
     return json(200, {
@@ -55,14 +66,14 @@ export default async function handler(req) {
       return json(400, { error: 'Tournoi pas en cours' });
     }
 
-    const pIdx = tournament.players.findIndex(p => p.sessionId === sessionId);
+    const pIdx = findPlayer(tournament.players);
     if (pIdx < 0) return json(400, { error: 'Vous n\'etes pas inscrit' });
 
     const tPlayer = tournament.players[pIdx];
     if (tPlayer.busted) return json(400, { error: 'Vous etes elimine' });
 
-    // Game state for this player in this tournament
-    const gsKey = `tgame:${tournamentId}:${sessionId}`;
+    // Game state for this player in this tournament (use linkingKey for cross-session stability)
+    const gsKey = `tgame:${tournamentId}:${currentLinkingKey || sessionId}`;
 
     // ===================== DEAL =====================
     if (action === 'deal') {
@@ -250,12 +261,16 @@ async function finishTournament(tournament) {
   for (let i = 0; i < Math.min(prizes.length, ranked.length); i++) {
     const p = ranked[i];
     if (prizes[i] > 0) {
-      const pk = `player:${p.sessionId}`;
+      // Utiliser linkingKey stocke a l'inscription, sinon tenter via session
+      const lk = p.linkingKey || await kv.get(`session:${p.sessionId}`);
+      if (!lk) { p.prize = prizes[i]; continue; } // session expiree, prize log impossible
+
+      const pk = `player:${lk}`;
       const player = await kv.get(pk);
       if (player) {
         player.balance += prizes[i];
         await kv.set(pk, player, { ex: 2592000 });
-        const txKey = `transactions:${p.sessionId}`;
+        const txKey = `transactions:${lk}`;
         await kv.rpush(txKey, {
           type: 'tournament_prize',
           amount: prizes[i],
