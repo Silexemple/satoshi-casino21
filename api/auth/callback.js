@@ -11,6 +11,27 @@ function hexToBytes(hex) {
   return bytes;
 }
 
+// @noble/secp256k1 v3 ne supporte pas DER — conversion DER -> compact (64 bytes)
+// Format DER: 30 <len> 02 <rLen> <r> 02 <sLen> <s>
+function derToCompact(der) {
+  let i = 0;
+  if (der[i++] !== 0x30) throw new Error('Not a DER SEQUENCE');
+  i++; // skip total length
+  if (der[i++] !== 0x02) throw new Error('Expected INTEGER for r');
+  const rLen = der[i++];
+  const r = der.slice(i, i + rLen); i += rLen;
+  if (der[i++] !== 0x02) throw new Error('Expected INTEGER for s');
+  const sLen = der[i++];
+  const s = der.slice(i, i + sLen);
+  // Strip leading 0x00 padding (DER positive-int convention) and right-align to 32 bytes
+  const rClean = r[0] === 0 ? r.slice(1) : r;
+  const sClean = s[0] === 0 ? s.slice(1) : s;
+  const compact = new Uint8Array(64);
+  compact.set(rClean, 32 - rClean.length);
+  compact.set(sClean, 64 - sClean.length);
+  return compact;
+}
+
 function errResp(reason) {
   return new Response(
     JSON.stringify({ status: 'ERROR', reason }),
@@ -38,14 +59,16 @@ export default async function handler(req) {
   if (!challenge) return errResp('Unknown or expired challenge');
   if (challenge.status !== 'pending') return errResp('Challenge already used');
 
-  // Verify secp256k1 signature: sig over SHA256(k1_bytes)
-  // @noble/secp256k1 v3 defaults to prehash:true — pass raw k1Bytes, library handles SHA256
+  // Verify secp256k1 signature
+  // LNAuth wallets sign k1 bytes directly (k1 is the 32-byte message hash)
+  // Wallets send DER-encoded sig; v3 only accepts compact (64 bytes) — convert first
   try {
     const k1Bytes = hexToBytes(k1);
-    const sigBytes = hexToBytes(sig);
+    const sigDer = hexToBytes(sig);
+    const sigCompact = derToCompact(sigDer);
     const pubKeyBytes = hexToBytes(key);
 
-    const isValid = secp.verify(sigBytes, k1Bytes, pubKeyBytes);
+    const isValid = secp.verify(sigCompact, k1Bytes, pubKeyBytes);
     if (!isValid) return errResp('Signature invalide');
   } catch (e) {
     return errResp('Erreur verification signature');
