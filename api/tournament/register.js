@@ -27,8 +27,8 @@ export default async function handler(req) {
       return json(400, { error: 'Inscriptions fermees' });
     }
 
-    // Check already registered
-    if (tournament.players.some(p => p.sessionId === sessionId)) {
+    // Check already registered (par sessionId OU linkingKey pour eviter les doublons cross-session)
+    if (tournament.players.some(p => p.sessionId === sessionId || p.linkingKey === linkingKey)) {
       return json(400, { error: 'Deja inscrit' });
     }
 

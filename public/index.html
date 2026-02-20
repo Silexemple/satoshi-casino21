@@ -1520,6 +1520,10 @@ async function apiCall(endpoint, method = 'GET', body = null) {
     
     if (!response.ok) {
         const error = await response.json();
+        // Si session expiree pendant la navigation, afficher la modale LNAuth
+        if (response.status === 401 && error.auth_required) {
+            showLNAuthModal();
+        }
         throw new Error(error.error || 'Erreur API');
     }
     
