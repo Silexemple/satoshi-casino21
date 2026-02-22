@@ -1823,9 +1823,11 @@ function updateDisplay() {
 
 // --- Rendu des cartes (données du serveur) ---
 
-function renderCardHTML(card) {
+function renderCardHTML(card, index = 0) {
     const isRed = card.suit === '♥' || card.suit === '♦';
-    return `<div class="card"><div class="card-content ${isRed ? 'red' : 'black'}"><div class="corner">${card.value}${card.suit}</div><div class="center">${card.suit}</div></div></div>`;
+    const colorClass = isRed ? 'red' : 'black';
+    const delay = index * 0.15;
+    return `<div class="card" style="animation-delay:${delay}s"><div class="card-content ${colorClass}"><div class="corner">${card.value}<br>${card.suit}</div><div class="center">${card.suit}</div><div class="corner" style="transform:rotate(180deg);align-self:flex-end;">${card.value}<br>${card.suit}</div></div></div>`;
 }
 
 function renderGameState(data) {
@@ -1833,12 +1835,12 @@ function renderGameState(data) {
     dc.innerHTML = '';
 
     if (data.status === 'finished' && data.dealerHand) {
-        data.dealerHand.forEach(c => { dc.innerHTML += renderCardHTML(c); });
+        data.dealerHand.forEach((c, i) => { dc.innerHTML += renderCardHTML(c, i); });
         const ds = document.getElementById('dealerScore');
         ds.textContent = data.dealerScore;
         ds.classList.toggle('bust', data.dealerScore > 21);
     } else if (data.dealerUpCard) {
-        dc.innerHTML = renderCardHTML(data.dealerUpCard) + '<div class="card hidden"></div>';
+        dc.innerHTML = renderCardHTML(data.dealerUpCard, 0) + '<div class="card hidden"></div>';
         const ds = document.getElementById('dealerScore');
         ds.textContent = data.dealerUpCard.num;
         ds.classList.remove('bust');
@@ -1862,7 +1864,7 @@ function renderSingleHand(hand) {
     `;
     const pc = document.getElementById('playerCards');
     pc.innerHTML = '';
-    hand.cards.forEach(c => { pc.innerHTML += renderCardHTML(c); });
+    hand.cards.forEach((c, i) => { pc.innerHTML += renderCardHTML(c, i); });
     const ps = document.getElementById('playerScore');
     ps.textContent = hand.score;
     ps.classList.toggle('bust', hand.score > 21);
@@ -1877,7 +1879,7 @@ function renderSplitHands(data) {
         const active = hand.active ? 'active' : '';
         const bust = hand.score > 21 ? 'bust' : '';
         let cardsHTML = '';
-        hand.cards.forEach(c => { cardsHTML += renderCardHTML(c); });
+        hand.cards.forEach((c, i) => { cardsHTML += renderCardHTML(c, i); });
 
         let label = `MAIN ${idx + 1}`;
         if (hand.result) label += ` (${hand.result.toUpperCase()})`;
@@ -1959,6 +1961,8 @@ async function deal() {
     playSound('card');
 
     if (data.status === 'finished') {
+        document.getElementById('betPanel').style.display = 'none';
+        document.getElementById('actionPanel').style.display = 'none';
         handleFinished(data, balanceBefore);
         return;
     }
@@ -2113,7 +2117,8 @@ function handleFinished(data, balanceBefore) {
         playSound('lose');
     }
 
-    showResult(icon, title, `${netGain >= 0 ? '+' : ''}${netGain} sats`);
+    // Délai pour laisser le joueur voir les cartes avant la modale de résultat
+    setTimeout(() => showResult(icon, title, `${netGain >= 0 ? '+' : ''}${netGain} sats`), 1500);
 }
 
 function showResult(icon, title, amountText) {
