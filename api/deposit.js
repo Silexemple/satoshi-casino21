@@ -1,6 +1,6 @@
 import { kv } from '@vercel/kv';
 import { json, getSessionId } from './_helpers.js';
-import { nwc } from '@getalby/sdk';
+import { nwcRequest } from './_nwc.js';
 
 export const config = { runtime: 'edge' };
 
@@ -36,33 +36,28 @@ export default async function handler(req) {
     return json(400, { error: `Balance max atteinte (${MAX_BALANCE} sats)` });
   }
 
-  let client;
   try {
-    client = new nwc.NWCClient({ nostrWalletConnectUrl: process.env.NWC_URL });
-
-    const invoice = await client.makeInvoice({
+    const result = await nwcRequest(process.env.NWC_URL, 'make_invoice', {
       amount: amount * 1000,
       description: `Satoshi BJ - Depot ${amount} sats`,
       expiry: 3600
     });
 
-    await kv.set(`invoice:${invoice.payment_hash}`, {
+    await kv.set(`invoice:${result.payment_hash}`, {
       session_id: sessionId,
       linking_key: linkingKey,
       amount: amount,
-      payment_request: invoice.payment_request,
+      payment_request: result.invoice,
       created_at: Date.now()
     }, { ex: 7200 });
 
     return json(200, {
-      payment_hash: invoice.payment_hash,
-      payment_request: invoice.payment_request
+      payment_hash: result.payment_hash,
+      payment_request: result.invoice
     });
 
   } catch (error) {
     console.error('Erreur creation invoice:', error);
     return json(500, { error: `Erreur creation invoice: ${error.message}` });
-  } finally {
-    if (client) client.close();
   }
 }
