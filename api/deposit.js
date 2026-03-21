@@ -36,6 +36,8 @@ export default async function handler(req) {
     return json(400, { error: `Balance max atteinte (${MAX_BALANCE} sats)` });
   }
 
+  if (!process.env.NWC_URL) return json(500, { error: 'NWC_URL non configuree' });
+
   try {
     const result = await nwcRequest(process.env.NWC_URL, 'make_invoice', {
       amount: amount * 1000,
