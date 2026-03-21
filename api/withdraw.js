@@ -1,6 +1,6 @@
 import { kv } from '@vercel/kv';
 import { json, getSessionId } from './_helpers.js';
-import { nwc } from '@getalby/sdk';
+
 
 // Decoder le montant d'une invoice BOLT11 (en satoshis)
 function decodeInvoiceAmount(invoice) {
@@ -125,6 +125,7 @@ export default async function handler(req) {
     let nwcClient;
     let payment;
     try {
+      const { nwc } = await import('@getalby/sdk');
       nwcClient = new nwc.NWCClient({ nostrWalletConnectUrl: process.env.NWC_URL });
       payment = await nwcClient.payInvoice({ invoice });
     } catch (payError) {

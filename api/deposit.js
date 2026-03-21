@@ -1,6 +1,5 @@
 import { kv } from '@vercel/kv';
 import { json, getSessionId } from './_helpers.js';
-import { nwc } from '@getalby/sdk';
 
 export default async function handler(req) {
   if (req.method !== 'POST') {
@@ -36,10 +35,11 @@ export default async function handler(req) {
 
   let client;
   try {
+    const { nwc } = await import('@getalby/sdk');
     client = new nwc.NWCClient({ nostrWalletConnectUrl: process.env.NWC_URL });
 
     const invoice = await client.makeInvoice({
-      amount: amount * 1000, // NWC = millisatoshis
+      amount: amount * 1000,
       description: `Satoshi BJ - Depot ${amount} sats`,
       expiry: 3600
     });
