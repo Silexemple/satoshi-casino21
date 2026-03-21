@@ -1,7 +1,7 @@
 {
   "functions": {
-    "api/deposit.js": { "maxDuration": 30 },
-    "api/withdraw.js": { "maxDuration": 30 },
-    "api/check-payment/[hash].js": { "maxDuration": 30 }
+    "api/deposit.js": { "maxDuration": 10 },
+    "api/withdraw.js": { "maxDuration": 10 },
+    "api/check-payment/[hash].js": { "maxDuration": 10 }
   }
 }
