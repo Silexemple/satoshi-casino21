@@ -64,7 +64,7 @@ async function createEvent(secretKeyBytes, walletPubkeyHex, content) {
 
   const id = await sha256Hex(serialized);
   // schnorr.sign(msg: Uint8Array, secretKey: Uint8Array) - both must be Uint8Array
-  const sig = bytesToHex(schnorr.sign(hexToBytes(id), secretKeyBytes));
+  const sig = bytesToHex(await schnorr.signAsync(hexToBytes(id), secretKeyBytes));
 
   return { id, pubkey: pubkeyHex, created_at, kind, tags, content, sig };
 }
