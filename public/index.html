@@ -3,6 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#ff6b00">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>₿ BITCOIN MAXI CASINO - Sats Jack 21</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;500;700&display=swap');
@@ -939,6 +943,7 @@
 </head>
 <body>
 
+<button class="mute-btn" id="muteBtn" onclick="toggleMute()" title="Son">🔊</button>
 <canvas id="threejs-canvas"></canvas>
 
 <div class="plasma-border"></div>
@@ -1289,18 +1294,35 @@ Object.values(sounds).forEach(sound => {
     sound.volume = 0.3;
 });
 
+let isMuted = localStorage.getItem('casino_muted') === '1';
+function toggleMute() {
+    isMuted = !isMuted;
+    localStorage.setItem('casino_muted', isMuted ? '1' : '0');
+    document.getElementById('muteBtn').textContent = isMuted ? '🔇' : '🔊';
+}
 function playSound(soundName) {
+    if (isMuted) return;
     try {
         const sound = sounds[soundName];
         if (sound && sound.readyState >= 2) {
             sound.currentTime = 0;
-            sound.play().catch(e => {
-                console.log('Sound play failed (muted):', e.message);
-            });
+            sound.play().catch(e => {});
         }
-    } catch (e) {
-        console.log('Sound error (ignored):', e.message);
-    }
+    } catch (e) {}
+}
+function showConfirm(message, onConfirm) {
+    const overlay = document.createElement('div');
+    overlay.className = 'confirm-overlay';
+    overlay.innerHTML = `<div class="confirm-box">
+        <p>${message}</p>
+        <div class="confirm-actions">
+            <button class="btn" style="background:rgba(255,0,0,0.2);border-color:#ff4444;color:#ff4444" id="confirmYes">Confirmer</button>
+            <button class="btn" id="confirmNo">Annuler</button>
+        </div>
+    </div>`;
+    document.body.appendChild(overlay);
+    overlay.querySelector('#confirmYes').onclick = () => { document.body.removeChild(overlay); onConfirm(); };
+    overlay.querySelector('#confirmNo').onclick = () => document.body.removeChild(overlay);
 }
 
 // ============================================
@@ -1328,25 +1350,50 @@ const achievements = [
     { id: 'veteran', name: '🏆 Vétéran', desc: 'Jouer 50 parties', unlocked: false }
 ];
 
-function loadStats() {
+async function loadStats() {
+    // Try KV first, fall back to localStorage
+    try {
+        const res = await fetch('/api/stats');
+        if (res.ok) {
+            const data = await res.json();
+            if (data.stats) {
+                const s = data.stats;
+                if (s.stats) Object.assign(stats, s.stats);
+                else Object.assign(stats, s);
+                if (s.achievements) {
+                    s.achievements.forEach(sa => {
+                        const ach = achievements.find(a => a.id === sa.id);
+                        if (ach) ach.unlocked = sa.unlocked;
+                    });
+                }
+                updateStatsDisplay();
+                return;
+            }
+        }
+    } catch (_) {}
+    // Fallback: localStorage
     const saved = localStorage.getItem('btc_casino_stats');
-    if (saved) {
-        stats = JSON.parse(saved);
-    }
-    
+    if (saved) { try { Object.assign(stats, JSON.parse(saved)); } catch(_) {} }
     const savedAch = localStorage.getItem('btc_casino_achievements');
     if (savedAch) {
-        const savedAchievements = JSON.parse(savedAch);
-        savedAchievements.forEach(savedAch => {
-            const ach = achievements.find(a => a.id === savedAch.id);
-            if (ach) ach.unlocked = savedAch.unlocked;
-        });
+        try {
+            JSON.parse(savedAch).forEach(sa => {
+                const ach = achievements.find(a => a.id === sa.id);
+                if (ach) ach.unlocked = sa.unlocked;
+            });
+        } catch(_) {}
     }
 }
 
 function saveStats() {
     localStorage.setItem('btc_casino_stats', JSON.stringify(stats));
     localStorage.setItem('btc_casino_achievements', JSON.stringify(achievements));
+    // Async save to KV (best-effort)
+    fetch('/api/stats', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ stats: { ...stats, achievements } })
+    }).catch(() => {});
 }
 
 function updateStats(result, netGain) {
@@ -1443,7 +1490,7 @@ function showStatsModal() {
 }
 
 function resetStats() {
-    if (confirm('Êtes-vous sûr de vouloir réinitialiser vos statistiques ?')) {
+    showConfirm('Réinitialiser toutes vos statistiques ?', () => {
         stats = {
             totalGames: 0,
             wins: 0,
@@ -1651,7 +1698,7 @@ function showNicknameModal() {
 async function saveNickname() {
     const nick = document.getElementById('nicknameInput').value.trim();
     if (nick.length < 2) {
-        alert('Pseudo trop court (min 2 caracteres)');
+        showToast('Pseudo trop court (min 2 caractères)', 'loss'); return;
         return;
     }
     try {
@@ -1660,20 +1707,18 @@ async function saveNickname() {
         updateNicknameDisplay();
         closeModal('nicknameModal');
     } catch (e) {
-        alert('Erreur: ' + e.message);
-    }
+        showToast('Erreur: ' + e.message, 'loss'); }
 }
-
 async function generateInvoice() {
     const amount = parseInt(document.getElementById('depositAmount').value);
     
     if (!amount || amount < 100 || amount > 100000) {
-        alert('Montant invalide (100-100000 sats)');
+        return showToast('Montant invalide (100-100000 sats)', 'loss');
         return;
     }
 
     if (balance + amount > 1000000) {
-        alert('Balance max 1 000 000 sats');
+        return showToast('Solde max atteint (1 000 000 sats)', 'loss');
         return;
     }
     
@@ -1694,13 +1739,11 @@ async function generateInvoice() {
         startPaymentCheck();
         
     } catch (error) {
-        alert('Erreur: ' + error.message);
-    }
+        showToast('Erreur: ' + error.message, 'loss'); }
 }
-
 async function copyInvoice() {
     if (!currentInvoice) {
-        alert('Aucune invoice à copier');
+        return showToast('Aucune invoice à copier', 'loss');
         return;
     }
     
@@ -1720,7 +1763,7 @@ async function copyInvoice() {
         }, 2000);
         
     } catch (error) {
-        alert('Erreur copie: ' + error.message);
+        showToast('Erreur copie', 'loss');
     }
 }
 
@@ -1753,12 +1796,12 @@ async function processWithdraw() {
     const invoice = document.getElementById('withdrawInvoice').value.trim().toLowerCase();
 
     if (!invoice || !invoice.startsWith('lnbc')) {
-        alert('Invoice invalide');
+        return showToast('Invoice invalide', 'loss');
         return;
     }
     
     if (balance === 0) {
-        alert('Solde insuffisant');
+        return showToast('Solde insuffisant', 'loss');
         return;
     }
     
@@ -1773,11 +1816,11 @@ async function processWithdraw() {
         updateDisplay();
         animateBalanceUpdate();
         
-        alert(`✅ Paiement envoyé ! ${data.amount} sats`);
+        showToast(`✅ ${data.amount} sats envoyés !`, 'win');
         closeModal('withdrawModal');
         
     } catch (error) {
-        alert('Erreur: ' + error.message);
+        showToast('Erreur: ' + error.message, 'loss');
     } finally {
         btn.disabled = false;
         btn.textContent = 'ENVOYER PAIEMENT';
@@ -1851,7 +1894,8 @@ function renderGameState(data) {
     } else if (data.playerHands && data.playerHands.length === 1) {
         renderSingleHand(data.playerHands[0]);
     }
-}
+});
+    }
 
 function renderSingleHand(hand) {
     const playerArea = document.getElementById('playerArea');
@@ -1930,7 +1974,7 @@ async function gameAction(action, extra = {}) {
         return data;
     } catch (error) {
         console.error('Erreur game API:', error);
-        alert('Erreur: ' + error.message);
+        showToast('Erreur: ' + error.message, 'loss');
         return null;
     } finally {
         hideSyncLoader();
@@ -1939,11 +1983,11 @@ async function gameAction(action, extra = {}) {
 
 async function deal() {
     if (currentBet === 0 || currentBet < MIN_BET) {
-        alert(`Mise minimum: ${MIN_BET} sats`);
+        return showToast(`Mise minimum: ${MIN_BET} sats`, 'loss');
         return;
     }
     if (balance < currentBet) {
-        alert('Solde insuffisant');
+        return showToast('Solde insuffisant', 'loss');
         return;
     }
 
@@ -2247,8 +2291,12 @@ async function checkExistingGame() {
 }
 
 window.onload = () => {
-    loadStats();
-    initSession().then(() => checkExistingGame());
+    if (isMuted) document.getElementById('muteBtn').textContent = '🔇';
+    initSession().then(async () => {
+        await loadStats();
+        updateStatsDisplay();
+        checkExistingGame();
+    });
 };
 </script>
 

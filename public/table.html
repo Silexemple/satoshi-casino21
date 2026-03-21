@@ -3,6 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#ff6b00">
     <title>SATS JACK 21 - Tables Multiplayer</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;500;700&display=swap');
@@ -787,7 +789,7 @@ function saveProfile() {
         playerAvatar = data.avatar;
         updateNicknameDisplay();
         document.getElementById('profilePopup').classList.remove('open');
-    }).catch(e => alert(e.message));
+    }).catch(e => showToast(e.message, 'loss'));
 }
 function selectAvatar(el) {
     document.querySelectorAll('.avatar-option').forEach(a => a.classList.remove('selected'));
@@ -983,12 +985,12 @@ async function joinTableView(tableId) {
 // Polling adaptatif: rapide quand c'est mon tour, lent en attente
 function getAdaptivePollDelay() {
     if (!lastTableState) return 1500;
-    if (lastTableState.isMyTurn) return 500; // Tres rapide: mon tour
-    if (lastTableState.status === 'playing') return 1000; // Rapide: en jeu
-    if (lastTableState.status === 'betting') return 1200; // Moyen: mises
-    if (lastTableState.status === 'dealer_turn') return 800; // Rapide: dealer joue
-    if (lastTableState.status === 'finished') return 2000; // Lent: round fini
-    return 3000; // Tres lent: en attente
+    if (lastTableState.isMyTurn) return 800;
+    if (lastTableState.status === 'playing') return 1500;
+    if (lastTableState.status === 'betting') return 1800;
+    if (lastTableState.status === 'dealer_turn') return 1200;
+    if (lastTableState.status === 'finished') return 3000;
+    return 4000;
 }
 
 function schedulePoll() {
@@ -1409,7 +1411,7 @@ async function placeBet() {
         if (navigator.vibrate) navigator.vibrate(30);
         addChatSystem(`Mise de ${lastBet} sats placee!`);
         await pollTable();
-    } catch (e) { alert(e.message); }
+    } catch (e) { showToast(e.message, 'loss'); }
 }
 
 function joinFirstEmpty() {
@@ -1424,7 +1426,7 @@ async function joinSeat(seatIdx) {
         await apiCall(`/api/table/${currentTableId}/join`, 'POST', { seatIdx });
         addChatSystem('Vous avez rejoint la table!');
         await pollTable();
-    } catch (e) { alert(e.message); }
+    } catch (e) { showToast(e.message, 'loss'); }
 }
 
 async function doAction(action) {
@@ -1438,7 +1440,7 @@ async function doAction(action) {
             detectPhaseChange(data); previousStatus = data.status;
         }
         renderTable(data);
-    } catch (e) { alert(e.message); }
+    } catch (e) { showToast(e.message, 'loss'); }
 }
 
 async function doInsurance(accept) {
@@ -1450,7 +1452,7 @@ async function doInsurance(accept) {
             detectPhaseChange(data); previousStatus = data.status;
         }
         renderTable(data);
-    } catch (e) { alert(e.message); }
+    } catch (e) { showToast(e.message, 'loss'); }
 }
 
 async function leaveTable() {
@@ -1459,16 +1461,35 @@ async function leaveTable() {
     backToLobby();
 }
 
-async function sendTip(seatIdx, playerName) {
-    const amount = prompt(`Pourboire a ${playerName} (10-1000 sats):`, '100');
-    if (!amount) return;
-    const tipAmount = parseInt(amount);
-    if (!tipAmount || tipAmount < 10 || tipAmount > 1000 || tipAmount > balance) { alert('Montant invalide'); return; }
+function sendTip(seatIdx, playerName) {
+    const overlay = document.createElement('div');
+    overlay.id = 'tipOverlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;z-index:9999';
+    const presets = [10,50,100,250,500,1000];
+    let btns = presets.map(v => `<button onclick="document.getElementById('tipAmt').value=${v}" style="background:rgba(255,107,0,0.1);border:1px solid rgba(255,107,0,0.3);color:#ff6b00;padding:5px 10px;border-radius:6px;cursor:pointer;font-size:11px">${v}</button>`).join('');
+    overlay.innerHTML = `<div style="background:#0d0d1a;border:1px solid rgba(255,107,0,0.4);border-radius:12px;padding:20px;width:280px;text-align:center">
+        <div style="color:#ff6b00;font-size:13px;margin-bottom:12px">&#128184; Pourboire &agrave; <b>${playerName}</b></div>
+        <div style="display:flex;gap:6px;justify-content:center;margin-bottom:10px;flex-wrap:wrap">${btns}</div>
+        <input id="tipAmt" type="number" min="10" max="1000" placeholder="Montant (10-1000)" style="width:100%;padding:7px;background:#111;border:1px solid rgba(255,107,0,0.3);color:#fff;border-radius:6px;margin-bottom:12px;text-align:center;font-family:monospace">
+        <div style="display:flex;gap:8px">
+            <button onclick="doTip(${seatIdx},'${playerName}')" style="flex:1;background:rgba(255,107,0,0.2);border:1px solid #ff6b00;color:#ff6b00;padding:8px;border-radius:6px;cursor:pointer">Envoyer</button>
+            <button onclick="document.getElementById('tipOverlay').remove()" style="flex:1;background:transparent;border:1px solid #444;color:#888;padding:8px;border-radius:6px;cursor:pointer">Annuler</button>
+        </div></div>`;
+    document.body.appendChild(overlay);
+    setTimeout(() => document.getElementById('tipAmt').focus(), 50);
+}
+async function doTip(seatIdx, playerName) {
+    const tipAmount = parseInt(document.getElementById('tipAmt').value);
+    if (!tipAmount || tipAmount < 10 || tipAmount > 1000 || tipAmount > balance) {
+        showToast('Montant invalide (10-1000 sats)', 'loss'); return;
+    }
+    document.getElementById('tipOverlay')?.remove();
     try {
         const data = await apiCall(`/api/table/${currentTableId}/tip`, 'POST', { seatIdx, amount: tipAmount });
         balance = data.balance; updateBalance();
-        addChatSystem(`Tip ${tipAmount} sats a ${playerName}!`);
-    } catch (e) { alert(e.message); }
+        addChatSystem(`Tip ${tipAmount} sats a ${playerName} !`);
+        showToast(`${tipAmount} sats envoyes a ${playerName} !`, 'win');
+    } catch (e) { showToast(e.message, 'loss'); }
 }
 
 window.onload = async () => {

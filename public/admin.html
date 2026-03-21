@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin — Satoshi Casino 21</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0a0a0f; color: #eee; font-family: monospace; padding: 20px; }
+  h1 { color: #ff6b00; margin-bottom: 20px; font-size: 20px; }
+  .login { max-width: 320px; margin: 80px auto; }
+  .login input { width: 100%; padding: 10px; background: #111; border: 1px solid #ff6b00; color: #fff; border-radius: 6px; margin-bottom: 10px; font-family: monospace; }
+  .btn { background: rgba(255,107,0,0.2); border: 1px solid #ff6b00; color: #ff6b00; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-family: monospace; }
+  .btn:hover { background: rgba(255,107,0,0.4); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 24px; }
+  .card { background: #111; border: 1px solid rgba(255,107,0,0.3); border-radius: 8px; padding: 16px; }
+  .card-label { font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: 1px; }
+  .card-value { font-size: 28px; color: #ff6b00; font-weight: bold; margin-top: 4px; }
+  .card-value.green { color: #00ff88; }
+  table { width: 100%; border-collapse: collapse; background: #111; border-radius: 8px; overflow: hidden; }
+  th { background: rgba(255,107,0,0.15); color: #ff6b00; padding: 8px 12px; text-align: left; font-size: 12px; }
+  td { padding: 7px 12px; border-top: 1px solid #1a1a1a; font-size: 12px; color: #ccc; }
+  tr:hover td { background: rgba(255,107,0,0.05); }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 10px; }
+  .badge.deposit { background: rgba(0,255,136,0.15); color: #00ff88; }
+  .badge.withdraw { background: rgba(255,107,0,0.15); color: #ff6b00; }
+  #dashboard { display: none; }
+  .refresh { float: right; font-size: 11px; color: #555; }
+  h2 { color: #ff6b00; font-size: 14px; margin-bottom: 12px; }
+</style>
+</head>
+<body>
+
+<div class="login" id="loginView">
+  <h1>⚡ Admin</h1>
+  <input type="password" id="tokenInput" placeholder="Token admin" onkeydown="if(event.key==='Enter')login()">
+  <button class="btn" onclick="login()" style="width:100%">Connexion</button>
+  <div id="loginErr" style="color:#ff4444;margin-top:8px;font-size:12px;"></div>
+</div>
+
+<div id="dashboard">
+  <h1>⚡ Satoshi Casino 21 — Dashboard <span class="refresh" id="lastRefresh"></span></h1>
+
+  <div class="grid">
+    <div class="card">
+      <div class="card-label">Bankroll maison</div>
+      <div class="card-value green" id="statBankroll">—</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Tables actives</div>
+      <div class="card-value" id="statTables">—</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Tournois actifs</div>
+      <div class="card-value" id="statTournaments">—</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Invoices en attente</div>
+      <div class="card-value" id="statInvoices">—</div>
+    </div>
+  </div>
+
+  <h2>Transactions récentes</h2>
+  <table>
+    <thead>
+      <tr><th>Joueur</th><th>Type</th><th>Montant</th><th>Heure</th></tr>
+    </thead>
+    <tbody id="txTable"><tr><td colspan="4" style="color:#555;text-align:center">Chargement...</td></tr></tbody>
+  </table>
+
+  <div style="margin-top:16px;">
+    <button class="btn" onclick="loadData()">↻ Rafraîchir</button>
+  </div>
+</div>
+
+<script>
+let adminToken = '';
+
+function login() {
+  adminToken = document.getElementById('tokenInput').value.trim();
+  if (!adminToken) return;
+  loadData();
+}
+
+async function loadData() {
+  try {
+    const res = await fetch('/api/admin', { headers: { 'x-admin-token': adminToken } });
+    if (res.status === 401) {
+      document.getElementById('loginErr').textContent = 'Token invalide';
+      return;
+    }
+    const data = await res.json();
+
+    document.getElementById('loginView').style.display = 'none';
+    document.getElementById('dashboard').style.display = 'block';
+
+    document.getElementById('statBankroll').textContent = (data.bankroll || 0).toLocaleString() + ' sats';
+    document.getElementById('statTables').textContent = data.activeTables;
+    document.getElementById('statTournaments').textContent = data.activeTournaments;
+    document.getElementById('statInvoices').textContent = data.pendingInvoices;
+    document.getElementById('lastRefresh').textContent = 'Mis à jour ' + new Date().toLocaleTimeString();
+
+    const tbody = document.getElementById('txTable');
+    if (!data.recentTransactions?.length) {
+      tbody.innerHTML = '<tr><td colspan="4" style="color:#555;text-align:center">Aucune transaction</td></tr>';
+      return;
+    }
+    tbody.innerHTML = data.recentTransactions.map(tx => `
+      <tr>
+        <td>${tx.player || '—'}...</td>
+        <td><span class="badge ${tx.type}">${tx.type}</span></td>
+        <td>${(tx.amount || 0).toLocaleString()} sats</td>
+        <td>${tx.timestamp ? new Date(tx.timestamp).toLocaleTimeString() : '—'}</td>
+      </tr>
+    `).join('');
+  } catch (e) {
+    document.getElementById('loginErr').textContent = 'Erreur: ' + e.message;
+  }
+}
+
+// Auto-refresh every 30s when logged in
+setInterval(() => { if (adminToken && document.getElementById('dashboard').style.display !== 'none') loadData(); }, 30000);
+</script>
+</body>
+</html>
