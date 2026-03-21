@@ -42,7 +42,7 @@
 | 🥇 Gold | 1 000 sats | 5 000 sats | 3 |
 
 - Tours synchronisés : 20s pour miser, 30s pour jouer
-- Chat rapide + Pourboires entre joueurs (10 — 1 000 sats)
+- Chat libre (jusqu'à 100 caractères) + boutons rapides (GL!, GG, etc.) + Pourboires entre joueurs (10 — 1 000 sats)
 
 ---
 
