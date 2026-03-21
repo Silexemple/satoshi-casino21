@@ -1,5 +1,8 @@
 import { kv } from '@vercel/kv';
 import { json, getSessionId } from '../_helpers.js';
+import { nwc } from '@getalby/sdk';
+
+export const config = { runtime: 'edge' };
 
 export default async function handler(req) {
   const sessionId = getSessionId(req);
@@ -31,7 +34,6 @@ export default async function handler(req) {
       let isPaid = false;
       let client;
       try {
-        const { nwc } = await import('@getalby/sdk');
         client = new nwc.NWCClient({ nostrWalletConnectUrl: process.env.NWC_URL });
         const status = await client.lookupInvoice({ payment_hash: paymentHash });
         isPaid = status.settled_at != null || status.state === 'SETTLED';
