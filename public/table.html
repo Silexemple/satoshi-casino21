@@ -434,6 +434,22 @@
             font-size: 10px; transition: all 0.2s;
         }
         .quick-msg:hover { background: rgba(255,107,0,0.3); }
+        .chat-input-row {
+            display: flex; gap: 4px; padding: 6px;
+            border-top: 1px solid rgba(255,107,0,0.15);
+        }
+        .chat-input {
+            flex: 1; background: rgba(255,107,0,0.05);
+            border: 1px solid rgba(255,107,0,0.25); border-radius: 10px;
+            color: #fff; padding: 4px 8px; font-size: 11px; outline: none;
+        }
+        .chat-input::placeholder { color: rgba(255,107,0,0.4); }
+        .chat-send {
+            background: rgba(255,107,0,0.2); border: 1px solid rgba(255,107,0,0.4);
+            color: #ff6b00; border-radius: 10px; padding: 4px 8px;
+            cursor: pointer; font-size: 11px; transition: all 0.2s;
+        }
+        .chat-send:hover { background: rgba(255,107,0,0.4); }
 
         /* TOAST */
         .toast {
@@ -1337,7 +1353,16 @@ function renderControls(data) {
 }
 
 // CHAT
-function toggleChat() { chatOpen = !chatOpen; document.getElementById('chatDrawer').classList.toggle('open', chatOpen); }
+function toggleChat() {
+    chatOpen = !chatOpen;
+    document.getElementById('chatDrawer').classList.toggle('open', chatOpen);
+    if (chatOpen) setTimeout(() => document.getElementById('chatInput')?.focus(), 50);
+}
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && chatOpen && document.activeElement?.id === 'chatInput') {
+        e.preventDefault(); sendChatInput();
+    }
+});
 function addChatMessage(name, text) {
     chatMessages.push({ name, text }); if (chatMessages.length > 30) chatMessages.shift();
     const container = document.getElementById('chatMessages');
@@ -1350,6 +1375,13 @@ function addChatSystem(text) {
     const div = document.createElement('div'); div.className = 'chat-msg';
     div.innerHTML = `<span class="system">${text}</span>`;
     container.appendChild(div); container.scrollTop = container.scrollHeight;
+}
+function sendChatInput() {
+    const input = document.getElementById('chatInput');
+    const msg = input.value.trim();
+    if (!msg) return;
+    input.value = '';
+    sendChat(msg);
 }
 async function sendChat(msg) {
     if (!currentTableId) return;
