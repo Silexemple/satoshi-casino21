@@ -1,23 +1,16 @@
 import { kv } from '@vercel/kv';
 import { json, getSessionId } from '../_helpers.js';
-
-export const config = {
-  runtime: 'edge',
-};
+import { nwc } from '@getalby/sdk';
 
 export default async function handler(req) {
   const sessionId = getSessionId(req);
-  if (!sessionId) {
-    return json(401, { error: 'Session invalide' });
-  }
+  if (!sessionId) return json(401, { error: 'Session invalide' });
 
   const url = new URL(req.url);
   const pathParts = url.pathname.split('/');
   const paymentHash = pathParts[pathParts.length - 1];
 
-  if (!paymentHash) {
-    return json(400, { error: 'Payment hash manquant' });
-  }
+  if (!paymentHash) return json(400, { error: 'Payment hash manquant' });
 
   const invoice = await kv.get(`invoice:${paymentHash}`);
   if (!invoice || invoice.session_id !== sessionId) {
@@ -27,9 +20,7 @@ export default async function handler(req) {
   try {
     const lockKey = `lock:payment:${paymentHash}`;
     const lockAcquired = await kv.set(lockKey, '1', { nx: true, ex: 10 });
-    if (!lockAcquired) {
-      return json(200, { paid: false, status: 'processing' });
-    }
+    if (!lockAcquired) return json(200, { paid: false, status: 'processing' });
 
     try {
       const freshInvoice = await kv.get(`invoice:${paymentHash}`);
@@ -38,20 +29,17 @@ export default async function handler(req) {
         return json(200, { paid: true });
       }
 
-      const response = await fetch(
-        `${process.env.LNBITS_URL}/api/v1/payments/${paymentHash}`,
-        { headers: { 'X-Api-Key': process.env.LNBITS_INVOICE_KEY } }
-      );
-
-      if (!response.ok) {
-        await kv.del(lockKey);
-        throw new Error(`LNbits error: ${response.status}`);
+      let isPaid = false;
+      let client;
+      try {
+        client = new nwc.NWCClient({ nostrWalletConnectUrl: process.env.NWC_URL });
+        const status = await client.lookupInvoice({ payment_hash: paymentHash });
+        isPaid = status.settled_at != null || status.state === 'SETTLED';
+      } finally {
+        if (client) client.close();
       }
 
-      const status = await response.json();
-
-      if (status.paid) {
-        // Use linking_key stored in invoice (survives session expiry)
+      if (isPaid) {
         const linkingKey = freshInvoice.linking_key;
         if (!linkingKey) {
           await kv.del(lockKey);
@@ -59,17 +47,10 @@ export default async function handler(req) {
         }
 
         const playerKey = `player:${linkingKey}`;
-        let player = await kv.get(playerKey);
-
-        if (!player) {
-          // Joueur recree si son profil a expire pendant le depot
-          player = {
-            balance: 0,
-            nickname: null,
-            created_at: Date.now(),
-            last_activity: Date.now()
-          };
-        }
+        let player = await kv.get(playerKey) || {
+          balance: 0, nickname: null,
+          created_at: Date.now(), last_activity: Date.now()
+        };
 
         const newBalance = player.balance + freshInvoice.amount;
         player.balance = newBalance;
@@ -87,17 +68,16 @@ export default async function handler(req) {
 
         await kv.del(`invoice:${paymentHash}`);
         await kv.del(lockKey);
-
         return json(200, { paid: true, new_balance: newBalance });
       }
 
       await kv.del(lockKey);
+      return json(200, { paid: false });
+
     } catch (innerError) {
       await kv.del(lockKey);
       throw innerError;
     }
-
-    return json(200, { paid: false });
 
   } catch (error) {
     console.error('Erreur verification invoice:', error);

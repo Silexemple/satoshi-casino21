@@ -1,9 +1,6 @@
 import { kv } from '@vercel/kv';
 import { json, getSessionId } from './_helpers.js';
-
-export const config = {
-  runtime: 'edge',
-};
+import { nwc } from '@getalby/sdk';
 
 export default async function handler(req) {
   if (req.method !== 'POST') {
@@ -11,24 +8,18 @@ export default async function handler(req) {
   }
 
   const sessionId = getSessionId(req);
-  if (!sessionId) {
-    return json(401, { error: 'Session invalide' });
-  }
+  if (!sessionId) return json(401, { error: 'Session invalide' });
 
-  // Rate limit: max 3 invoices par minute par session
   const rlKey = `ratelimit:deposit:${sessionId}`;
   const rlCount = await kv.incr(rlKey);
   if (rlCount === 1) await kv.expire(rlKey, 60);
-  if (rlCount > 3) {
-    return json(429, { error: 'Trop de demandes de depot, attendez un instant' });
-  }
+  if (rlCount > 3) return json(429, { error: 'Trop de demandes de depot, attendez un instant' });
 
   const linkingKey = await kv.get(`session:${sessionId}`);
   if (!linkingKey) return json(401, { error: 'Session invalide' });
 
   const body = await req.json();
   const amount = parseInt(body.amount);
-
   const MAX_DEPOSIT = 100000;
   const MAX_BALANCE = 1000000;
 
@@ -37,36 +28,22 @@ export default async function handler(req) {
   }
 
   const player = await kv.get(`player:${linkingKey}`);
-  if (!player) {
-    return json(404, { error: 'Joueur non trouve' });
-  }
+  if (!player) return json(404, { error: 'Joueur non trouve' });
 
   if (player.balance + amount > MAX_BALANCE) {
     return json(400, { error: `Balance max atteinte (${MAX_BALANCE} sats)` });
   }
 
+  let client;
   try {
-    const response = await fetch(`${process.env.LNBITS_URL}/api/v1/payments`, {
-      method: 'POST',
-      headers: {
-        'X-Api-Key': process.env.LNBITS_INVOICE_KEY,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        out: false,
-        amount: amount,
-        memo: `Satoshi BJ - Depot ${amount} sats`,
-        expiry: 3600
-      })
+    client = new nwc.NWCClient({ nostrWalletConnectUrl: process.env.NWC_URL });
+
+    const invoice = await client.makeInvoice({
+      amount: amount * 1000, // NWC = millisatoshis
+      description: `Satoshi BJ - Depot ${amount} sats`,
+      expiry: 3600
     });
 
-    if (!response.ok) {
-      throw new Error(`LNbits error: ${response.status}`);
-    }
-
-    const invoice = await response.json();
-
-    // Store linking_key so we can credit even if session expires before payment
     await kv.set(`invoice:${invoice.payment_hash}`, {
       session_id: sessionId,
       linking_key: linkingKey,
@@ -82,6 +59,8 @@ export default async function handler(req) {
 
   } catch (error) {
     console.error('Erreur creation invoice:', error);
-    return json(500, { error: 'Erreur creation invoice' });
+    return json(500, { error: `Erreur creation invoice: ${error.message}` });
+  } finally {
+    if (client) client.close();
   }
 }

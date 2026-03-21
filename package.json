@@ -12,7 +12,8 @@
     "@noble/secp256k1": "^3.0.0",
     "@vercel/kv": "^1.0.1",
     "bech32": "^2.0.0",
-    "cookie": "^0.6.0"
+    "cookie": "^0.6.0",
+    "@getalby/sdk": "^3.9.0"
   },
   "devDependencies": {
     "vercel": "^33.0.1"
