@@ -42,7 +42,8 @@
 | 🥇 Gold | 1 000 sats | 5 000 sats | 3 |
 
 - Tours synchronisés : 20s pour miser, 30s pour jouer
-- Chat libre (jusqu'à 100 caractères) + boutons rapides (GL!, GG, etc.) + Pourboires entre joueurs (10 — 1 000 sats)
+- Chat libre (jusqu'à 100 caractères) + boutons rapides (GL!, GG, etc.)
+- **Pourboires entre joueurs** (10 — 1 000 sats) via modal avec montants prédéfinis
 
 ---
 
@@ -54,7 +55,7 @@
 | ⚡ Standard | 500 sats | 5 000 | 15 | 8 max |
 | 💎 High Roller | 2 000 sats | 10 000 | 20 | 6 max |
 
-Distribution des prix automatique : 60% / 30% / 10%
+Distribution des prix automatique : 60% / 30% / 10% — Compte à rebours en temps réel.
 
 ---
 
@@ -71,6 +72,17 @@ Distribution des prix automatique : 60% / 30% / 10%
 - Paiement direct via NWC
 - Rate limit : 1 retrait/min
 - Débit-first + remboursement automatique si le paiement échoue
+
+---
+
+### 🎨 Interface & UX
+
+- **Toasts** : toutes les notifications (gains, erreurs) via toast animé — zéro `alert()`
+- **Modal de confirmation** pour les actions destructives (reset stats)
+- **Bouton Mute** : coupe tous les sons, persisté en localStorage
+- **Statistiques persistantes** : synchronisées sur Vercel KV (retrouve tes stats sur n'importe quel appareil)
+- **PWA installable** : manifest.json — ajoute le casino à ton écran d'accueil
+- **Page Admin** (`/admin.html`) : dashboard bankroll / tables / tournois / transactions (protégé par token)
 
 ---
 
@@ -93,12 +105,16 @@ satoshi-casino21/
 │   ├── withdraw.js              # Paie invoice via NWC pay_invoice
 │   ├── transactions.js
 │   ├── check-payment/[hash].js  # Vérifie paiement via NWC lookup_invoice
+│   ├── stats.js                 # Sync stats joueur → Vercel KV
+│   ├── admin.js                 # Dashboard admin (protégé ADMIN_TOKEN)
 │   ├── table/                   # Multiplayer
 │   └── tournament/              # Tournois
 ├── public/
-│   ├── index.html
-│   ├── table.html
-│   └── tournament.html
+│   ├── index.html               # Lobby + jeu solo
+│   ├── table.html               # Tables multiplayer
+│   ├── tournament.html          # Tournois
+│   ├── admin.html               # Dashboard admin
+│   └── manifest.json            # PWA manifest
 └── package.json
 ```
 
@@ -130,6 +146,7 @@ Dans **Settings** → **Environment Variables** :
 | Variable | Description | Exemple |
 |----------|-------------|---------|
 | `NWC_URL` | Connection string NWC de ton wallet | `nostr+walletconnect://pubkey?relay=wss://...&secret=...` |
+| `ADMIN_TOKEN` | Token secret pour accéder à `/admin.html` | `un-secret-long-et-aléatoire` |
 
 **Obtenir ta NWC URL :**
 - **Alby Hub** : Settings → Nostr Wallet Connect → New Connection → copie l'URL
@@ -174,6 +191,7 @@ npx vercel dev
 | **Rate limiting** | Dépôts : 3/min — Retraits : 1/min |
 | **Cookies httpOnly** | Sessions inaccessibles par JavaScript client |
 | **Deck cryptographique** | Fisher-Yates avec `crypto.getRandomValues()` |
+| **Admin protégé** | `ADMIN_TOKEN` via header `x-admin-token`, jamais exposé côté client |
 
 ---
 
