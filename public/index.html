@@ -1353,7 +1353,7 @@ const achievements = [
 async function loadStats() {
     // Try KV first, fall back to localStorage
     try {
-        const res = await fetch('/api/stats');
+        const res = await fetch('/api/stats', { credentials: 'include' });
         if (res.ok) {
             const data = await res.json();
             if (data.stats) {
@@ -1391,6 +1391,7 @@ function saveStats() {
     // Async save to KV (best-effort)
     fetch('/api/stats', {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ stats: { ...stats, achievements } })
     }).catch(() => {});

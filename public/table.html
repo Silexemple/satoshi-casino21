@@ -709,6 +709,10 @@
         <span class="quick-msg" onclick="sendChat('BJ!')">BJ!</span>
         <span class="quick-msg" onclick="sendChat('GG')">GG</span>
     </div>
+    <div class="chat-input-row">
+        <input type="text" id="chatInput" class="chat-input" placeholder="Votre message..." maxlength="100" onkeydown="if(event.key==='Enter'){sendChatInput();event.preventDefault();}">
+        <button class="chat-send" onclick="sendChatInput()">&#10148;</button>
+    </div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
