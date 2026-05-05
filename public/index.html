@@ -1150,7 +1150,14 @@
 <div class="modal" id="transactionsModal">
     <div class="modal-content">
         <div class="modal-title">HISTORIQUE</div>
-        <div id="transactionsList" style="max-height: 400px; overflow-y: auto;"></div>
+        <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;justify-content:center;">
+            <button id="txFilter7d" onclick="setTxFilter('7d')" style="background:rgba(255,107,0,0.3);border:1px solid #ff6b00;color:#ff6b00;padding:4px 10px;border-radius:6px;font-size:10px;font-family:Orbitron;cursor:pointer;">7 JOURS</button>
+            <button id="txFilter30d" onclick="setTxFilter('30d')" style="background:transparent;border:1px solid #555;color:#888;padding:4px 10px;border-radius:6px;font-size:10px;font-family:Orbitron;cursor:pointer;">30 JOURS</button>
+            <button id="txFilterAll" onclick="setTxFilter('all')" style="background:transparent;border:1px solid #555;color:#888;padding:4px 10px;border-radius:6px;font-size:10px;font-family:Orbitron;cursor:pointer;">TOUT</button>
+            <button onclick="exportTxCSV()" style="background:rgba(0,200,100,0.15);border:1px solid #00c864;color:#00c864;padding:4px 10px;border-radius:6px;font-size:10px;font-family:Orbitron;cursor:pointer;">⬇ CSV</button>
+        </div>
+        <div id="txStats" style="display:flex;gap:12px;justify-content:center;margin-bottom:8px;font-size:11px;font-family:Orbitron;"></div>
+        <div id="transactionsList" style="max-height: 360px; overflow-y: auto;"></div>
         <button onclick="closeModal('transactionsModal')" style="background: transparent; border: 2px solid #666; color: #666; margin-top: 10px;">FERMER</button>
     </div>
 </div>
@@ -2235,35 +2242,101 @@ function decodeWithdrawInvoice() {
 // TRANSACTIONS HISTORY
 // ============================================
 
+let allTxData = [];
+let currentTxFilter = '7d';
+
+function setTxFilter(period) {
+    currentTxFilter = period;
+    ['7d','30d','all'].forEach(p => {
+        const btn = document.getElementById('txFilter' + p);
+        if (btn) {
+            const active = p === period;
+            btn.style.background = active ? 'rgba(255,107,0,0.3)' : 'transparent';
+            btn.style.borderColor = active ? '#ff6b00' : '#555';
+            btn.style.color = active ? '#ff6b00' : '#888';
+        }
+    });
+    renderTransactions(allTxData, period);
+}
+
+function renderTransactions(txs, period) {
+    const list = document.getElementById('transactionsList');
+    const statsEl = document.getElementById('txStats');
+    const now = Date.now();
+    const cutoff = period === '7d' ? now - 7*86400000 : period === '30d' ? now - 30*86400000 : 0;
+    const filtered = txs.filter(tx => (tx.timestamp || 0) >= cutoff);
+
+    if (filtered.length === 0) {
+        list.innerHTML = '<div style="color:#888;padding:20px;text-align:center;">Aucune transaction sur cette période</div>';
+        statsEl.innerHTML = '';
+        return;
+    }
+
+    let net = 0, wins = 0, losses = 0, deposits = 0;
+    filtered.forEach(tx => {
+        const a = tx.amount || 0;
+        net += a;
+        if (tx.type === 'deposit') deposits += a;
+        else if (a > 0) wins++;
+        else if (a < 0) losses++;
+    });
+
+    const netColor = net >= 0 ? '#00ff88' : '#ff4444';
+    statsEl.innerHTML = `
+        <span style="color:#00ff88">▲${wins}</span>
+        <span style="color:#ff4444">▼${losses}</span>
+        <span style="color:${netColor}">NET: ${net >= 0 ? '+' : ''}${net} sats</span>
+        <span style="color:#ffa500">⬇${deposits} sats</span>
+    `;
+
+    list.innerHTML = '';
+    filtered.forEach(tx => {
+        const date = new Date(tx.timestamp).toLocaleString('fr-FR');
+        const isPos = tx.type === 'deposit' || tx.type === 'win' || tx.type === 'bj' || tx.type === 'tournament_prize';
+        const color = isPos ? '#00ff88' : (tx.type === 'push' ? '#ffa500' : '#ff4444');
+        const sign = tx.amount > 0 ? '+' : '';
+        const icons = { deposit:'⬇', withdraw:'⬆', win:'✅', loss:'❌', bj:'⚡', push:'🔄', tournament_prize:'🏆', bust:'💥', surrender:'🏳️' };
+        list.innerHTML += `
+            <div class="stat-row">
+                <div>
+                    <div class="stat-label">${icons[tx.type] || ''} ${tx.description || tx.type}</div>
+                    <div style="font-size:11px;color:#555;">${date}</div>
+                </div>
+                <div class="stat-value" style="color:${color};">${sign}${tx.amount} sats</div>
+            </div>
+        `;
+    });
+}
+
+function exportTxCSV() {
+    if (!allTxData.length) return;
+    const now = Date.now();
+    const cutoff = currentTxFilter === '7d' ? now - 7*86400000 : currentTxFilter === '30d' ? now - 30*86400000 : 0;
+    const filtered = allTxData.filter(tx => (tx.timestamp || 0) >= cutoff);
+    const header = 'Date,Type,Description,Montant (sats)';
+    const rows = filtered.map(tx => {
+        const d = new Date(tx.timestamp).toLocaleString('fr-FR').replace(',', ' ');
+        return `"${d}","${tx.type}","${(tx.description || '').replace(/"/g, "''")}",${tx.amount}`;
+    });
+    const csv = [header, ...rows].join('
+');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `sats21_transactions_${new Date().toISOString().slice(0,10)}.csv`;
+    a.click(); URL.revokeObjectURL(url);
+}
+
 async function showTransactionsModal() {
     const list = document.getElementById('transactionsList');
-    list.innerHTML = '<div style="color: #888; padding: 20px;">Chargement...</div>';
+    list.innerHTML = '<div style="color: #888; padding: 20px; text-align:center;">Chargement...</div>';
     document.getElementById('transactionsModal').classList.add('active');
-
     try {
         const data = await apiCall('/api/transactions');
-        if (!data.transactions || data.transactions.length === 0) {
-            list.innerHTML = '<div style="color: #888; padding: 20px;">Aucune transaction</div>';
-            return;
-        }
-        list.innerHTML = '';
-        data.transactions.forEach(tx => {
-            const date = new Date(tx.timestamp).toLocaleString('fr-FR');
-            const isPositive = tx.type === 'deposit' || tx.type === 'win' || tx.type === 'bj';
-            const color = isPositive ? '#00ff00' : (tx.type === 'push' ? '#ffa500' : '#ff0000');
-            const sign = (tx.type === 'deposit' || tx.amount > 0) ? '+' : '';
-            list.innerHTML += `
-                <div class="stat-row">
-                    <div>
-                        <div class="stat-label">${tx.description || tx.type}</div>
-                        <div style="font-size: 11px; color: #666;">${date}</div>
-                    </div>
-                    <div class="stat-value" style="color: ${color};">${sign}${tx.amount} sats</div>
-                </div>
-            `;
-        });
+        allTxData = data.transactions || [];
+        setTxFilter(currentTxFilter);
     } catch (error) {
-        list.innerHTML = '<div style="color: #ff0000; padding: 20px;">Erreur chargement</div>';
+        list.innerHTML = '<div style="color: #ff4444; padding: 20px; text-align:center;">Erreur chargement</div>';
     }
 }
 

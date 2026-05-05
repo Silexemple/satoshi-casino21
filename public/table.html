@@ -161,15 +161,19 @@
         .timer-row {
             display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 2px;
         }
-        .timer-bar-mini {
-            width: 120px; height: 3px; background: rgba(255,255,255,0.1); border-radius: 2px; overflow: hidden;
+        /* Circular SVG timer */
+        .timer-svg-wrap { position: relative; width: 38px; height: 38px; }
+        .timer-svg-wrap svg { transform: rotate(-90deg); }
+        .timer-ring-bg { fill: none; stroke: rgba(255,255,255,0.08); stroke-width: 3; }
+        .timer-ring-fg { fill: none; stroke: #ff6b00; stroke-width: 3;
+            stroke-linecap: round; stroke-dasharray: 100; stroke-dashoffset: 0;
+            transition: stroke-dashoffset 1s linear, stroke 0.3s; }
+        .timer-ring-fg.low { stroke: #ff2222; }
+        .timer-ring-num {
+            position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+            font-family: 'Orbitron'; font-size: 12px; font-weight: 700; color: #ff6b00;
         }
-        .timer-fill-mini {
-            height: 100%; background: linear-gradient(90deg, #ff6b00, #ffa500);
-            border-radius: 2px; transition: width 1s linear;
-        }
-        .timer-fill-mini.low { background: #ff0000; }
-        .timer-text-mini { font-family: 'Orbitron'; font-size: 11px; color: #ff6b00; min-width: 24px; }
+        .timer-ring-num.low { color: #ff2222; }
 
         /* SEATS - Vue premiere personne */
         .seats-zone {
@@ -187,7 +191,7 @@
             padding: 4px 4px; border-radius: 8px;
         }
         .others-arc .seat-cards { gap: 2px; }
-        .others-arc .card { width: 28px; height: 40px; border-radius: 3px; }
+        .others-arc .card-wrapper .card { width: 28px; height: 40px; border-radius: 3px; }
         .others-arc .card-content { padding: 2px; }
         .others-arc .corner { font-size: 7px; }
         .others-arc .center { font-size: 14px; }
@@ -207,7 +211,7 @@
             max-width: 320px; width: 100%;
             padding: 8px 10px; border-radius: 14px;
         }
-        .my-seat-zone .card { width: 48px; height: 68px; }
+        .my-seat-zone .card-wrapper .card { width: 48px; height: 68px; }
         .my-seat-zone .corner { font-size: 12px; }
         .my-seat-zone .center { font-size: 24px; }
         .my-seat-zone .player-score { font-size: 16px; padding: 3px 12px; }
@@ -264,21 +268,53 @@
         .seat-cards { display: flex; justify-content: center; gap: 3px; flex-wrap: nowrap; margin: 3px 0; }
 
         /* CARTES */
+        /* ===== 3D CARD FLIP ===== */
+        .card-wrapper {
+            flex-shrink: 0;
+            perspective: 500px;
+        }
         .card {
-            width: 44px; height: 62px; background: linear-gradient(135deg, #fff, #f0f0f0);
-            border-radius: 5px; box-shadow: 0 3px 8px rgba(0,0,0,0.5);
-            border: 1px solid rgba(0,0,0,0.15); flex-shrink: 0;
+            width: 44px; height: 62px;
+            border-radius: 5px; flex-shrink: 0;
+            position: relative;
+            transform-style: preserve-3d;
+            transition: transform 0.45s cubic-bezier(0.4, 0, 0.2, 1);
         }
         .dealer-cards .card { width: 52px; height: 74px; }
-        /* Animation seulement sur les nouvelles cartes */
-        .card-new {
-            animation: dealIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+        .card.card-new {
+            animation: dealIn3d 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
             animation-fill-mode: forwards;
         }
-        @keyframes dealIn {
-            0% { transform: translateY(-80px) scale(0.5); opacity: 0; }
-            100% { transform: translateY(0) scale(1); opacity: 1; }
+        .card.card-flip { animation: flipCard 0.45s ease-in-out forwards; }
+        @keyframes dealIn3d {
+            0% { transform: translateY(-80px) rotateY(-90deg) scale(0.6); opacity: 0; }
+            100% { transform: translateY(0) rotateY(0deg) scale(1); opacity: 1; }
         }
+        @keyframes flipCard {
+            0%   { transform: rotateY(0deg); }
+            50%  { transform: rotateY(90deg); }
+            100% { transform: rotateY(0deg); }
+        }
+        .card-face {
+            position: absolute; inset: 0; border-radius: 5px;
+            backface-visibility: hidden; -webkit-backface-visibility: hidden;
+        }
+        .card-front {
+            background: linear-gradient(135deg, #fff, #f0f0f0);
+            box-shadow: 0 3px 8px rgba(0,0,0,0.5);
+            border: 1px solid rgba(0,0,0,0.15);
+        }
+        .card-back {
+            background: linear-gradient(135deg, #1a0800, #0a0400);
+            border: 1.5px solid #ff6b00;
+            box-shadow: 0 3px 8px rgba(0,0,0,0.5);
+            transform: rotateY(180deg);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 24px; color: #ff6b00; font-family: 'Orbitron';
+            text-shadow: 0 0 8px #ff6b00;
+        }
+        .dealer-cards .card-back { font-size: 32px; }
+        .card.hidden-card { transform: rotateY(180deg); }
         .card-content {
             padding: 3px 4px; height: 100%;
             display: flex; flex-direction: column; justify-content: space-between;
@@ -292,16 +328,21 @@
         .red { color: #d00; }
         .black { color: #111; }
 
-        .card.hidden-card {
-            background: linear-gradient(135deg, #1a0800, #000); border: 1.5px solid #ff6b00;
-            position: relative;
+        /* ===== FLOAT SATS ANIMATION ===== */
+        .float-sats {
+            position: fixed; font-family: 'Orbitron'; font-size: 22px; font-weight: 900;
+            pointer-events: none; z-index: 9999; left: 50%; transform: translateX(-50%);
+            animation: floatUp 1.6s ease-out forwards;
+            text-shadow: 0 0 20px currentColor;
         }
-        .card.hidden-card::after {
-            content: "\20BF"; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            font-size: 24px; color: #ff6b00; font-family: 'Orbitron';
-            text-shadow: 0 0 8px #ff6b00;
+        @keyframes floatUp {
+            0%   { opacity: 1; bottom: 35%; }
+            70%  { opacity: 1; bottom: 55%; }
+            100% { opacity: 0; bottom: 60%; }
         }
-        .dealer-cards .card.hidden-card::after { font-size: 32px; }
+
+        /* ===== BITCOIN BURST CANVAS ===== */
+        #btcBurst { position: fixed; inset: 0; pointer-events: none; z-index: 9998; }
 
         /* SCORE joueur - plus gros et visible */
         .player-score {
@@ -374,23 +415,33 @@
         .act-insurance { background: linear-gradient(135deg, #0088dd, #0066aa); border-color: #00aaff; color: #fff; }
         .act-surrender { background: linear-gradient(135deg, #666, #444); border-color: #888; color: #fff; }
         .act-bet { background: linear-gradient(135deg, #ff6b00, #ffa500); border-color: #ffd700; }
-        .act-rebet { background: linear-gradient(135deg, #ffd700, #ff8c00); border-color: #ffd700; }
+        .act-rebet { background: linear-gradient(135deg, #ffd700, #ff8c00); border-color: #ffd700; font-size: 10px; }
+        .act-rebuy { background: linear-gradient(135deg, #00aa55, #007733); border-color: #00ff88; color: #fff; font-size: 10px; }
+        .kbd-hint { font-size: 8px; color: #555; font-family: 'Orbitron'; letter-spacing: 1px; text-align: center; margin-top: 2px; }
 
         .chips-row { display: flex; justify-content: center; gap: 8px; margin: 4px 0; }
         .chip {
-            width: 46px; height: 46px; border-radius: 50%; border: 3px solid;
+            width: 52px; height: 52px; border-radius: 50%; border: 4px solid;
             display: flex; align-items: center; justify-content: center;
             font-weight: bold; cursor: pointer; color: #fff; font-size: 11px;
-            font-family: 'Orbitron'; transition: all 0.2s;
-            box-shadow: 0 3px 8px rgba(0,0,0,0.5);
+            font-family: 'Orbitron'; transition: all 0.18s;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.6), inset 0 0 0 6px rgba(255,255,255,0.07);
+            position: relative; flex-shrink: 0;
         }
-        .chip:hover:not(.disabled) { transform: translateY(-4px) scale(1.1); }
-        .chip:active:not(.disabled) { transform: scale(0.9); }
-        .chip.disabled { opacity: 0.25; cursor: not-allowed; filter: grayscale(1); }
-        .chip.c100 { background: radial-gradient(circle, #0088ff, #0044cc); border-color: #00ccff; }
-        .chip.c500 { background: radial-gradient(circle, #ff0088, #cc0044); border-color: #ff44cc; }
-        .chip.c1k { background: radial-gradient(circle, #ff6b00, #cc5500); border-color: #ffd700; }
-        .chip.c5k { background: radial-gradient(circle, #8800ff, #5500cc); border-color: #cc88ff; }
+        .chip::before {
+            content: ''; position: absolute; inset: 3px;
+            border-radius: 50%;
+            border: 2px dashed rgba(255,255,255,0.2);
+            pointer-events: none;
+        }
+        .chip:hover:not(.disabled) { transform: translateY(-5px) scale(1.12); box-shadow: 0 8px 20px rgba(0,0,0,0.7), 0 0 15px currentColor; }
+        .chip:active:not(.disabled) { transform: scale(0.88) translateY(0); }
+        .chip.disabled { opacity: 0.2; cursor: not-allowed; filter: grayscale(1); }
+        .chip.c100 { background: radial-gradient(circle at 35% 35%, #22aaff, #0044cc); border-color: #00ccff; color: #cef; }
+        .chip.c500 { background: radial-gradient(circle at 35% 35%, #ff22aa, #cc0044); border-color: #ff55cc; color: #fce; }
+        .chip.c1k  { background: radial-gradient(circle at 35% 35%, #ff8822, #cc5500); border-color: #ffd700; color: #ffe; }
+        .chip.c5k  { background: radial-gradient(circle at 35% 35%, #aa44ff, #5500cc); border-color: #cc88ff; color: #edf; }
+        .chip-label { font-size: 10px; font-family: 'Orbitron'; font-weight: 900; letter-spacing: -0.5px; }
 
         .bet-amount {
             font-family: 'Orbitron'; font-size: 22px; font-weight: 900;
@@ -642,6 +693,7 @@
     </div>
     <div style="display:flex;align-items:center;gap:8px;">
         <button class="topbar-stats" onclick="showStats()">STATS</button>
+        <button class="topbar-stats" id="muteBtn" onclick="toggleMute()" style="font-size:14px;padding:3px 6px;">🔊</button>
         <div class="topbar-balance" id="balance"><span class="sat-icon">&#8383;</span>0</div>
     </div>
 </div>
@@ -668,7 +720,14 @@
     <div class="felt">
         <div class="players-badge" id="playersBadge"><span class="count">0</span>/5</div>
         <div class="leaderboard-mini" id="leaderboardMini" style="display:none;">
-            <div class="lb-title">TOP DU JOUR</div>
+            <div class="lb-title" style="display:flex;align-items:center;justify-content:space-between;gap:6px;">
+                <span id="lbTitle">TOP DU JOUR</span>
+                <div style="display:flex;gap:3px;">
+                    <span onclick="changeLbPeriod('1d')" id="lbP1d" style="cursor:pointer;font-size:7px;padding:1px 5px;border-radius:4px;background:rgba(255,107,0,0.3);color:#ff6b00;border:1px solid #ff6b00;">1J</span>
+                    <span onclick="changeLbPeriod('7d')" id="lbP7d" style="cursor:pointer;font-size:7px;padding:1px 5px;border-radius:4px;background:transparent;color:#888;border:1px solid #444;">7J</span>
+                    <span onclick="changeLbPeriod('30d')" id="lbP30d" style="cursor:pointer;font-size:7px;padding:1px 5px;border-radius:4px;background:transparent;color:#888;border:1px solid #444;">30J</span>
+                </div>
+            </div>
             <div id="lbEntries"></div>
         </div>
         <div class="join-btn-float hidden" id="joinBtnFloat" onclick="joinFirstEmpty()">+ REJOINDRE</div>
@@ -683,8 +742,14 @@
         <div class="center-info">
             <div class="phase-text" id="phaseLabel">EN ATTENTE</div>
             <div class="timer-row" id="timerRow" style="display:none;">
-                <div class="timer-bar-mini"><div class="timer-fill-mini" id="timerFill"></div></div>
-                <span class="timer-text-mini" id="timerText"></span>
+                <div class="timer-svg-wrap">
+                    <svg width="38" height="38" viewBox="0 0 38 38">
+                        <circle class="timer-ring-bg" cx="19" cy="19" r="15.9"/>
+                        <circle class="timer-ring-fg" id="timerRingFg" cx="19" cy="19" r="15.9"
+                            stroke-dasharray="99.9" stroke-dashoffset="0"/>
+                    </svg>
+                    <div class="timer-ring-num" id="timerText">--</div>
+                </div>
             </div>
         </div>
 
@@ -800,31 +865,49 @@ function selectAvatar(el) {
     el.classList.add('selected');
 }
 
-// SON CARTE (Web Audio API - pas de fichier externe)
+// ===== SONS Web Audio API (aucun fichier externe) =====
 let audioCtx = null;
-function playCardSound() {
+let isMuted = false;
+function getAudioCtx() {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    return audioCtx;
+}
+function playTone(freq, type, vol, dur, delay=0) {
+    if (isMuted) return;
     try {
-        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-        osc.connect(gain); gain.connect(audioCtx.destination);
-        osc.type = 'sine'; osc.frequency.value = 800;
-        gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.08);
-        osc.start(); osc.stop(audioCtx.currentTime + 0.08);
+        const ctx = getAudioCtx();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain); gain.connect(ctx.destination);
+        osc.type = type; osc.frequency.value = freq;
+        const t = ctx.currentTime + delay;
+        gain.gain.setValueAtTime(vol, t);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + dur);
+        osc.start(t); osc.stop(t + dur);
     } catch(e) {}
 }
-function playChipSound() {
-    try {
-        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-        osc.connect(gain); gain.connect(audioCtx.destination);
-        osc.type = 'triangle'; osc.frequency.value = 1200;
-        gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.05);
-        osc.start(); osc.stop(audioCtx.currentTime + 0.05);
-    } catch(e) {}
+function playCardSound() { playTone(900, 'sine', 0.12, 0.07); }
+function playChipSound() { playTone(1300, 'triangle', 0.08, 0.04); }
+function playWinSound() {
+    playTone(523, 'sine', 0.18, 0.12);
+    playTone(659, 'sine', 0.18, 0.12, 0.1);
+    playTone(784, 'sine', 0.22, 0.2, 0.2);
+}
+function playBJSound() {
+    [523, 659, 784, 1047].forEach((f, i) => playTone(f, 'sine', 0.2, 0.18, i * 0.1));
+    setTimeout(() => { playTone(1047, 'triangle', 0.3, 0.35); }, 500);
+}
+function playLossSound() {
+    playTone(300, 'sawtooth', 0.12, 0.1);
+    playTone(220, 'sawtooth', 0.1, 0.18, 0.1);
+}
+function playBustSound() {
+    playTone(350, 'square', 0.1, 0.06);
+    playTone(200, 'sawtooth', 0.12, 0.2, 0.05);
+}
+function toggleMute() {
+    isMuted = !isMuted;
+    document.getElementById('muteBtn').textContent = isMuted ? '🔇' : '🔊';
 }
 
 // NOTIFICATION TAB ARRIERE-PLAN
@@ -916,13 +999,31 @@ async function showStats() {
 }
 
 // LEADERBOARD
+let lbPeriod = '1d';
+const LB_TITLES = { '1d': 'TOP DU JOUR', '7d': 'TOP 7 JOURS', '30d': 'TOP 30 JOURS' };
+
+function changeLbPeriod(p) {
+    lbPeriod = p; lbLastFetch = 0;
+    ['1d','7d','30d'].forEach(x => {
+        const el = document.getElementById('lbP' + x);
+        if (!el) return;
+        const active = x === p;
+        el.style.background = active ? 'rgba(255,107,0,0.3)' : 'transparent';
+        el.style.borderColor = active ? '#ff6b00' : '#444';
+        el.style.color = active ? '#ff6b00' : '#888';
+    });
+    const titleEl = document.getElementById('lbTitle');
+    if (titleEl) titleEl.textContent = LB_TITLES[p] || 'TOP';
+    fetchLeaderboard();
+}
+
 async function fetchLeaderboard() {
     if (!currentTableId) return;
     const now = Date.now();
     if (now - lbLastFetch < 15000) return; // Cache 15s
     lbLastFetch = now;
     try {
-        const data = await apiCall(`/api/table/leaderboard?tableId=${currentTableId}`);
+        const data = await apiCall(`/api/table/leaderboard?tableId=${currentTableId}&period=${lbPeriod}`);
         const container = document.getElementById('lbEntries');
         const lbDiv = document.getElementById('leaderboardMini');
         if (!data.leaderboard || data.leaderboard.length === 0) {
@@ -930,9 +1031,10 @@ async function fetchLeaderboard() {
             return;
         }
         lbDiv.style.display = 'block';
-        container.innerHTML = data.leaderboard.map(e =>
-            `<div class="lb-entry"><span class="lb-name">${e.avatar || ''} ${e.name}</span><span class="lb-score">+${e.score}</span></div>`
-        ).join('');
+        container.innerHTML = data.leaderboard.map((e, i) => {
+            const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i+1}.`;
+            return `<div class="lb-entry"><span class="lb-name">${medal} ${e.avatar || ''} ${e.name}</span><span class="lb-score">+${e.score}</span></div>`;
+        }).join('');
     } catch(e) {
         document.getElementById('leaderboardMini').style.display = 'none';
     }
@@ -945,6 +1047,59 @@ function showToast(text, type, duration = 2800) {
     toast.className = 'toast ' + type;
     requestAnimationFrame(() => toast.classList.add('show'));
     setTimeout(() => toast.classList.remove('show'), duration);
+}
+
+// FLOAT SATS (texte qui monte)
+function spawnFloatSats(text, color) {
+    const el = document.createElement('div');
+    el.className = 'float-sats';
+    el.textContent = text;
+    el.style.color = color;
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), 1700);
+}
+
+// BITCOIN BURST (BJ seulement - canvas particles)
+function bitcoinBurst() {
+    const canvas = document.getElementById('btcBurst');
+    if (!canvas) return;
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    const ctx = canvas.getContext('2d');
+    const emojis = ['₿', '⚡', '₿', '🔥', '₿'];
+    const particles = Array.from({ length: 40 }, () => ({
+        x: canvas.width * (0.2 + Math.random() * 0.6),
+        y: canvas.height * 0.6,
+        vx: (Math.random() - 0.5) * 14,
+        vy: -(4 + Math.random() * 10),
+        alpha: 1,
+        size: 18 + Math.random() * 20,
+        emoji: emojis[Math.floor(Math.random() * emojis.length)],
+        rot: (Math.random() - 0.5) * 0.3
+    }));
+    let frame = 0;
+    function draw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        particles.forEach(p => {
+            p.x += p.vx; p.y += p.vy;
+            p.vy += 0.35; p.alpha -= 0.022;
+            p.vx *= 0.98;
+            if (p.alpha <= 0) return;
+            ctx.globalAlpha = p.alpha;
+            ctx.font = `${p.size}px serif`;
+            ctx.fillText(p.emoji, p.x, p.y);
+        });
+        ctx.globalAlpha = 1;
+        frame++;
+        if (frame < 80) requestAnimationFrame(draw);
+        else ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+    draw();
+    if (typeof confetti !== 'undefined') {
+        confetti({ particleCount: 200, spread: 90, origin: { y: 0.5 }, colors: ['#ff6b00','#ffa500','#ffd700','#ffff00'] });
+        setTimeout(() => confetti({ particleCount: 80, angle: 60,  spread: 55, origin: { x: 0, y: 0.6 }, colors: ['#ffd700','#ff6b00'] }), 250);
+        setTimeout(() => confetti({ particleCount: 80, angle: 120, spread: 55, origin: { x: 1, y: 0.6 }, colors: ['#ffd700','#ff6b00'] }), 250);
+    }
 }
 
 // LOBBY
@@ -1072,12 +1227,13 @@ function detectPhaseChange(data) {
             if (gain > 0) {
                 const hasBJ = mySeat.hands && mySeat.hands.some(h => h.result === 'bj');
                 showToast(hasBJ ? `BLACKJACK! +${gain} sats` : `GAGNE! +${gain} sats`, hasBJ ? 'bj' : 'win');
-                // Confetti ameliore avec symboles sats
-                if (typeof confetti !== 'undefined') {
-                    confetti({ particleCount: hasBJ ? 180 : 100, spread: 70, origin: { y: 0.5 }, colors: ['#ff6b00', '#ffa500', '#ffd700', '#00ff00'] });
-                    // Deuxieme vague decalee pour effet pluie de sats
-                    if (hasBJ) setTimeout(() => confetti({ particleCount: 60, spread: 100, origin: { y: 0.3, x: 0.3 }, colors: ['#ffd700', '#ff6b00'] }), 300);
-                    if (hasBJ) setTimeout(() => confetti({ particleCount: 60, spread: 100, origin: { y: 0.3, x: 0.7 }, colors: ['#ffd700', '#ff6b00'] }), 500);
+                spawnFloatSats(`+${gain} ₿`, hasBJ ? '#ffd700' : '#00ff88');
+                playWinSound();
+                if (hasBJ) {
+                    playBJSound();
+                    bitcoinBurst();
+                } else if (typeof confetti !== 'undefined') {
+                    confetti({ particleCount: 80, spread: 60, origin: { y: 0.55 }, colors: ['#ff6b00', '#ffa500', '#ffd700', '#00ff00'] });
                 }
                 if (mySeat.bet) lastBet = mySeat.bet;
                 sessionWins++; sessionTotalWon += gain;
@@ -1086,6 +1242,8 @@ function detectPhaseChange(data) {
                 resultHistory.push(hasBJ ? 'bj' : 'win');
             } else if (gain < 0) {
                 showToast(`PERDU ${gain} sats`, 'loss');
+                spawnFloatSats(`${gain} ₿`, '#ff4444');
+                playLossSound();
                 sessionLosses++;
                 sessionCurrentStreak = 0;
                 resultHistory.push('loss');
@@ -1118,9 +1276,11 @@ function detectPhaseChange(data) {
 function renderCardHTML(card, animate, delay) {
     const animClass = animate ? ' card-new' : '';
     const delayStyle = animate && delay > 0 ? `animation-delay:${delay}ms;opacity:0;` : '';
-    if (card.hidden) return `<div class="card hidden-card${animClass}" style="${delayStyle}"></div>`;
-    const isRed = card.suit === '\u2665' || card.suit === '\u2666';
-    return `<div class="card${animClass}" style="${delayStyle}"><div class="card-content ${isRed ? 'red' : 'black'}"><div class="corner">${card.value}${card.suit}</div><div class="center">${card.suit}</div></div></div>`;
+    if (card.hidden) {
+        return `<div class="card-wrapper"><div class="card hidden-card${animClass}" style="${delayStyle}"><div class="card-face card-front"></div><div class="card-face card-back">₿</div></div></div>`;
+    }
+    const isRed = card.suit === '♥' || card.suit === '♦';
+    return `<div class="card-wrapper"><div class="card${animClass}" style="${delayStyle}"><div class="card-face card-front"><div class="card-content ${isRed ? 'red' : 'black'}"><div class="corner">${card.value}${card.suit}</div><div class="center">${card.suit}</div></div></div><div class="card-face card-back">₿</div></div></div>`;
 }
 
 // RENDER TABLE
@@ -1308,20 +1468,21 @@ function renderControls(data) {
         const min = data.minBet, max = data.maxBet;
         let rebet = '';
         if (lastBet > 0 && lastBet >= min && lastBet <= max && balance >= lastBet)
-            rebet = `<button class="act-btn act-rebet" onclick="quickRebet(${lastBet})">RE-BET ${lastBet}</button>`;
+            rebet = `<button class="act-btn act-rebet" onclick="quickRebet(${lastBet})" title="Rejouer même mise [R]">⟳ ${lastBet}</button>`;
+        const rebuyBtn = balance < min ? `<button class="act-btn act-rebuy" onclick="openRebuyModal()">+ RECHARGER</button>` : '';
         c.innerHTML = `
             <div style="display:flex;flex-direction:column;align-items:center;gap:4px;width:100%;">
-                <div class="bet-amount">${currentBet || '-'}</div>
+                <div class="bet-amount">${currentBet > 0 ? currentBet + ' sats' : '-'}</div>
                 <div class="chips-row">
-                    <div class="chip c100 ${currentBet+100>max||balance<100?'disabled':''}" onclick="addBet(100,${max})">100</div>
-                    <div class="chip c500 ${currentBet+500>max||balance<500?'disabled':''}" onclick="addBet(500,${max})">500</div>
-                    <div class="chip c1k ${currentBet+1000>max||balance<1000?'disabled':''}" onclick="addBet(1000,${max})">1K</div>
-                    <div class="chip c5k ${currentBet+5000>max||balance<5000?'disabled':''}" onclick="addBet(5000,${max})">5K</div>
+                    <div class="chip c100 ${currentBet+100>max||balance<100?'disabled':''}" onclick="addBet(100,${max})"><span class="chip-label">100</span></div>
+                    <div class="chip c500 ${currentBet+500>max||balance<500?'disabled':''}" onclick="addBet(500,${max})"><span class="chip-label">500</span></div>
+                    <div class="chip c1k ${currentBet+1000>max||balance<1000?'disabled':''}" onclick="addBet(1000,${max})"><span class="chip-label">1K</span></div>
+                    <div class="chip c5k ${currentBet+5000>max||balance<5000?'disabled':''}" onclick="addBet(5000,${max})"><span class="chip-label">5K</span></div>
                 </div>
-                <div style="display:flex;gap:6px;">
-                    <button class="act-btn act-bet" onclick="placeBet()" ${currentBet<min?'disabled':''}>MISER</button>
+                <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:center;">
+                    <button class="act-btn act-bet" onclick="placeBet()" ${currentBet<min?'disabled':''}>MISER [↵]</button>
                     <button class="act-btn act-surrender" onclick="currentBet=0;renderControls(lastTableState)">RESET</button>
-                    ${rebet}
+                    ${rebet}${rebuyBtn}
                 </div>
             </div>`;
         return;
@@ -1329,10 +1490,10 @@ function renderControls(data) {
 
     if (data.isMyTurn) {
         c.innerHTML = `
-            <button class="act-btn act-hit" onclick="doAction('hit')" ${!data.canHit?'disabled':''}>CARTE</button>
-            <button class="act-btn act-stand" onclick="doAction('stand')" ${!data.canStand?'disabled':''}>RESTER</button>
-            <button class="act-btn act-double" onclick="doAction('double')" ${!data.canDouble?'disabled':''}>x2</button>
-            <button class="act-btn act-split" onclick="doAction('split')" ${!data.canSplit?'disabled':''}>SPLIT</button>
+            <button class="act-btn act-hit" id="btnHit" onclick="doAction('hit')" ${!data.canHit?'disabled':''}>CARTE<span style="font-size:7px;display:block;opacity:0.5">[H]</span></button>
+            <button class="act-btn act-stand" id="btnStand" onclick="doAction('stand')" ${!data.canStand?'disabled':''}>RESTER<span style="font-size:7px;display:block;opacity:0.5">[S]</span></button>
+            <button class="act-btn act-double" id="btnDouble" onclick="doAction('double')" ${!data.canDouble?'disabled':''}>x2<span style="font-size:7px;display:block;opacity:0.5">[D]</span></button>
+            <button class="act-btn act-split" id="btnSplit" onclick="doAction('split')" ${!data.canSplit?'disabled':''}>SPLIT<span style="font-size:7px;display:block;opacity:0.5">[P]</span></button>
             ${data.canInsurance ? '<button class="act-btn act-insurance" onclick="doInsurance(true)">ASSURANCE</button><button class="act-btn act-surrender" onclick="doInsurance(false)">NON</button>' : ''}
             ${data.canSurrender && !data.canInsurance ? '<button class="act-btn act-surrender" onclick="doAction(\'surrender\')">ABANDON</button>' : ''}
         `;
@@ -1364,11 +1525,7 @@ function toggleChat() {
     document.getElementById('chatDrawer').classList.toggle('open', chatOpen);
     if (chatOpen) setTimeout(() => document.getElementById('chatInput')?.focus(), 50);
 }
-document.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && chatOpen && document.activeElement?.id === 'chatInput') {
-        e.preventDefault(); sendChatInput();
-    }
-});
+// (keydown chat: fusionné dans le handler principal ci-dessous)
 function escapeHtml(str) {
     const d = document.createElement('div');
     d.appendChild(document.createTextNode(String(str)));
@@ -1437,6 +1594,49 @@ async function joinSeat(seatIdx) {
         await pollTable();
     } catch (e) { showToast(e.message, 'loss'); }
 }
+
+// REBUY depuis la table
+function openRebuyModal() {
+    // Ouvre la page principale avec le modal de dépôt en paramètre
+    window.open('/?deposit=1', '_blank');
+}
+
+// RACCOURCIS CLAVIER
+document.addEventListener('keydown', (e) => {
+    // Ne pas intercepter si chat input actif ou popup ouverte
+    if (document.activeElement === document.getElementById('chatInput')) return;
+    if (document.getElementById('statsPopup')?.classList.contains('open')) return;
+    if (document.getElementById('profilePopup')?.classList.contains('open')) return;
+
+    const key = e.key.toLowerCase();
+
+    // Pendant le jeu (mon tour)
+    if (lastTableState?.isMyTurn) {
+        if (key === 'h' && !document.getElementById('btnHit')?.disabled) { e.preventDefault(); doAction('hit'); return; }
+        if (key === 's' && !document.getElementById('btnStand')?.disabled) { e.preventDefault(); doAction('stand'); return; }
+        if (key === 'd' && !document.getElementById('btnDouble')?.disabled) { e.preventDefault(); doAction('double'); return; }
+        if (key === 'p' && !document.getElementById('btnSplit')?.disabled) { e.preventDefault(); doAction('split'); return; }
+    }
+
+    // Pendant la mise
+    if (lastTableState?.canBet) {
+        if (key === 'enter' || key === ' ') { e.preventDefault(); if (currentBet >= (lastTableState.minBet||100)) placeBet(); return; }
+        if (key === 'r' && lastBet > 0 && balance >= lastBet) { e.preventDefault(); quickRebet(lastBet); return; }
+        if (key === 'backspace') { e.preventDefault(); currentBet = 0; renderControls(lastTableState); return; }
+        if (key === '1') { e.preventDefault(); addBet(100, lastTableState.maxBet); return; }
+        if (key === '2') { e.preventDefault(); addBet(500, lastTableState.maxBet); return; }
+        if (key === '3') { e.preventDefault(); addBet(1000, lastTableState.maxBet); return; }
+        if (key === '4') { e.preventDefault(); addBet(5000, lastTableState.maxBet); return; }
+    }
+
+    // Chat toggle: C
+    if (key === 'c' && currentTableId) { e.preventDefault(); toggleChat(); return; }
+
+    // Chat submit: Enter quand input actif
+    if (e.key === 'Enter' && chatOpen && document.activeElement?.id === 'chatInput') {
+        e.preventDefault(); sendChatInput(); return;
+    }
+});
 
 async function doAction(action) {
     if (!currentTableId) return;
@@ -1529,5 +1729,6 @@ window.onload = async () => {
     });
 };
 </script>
+<canvas id="btcBurst"></canvas>
 </body>
 </html>
