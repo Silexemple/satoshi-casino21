@@ -24,13 +24,25 @@ export default async function handler(req) {
         t.currentRound = 1;
         await kv.set(`tournament:${id}`, t, { ex: 86400 });
       } else {
-        // Refund all players
+        // Refund all players (utiliser linkingKey stocké à l'inscription, pas sessionId)
         for (const p of t.players) {
-          const pk = `player:${p.sessionId}`;
+          const lk = p.linkingKey || await kv.get(`session:${p.sessionId}`);
+          if (!lk) continue; // session expirée, remboursement impossible
+          const pk = `player:${lk}`;
           const player = await kv.get(pk);
           if (player) {
             player.balance += t.buyIn;
+            player.last_activity = Date.now();
             await kv.set(pk, player, { ex: 2592000 });
+            // Log transaction remboursement
+            const txKey = `transactions:${lk}`;
+            await kv.rpush(txKey, {
+              type: 'deposit',
+              amount: t.buyIn,
+              timestamp: Date.now(),
+              description: `Remboursement tournoi annulé: ${t.name}`
+            });
+            await kv.expire(txKey, 2592000);
           }
         }
         t.status = 'cancelled';

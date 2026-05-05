@@ -2369,6 +2369,10 @@ window.onload = () => {
         await loadStats();
         updateStatsDisplay();
         checkExistingGame();
+        // Auto-open deposit modal si redirigé depuis table (rebuy)
+        if (new URLSearchParams(window.location.search).get('deposit') === '1') {
+            setTimeout(() => showDepositModal(), 500);
+        }
     });
 };
 </script>

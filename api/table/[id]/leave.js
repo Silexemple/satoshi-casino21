@@ -35,6 +35,10 @@ export default async function handler(req) {
     if (table.status === 'playing' && seat.bet > 0 && !seat.finished) {
       return json(400, { error: 'Impossible de quitter pendant votre tour' });
     }
+    // Interdire de quitter pendant la distribution des cartes
+    if (table.status === 'dealing') {
+      return json(400, { error: 'Impossible de quitter pendant la distribution' });
+    }
 
     // Rembourser la mise si le joueur quitte pendant la phase de mises
     let refunded = 0;

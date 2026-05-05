@@ -1418,7 +1418,9 @@ function renderTable(data) {
         }
 
         const avatarDisplay = seat.avatar ? `<div class="seat-avatar">${seat.avatar}</div>` : '';
-        const nameDisplay = seat.isMe ? 'VOUS' : seat.playerName;
+        const safePName = escapeHtml(seat.playerName || '');
+        const nameDisplay = seat.isMe ? 'VOUS'
+            : `<span title="Envoyer un pourboire" style="cursor:pointer;" onclick="sendTip(${seat.seatIdx},'${safePName}')">${safePName} 💸</span>`;
         const betDisplay = seat.bet > 0 ? `<div class="seat-bet-badge">${seat.bet} sats</div>` : '';
 
         // Compteur W/L (seulement pour moi)
@@ -1670,24 +1672,30 @@ async function leaveTable() {
     backToLobby();
 }
 
+// Stockage temporaire pour tip (évite XSS via onclick inline)
+let _tipTarget = { seatIdx: -1, playerName: '' };
+
 function sendTip(seatIdx, playerName) {
+    _tipTarget = { seatIdx, playerName };
     const overlay = document.createElement('div');
     overlay.id = 'tipOverlay';
     overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;z-index:9999';
     const presets = [10,50,100,250,500,1000];
+    const safeName = escapeHtml(playerName);
     let btns = presets.map(v => `<button onclick="document.getElementById('tipAmt').value=${v}" style="background:rgba(255,107,0,0.1);border:1px solid rgba(255,107,0,0.3);color:#ff6b00;padding:5px 10px;border-radius:6px;cursor:pointer;font-size:11px">${v}</button>`).join('');
     overlay.innerHTML = `<div style="background:#0d0d1a;border:1px solid rgba(255,107,0,0.4);border-radius:12px;padding:20px;width:280px;text-align:center">
-        <div style="color:#ff6b00;font-size:13px;margin-bottom:12px">&#128184; Pourboire &agrave; <b>${playerName}</b></div>
+        <div style="color:#ff6b00;font-size:13px;margin-bottom:12px">&#128184; Pourboire à <b>${safeName}</b></div>
         <div style="display:flex;gap:6px;justify-content:center;margin-bottom:10px;flex-wrap:wrap">${btns}</div>
         <input id="tipAmt" type="number" min="10" max="1000" placeholder="Montant (10-1000)" style="width:100%;padding:7px;background:#111;border:1px solid rgba(255,107,0,0.3);color:#fff;border-radius:6px;margin-bottom:12px;text-align:center;font-family:monospace">
         <div style="display:flex;gap:8px">
-            <button onclick="doTip(${seatIdx},'${playerName}')" style="flex:1;background:rgba(255,107,0,0.2);border:1px solid #ff6b00;color:#ff6b00;padding:8px;border-radius:6px;cursor:pointer">Envoyer</button>
+            <button onclick="doTip()" style="flex:1;background:rgba(255,107,0,0.2);border:1px solid #ff6b00;color:#ff6b00;padding:8px;border-radius:6px;cursor:pointer">Envoyer</button>
             <button onclick="document.getElementById('tipOverlay').remove()" style="flex:1;background:transparent;border:1px solid #444;color:#888;padding:8px;border-radius:6px;cursor:pointer">Annuler</button>
         </div></div>`;
     document.body.appendChild(overlay);
     setTimeout(() => document.getElementById('tipAmt').focus(), 50);
 }
-async function doTip(seatIdx, playerName) {
+async function doTip() {
+    const { seatIdx, playerName } = _tipTarget;
     const tipAmount = parseInt(document.getElementById('tipAmt').value);
     if (!tipAmount || tipAmount < 10 || tipAmount > 1000 || tipAmount > balance) {
         showToast('Montant invalide (10-1000 sats)', 'loss'); return;
@@ -1696,8 +1704,9 @@ async function doTip(seatIdx, playerName) {
     try {
         const data = await apiCall(`/api/table/${currentTableId}/tip`, 'POST', { seatIdx, amount: tipAmount });
         balance = data.balance; updateBalance();
-        addChatSystem(`Tip ${tipAmount} sats a ${playerName} !`);
-        showToast(`${tipAmount} sats envoyes a ${playerName} !`, 'win');
+        addChatSystem(`Tip ${tipAmount} sats à ${escapeHtml(playerName)} !`);
+        showToast(`${tipAmount} sats → ${escapeHtml(playerName)} !`, 'win');
+        spawnFloatSats(`💸 ${tipAmount}`, '#ffd700');
     } catch (e) { showToast(e.message, 'loss'); }
 }
 

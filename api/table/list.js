@@ -44,7 +44,10 @@ export default async function handler(req) {
     let table = await kv.get(`table:${def.id}`);
     if (!table) {
       table = createEmptyTable(def);
-      await kv.set(`table:${def.id}`, table, { ex: 86400 }); // 24h TTL
+      await kv.set(`table:${def.id}`, table, { ex: 604800 }); // 7j TTL
+    } else {
+      // Refresh TTL pour éviter expiration pendant session active
+      await kv.expire(`table:${def.id}`, 604800);
     }
 
     const playerCount = table.seats.filter(s => s !== null).length;
