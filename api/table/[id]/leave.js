@@ -47,7 +47,7 @@ export default async function handler(req) {
       if (!lk) {
         table.seats[seatIdx] = null;
         table.lastUpdate = Date.now();
-        await kv.set(tableKey, table, { ex: 86400 });
+        await kv.set(tableKey, table, { ex: 604800 });
         return json(200, { success: true, refunded: 0 });
       }
       const playerKey = `player:${lk}`;
@@ -62,7 +62,7 @@ export default async function handler(req) {
     table.seats[seatIdx] = null;
     table.lastUpdate = Date.now();
 
-    await kv.set(tableKey, table, { ex: 86400 });
+    await kv.set(tableKey, table, { ex: 604800 });
 
     return json(200, { success: true, refunded });
   } finally {

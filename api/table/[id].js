@@ -422,7 +422,7 @@ export default async function handler(req) {
           table = freshTable;
           const stillChanged = checkTimeouts(table);
           if (stillChanged) {
-            await kv.set(tableKey, table, { ex: 86400 });
+            await kv.set(tableKey, table, { ex: 604800 });
           }
         }
       } finally {

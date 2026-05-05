@@ -57,8 +57,10 @@ export async function rateLimit(req, route, maxRequests = 30, windowSeconds = 60
   if (ip === 'unknown') return null; // pas de rate limit si IP inconnue
 
   const key = `ratelimit:global:${route}:${ip}`;
+  // Atomique: SET NX avec EX pour initialiser, puis INCR
+  // Évite la race condition INCR+EXPIRE (clé sans TTL si crash entre les deux)
+  await kv.set(key, 0, { nx: true, ex: windowSeconds });
   const count = await kv.incr(key);
-  if (count === 1) await kv.expire(key, windowSeconds);
 
   if (count > maxRequests) {
     const retryAfter = windowSeconds;

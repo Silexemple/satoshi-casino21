@@ -22,7 +22,14 @@ export default async function handler(req) {
   const tableId = pathParts[pathParts.length - 2];
 
   const body = await req.json();
-  const message = (body.message || '').trim().slice(0, MAX_MSG_LENGTH);
+  // Sanitiser le message côté serveur (défense en profondeur vs XSS via API directe)
+  const rawMsg = (body.message || '').trim().slice(0, MAX_MSG_LENGTH);
+  const message = rawMsg
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#x27;')
+    .replace(/\//g, '&#x2F;');
 
   if (!message) return json(400, { error: 'Message vide' });
 

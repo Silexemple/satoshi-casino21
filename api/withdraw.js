@@ -61,8 +61,6 @@ export default async function handler(req) {
   if (!lock) return json(423, { error: 'Une autre operation est en cours' });
 
   let debited = false;
-  const attemptId = `withdraw:${linkingKey}:${Date.now()}`;
-
   try {
     const player = await kv.get(playerKey);
     if (!player) return json(404, { error: 'Joueur non trouve' });

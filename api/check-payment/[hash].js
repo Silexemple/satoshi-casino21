@@ -13,6 +13,10 @@ export default async function handler(req) {
   const paymentHash = pathParts[pathParts.length - 1];
 
   if (!paymentHash) return json(400, { error: 'Payment hash manquant' });
+  // Validation stricte: un payment hash Lightning est exactement 64 hex chars
+  if (!/^[a-f0-9]{64}$/i.test(paymentHash)) {
+    return json(400, { error: 'Payment hash invalide' });
+  }
 
   const invoice = await kv.get(`invoice:${paymentHash}`);
   if (!invoice) return json(404, { error: 'Invoice non trouvee' });

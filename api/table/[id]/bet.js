@@ -118,12 +118,12 @@ export default async function handler(req) {
     }
 
     table.lastUpdate = Date.now();
-    await kv.set(tableKey, table, { ex: 86400 });
+    await kv.set(tableKey, table, { ex: 604800 });
 
     // Si le round s'est terminé pendant la distribution (BJ dealer/joueur)
     if (table.status === 'finished') {
       await creditPlayers(table);
-      await kv.set(tableKey, table, { ex: 86400 });
+      await kv.set(tableKey, table, { ex: 604800 });
 
       // Relire le solde mis à jour après crédit
       const updatedPlayer = await kv.get(playerKey);

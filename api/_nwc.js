@@ -73,6 +73,12 @@ async function createEvent(secretKeyBytes, walletPubkeyHex, content) {
 
 export async function nwcRequest(nwcUrl, method, params, timeoutMs = 8000) {
   const { pubkey, relays, secret } = parseNWCUrl(nwcUrl);
+
+  // Validation défensive de la NWC URL
+  if (!pubkey || !/^[a-f0-9]{64}$/i.test(pubkey)) throw new Error('NWC: pubkey invalide');
+  if (!secret || !/^[a-f0-9]{64}$/i.test(secret)) throw new Error('NWC: secret invalide');
+  if (!relays || relays.length === 0) throw new Error('NWC: aucun relay configuré');
+
   const secretKeyBytes = hexToBytes(secret);
   const myPubkey = bytesToHex(schnorr.getPublicKey(secretKeyBytes));
 

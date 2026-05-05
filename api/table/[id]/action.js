@@ -241,12 +241,12 @@ export default async function handler(req) {
     }
 
     table.lastUpdate = Date.now();
-    await kv.set(tableKey, table, { ex: 86400 });
+    await kv.set(tableKey, table, { ex: 604800 });
 
     // Si la round est finie, créditer les joueurs
     if (table.status === 'finished') {
       await creditPlayers(table);
-      await kv.set(tableKey, table, { ex: 86400 });
+      await kv.set(tableKey, table, { ex: 604800 });
     }
 
     return json(200, tableStateForClient(table, sessionId));

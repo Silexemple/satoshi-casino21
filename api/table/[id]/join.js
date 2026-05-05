@@ -64,7 +64,7 @@ export default async function handler(req) {
     };
     table.lastUpdate = Date.now();
 
-    await kv.set(tableKey, table, { ex: 86400 });
+    await kv.set(tableKey, table, { ex: 604800 });
 
     return json(200, { success: true, seatIdx });
   } finally {

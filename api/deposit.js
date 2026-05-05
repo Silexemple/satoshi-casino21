@@ -25,11 +25,15 @@ export default async function handler(req) {
   if (!linkingKey) return json(401, { error: 'Session invalide' });
 
   const body = await req.json();
-  const amount = parseInt(body.amount);
   const MAX_DEPOSIT = 100000;
   const MAX_BALANCE = 1000000;
-
-  if (!amount || amount < 100 || amount > MAX_DEPOSIT) {
+  // Validation stricte: entier pur, pas de float/exponentielle
+  const rawAmount = body.amount;
+  if (typeof rawAmount !== 'number' && typeof rawAmount !== 'string') {
+    return json(400, { error: 'Montant invalide' });
+  }
+  const amount = Number(rawAmount);
+  if (!Number.isInteger(amount) || amount < 100 || amount > MAX_DEPOSIT) {
     return json(400, { error: `Montant invalide (100-${MAX_DEPOSIT} sats)` });
   }
 
