@@ -6,7 +6,11 @@
   "scripts": {
     "dev": "vercel dev",
     "deploy": "vercel --prod",
-    "test": "node tests/game-logic.test.js"
+    "test": "node tests/game-logic.test.js",
+    "test:all": "node tests/run-all.js",
+    "test:game": "node tests/game-logic.test.js",
+    "test:table": "node tests/table-logic.test.js",
+    "test:api": "node tests/api-helpers.test.js && node tests/api-payments.test.js && node tests/api-game-advanced.test.js && node tests/api-security.test.js && node tests/api-auth.test.js && node tests/api-tournament.test.js"
   },
   "dependencies": {
     "@noble/secp256k1": "^3.0.0",
