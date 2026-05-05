@@ -1,5 +1,5 @@
 import { kv } from '@vercel/kv';
-import { json, getSessionId } from './_helpers.js';
+import { json, getSessionId, rateLimit } from './_helpers.js';
 import { createAndShuffleDeck, handScore, isBlackjack, isPair, cardForClient, drawCard } from './_game-helpers.js';
 
 export const config = {
@@ -22,6 +22,10 @@ function getRake(netGain) {
 // --- Handler ---
 
 export default async function handler(req) {
+  // ── Rate limit IP global ──
+  const rl = await rateLimit(req, 'game', 60, 60);
+  if (rl) return rl;
+
   const sessionId = getSessionId(req);
   if (!sessionId) {
     return json(401, { error: 'Session invalide' });

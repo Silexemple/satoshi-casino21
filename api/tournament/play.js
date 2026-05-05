@@ -1,5 +1,5 @@
 import { kv } from '@vercel/kv';
-import { json, getSessionId } from '../_helpers.js';
+import { json, getSessionId, rateLimit } from '../_helpers.js';
 import { createAndShuffleDeck, handScore, isBlackjack, cardForClient, drawCard } from '../_game-helpers.js';
 
 export const config = { runtime: 'edge' };
@@ -11,6 +11,10 @@ export const config = { runtime: 'edge' };
 const BET_PERCENT = 10; // 10% of current chips per round
 
 export default async function handler(req) {
+  // ── Rate limit IP global ──
+  const rl = await rateLimit(req, 'tplay', 60, 60);
+  if (rl) return rl;
+
   if (req.method !== 'POST') return json(405, { error: 'Method not allowed' });
 
   const sessionId = getSessionId(req);
@@ -291,6 +295,42 @@ async function finishTournament(tournament) {
 
   tournament.status = 'finished';
   tournament.finishedAt = Date.now();
+
+  // Auto-archiver et relancer un nouveau tournoi du même template
+  try {
+    // Retirer de la liste active
+    await kv.srem('tournaments:active', tournament.id);
+
+    // Archiver les résultats (7 jours)
+    await kv.set(`tournament:archive:${tournament.id}`, {
+      name: tournament.name,
+      finishedAt: tournament.finishedAt,
+      prizePool: tournament.players.length * tournament.buyIn,
+      leaderboard: tournament.leaderboard
+    }, { ex: 604800 });
+
+    // Créer un nouveau tournoi du même template dans 5 minutes
+    const newId = `tourney-${Date.now()}-${Math.random().toString(36).slice(2,6)}`;
+    const newTournament = {
+      id: newId,
+      name: tournament.name,
+      buyIn: tournament.buyIn,
+      startingChips: tournament.startingChips,
+      totalRounds: tournament.totalRounds,
+      maxPlayers: tournament.maxPlayers,
+      minPlayers: tournament.minPlayers || 2,
+      players: [],
+      leaderboard: [],
+      status: 'registering',
+      startTime: null,
+      currentRound: 0,
+      createdAt: Date.now()
+    };
+    await kv.set(`tournament:${newId}`, newTournament, { ex: 86400 });
+    await kv.sadd('tournaments:active', newId);
+  } catch(e) {
+    console.error('Auto-restart tournament failed:', e);
+  }
 }
 
 function tournamentGameResponse(gs, tPlayer, tournament) {

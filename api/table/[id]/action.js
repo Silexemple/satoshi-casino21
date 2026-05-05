@@ -1,11 +1,15 @@
 import { kv } from '@vercel/kv';
-import { json, getSessionId } from '../../_helpers.js';
+import { json, getSessionId, rateLimit } from '../../_helpers.js';
 import { handScore, isPair, drawCard, isBlackjack } from '../../_game-helpers.js';
 import { checkTimeouts, advanceToNextPlayer, creditPlayers, tableStateForClient } from '../[id].js';
 
 export const config = { runtime: 'edge' };
 
 export default async function handler(req) {
+  // ── Rate limit IP global ──
+  const rl = await rateLimit(req, 'action', 60, 60);
+  if (rl) return rl;
+
   if (req.method !== 'POST') {
     return json(405, { error: 'Method not allowed' });
   }

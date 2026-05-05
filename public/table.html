@@ -11,14 +11,39 @@
 
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
+        /* ═══ THEME SYSTEM ═══ */
+        :root {
+            --bg:        #0a0a0a;
+            --bg2:       #111;
+            --felt1:     #1a4d1a;
+            --felt2:     #0d2e0d;
+            --felt3:     #081a08;
+            --felt-brd:  #2a1500;
+            --topbar-bg: rgba(0,0,0,0.95);
+            --text:      #fff;
+            --text-dim:  #888;
+            --orange:    #ff6b00;
+        }
+        :root.day {
+            --bg:        #e8e0d0;
+            --bg2:       #d4c9b5;
+            --felt1:     #2d6e2d;
+            --felt2:     #1a4d1a;
+            --felt3:     #0f3010;
+            --felt-brd:  #5c3a00;
+            --topbar-bg: rgba(30,20,10,0.97);
+            --text:      #fff;
+            --text-dim:  #ccc;
+        }
         body {
-            background: #0a0a0a;
+            background: var(--bg);
             font-family: 'Rajdhani', sans-serif;
             height: 100vh; height: 100dvh;
-            color: #fff;
+            color: var(--text);
             overflow: hidden;
             user-select: none;
             -webkit-user-select: none;
+            transition: background 0.4s;
         }
 
         /* ========== TOP BAR ========== */
@@ -96,8 +121,8 @@
 
         .felt {
             flex: 1; position: relative;
-            background: radial-gradient(ellipse at 50% 30%, #1a4d1a, #0d2e0d 60%, #081a08);
-            border: 3px solid #2a1500;
+            background: radial-gradient(ellipse at 50% 30%, var(--felt1), var(--felt2) 60%, var(--felt3));
+            border: 3px solid var(--felt-brd);
             border-radius: 0 0 50% 50% / 0 0 18% 18%;
             margin: 4px 4px 0;
             box-shadow: inset 0 0 60px rgba(0,0,0,0.5), 0 0 20px rgba(255,107,0,0.15);
@@ -258,6 +283,92 @@
             20% { box-shadow: 0 0 50px rgba(255,215,0,0.8), inset 0 0 25px rgba(255,215,0,0.2); border-color: #ffd700; transform: scale(1.03); }
             100% { box-shadow: none; transform: scale(1); }
         }
+
+        /* ═══ ANIMATIONS IMMERSIVES ═══ */
+        /* Tremblement felt sur bust */
+        @keyframes feltShake {
+            0%,100% { transform: translateX(0) rotate(0deg); }
+            10%      { transform: translateX(-6px) rotate(-0.5deg); }
+            20%      { transform: translateX(6px) rotate(0.5deg); }
+            30%      { transform: translateX(-5px) rotate(-0.3deg); }
+            40%      { transform: translateX(5px) rotate(0.3deg); }
+            50%      { transform: translateX(-3px); }
+            60%      { transform: translateX(3px); }
+            70%      { transform: translateX(-2px); }
+            80%      { transform: translateX(2px); }
+        }
+        .felt.shake { animation: feltShake 0.55s cubic-bezier(.36,.07,.19,.97); }
+
+        /* Flash rouge grosse perte */
+        @keyframes bigLossFlash {
+            0%   { background: rgba(180,0,0,0); }
+            15%  { background: rgba(180,0,0,0.35); }
+            50%  { background: rgba(180,0,0,0.18); }
+            100% { background: rgba(180,0,0,0); }
+        }
+        .loss-overlay {
+            position: fixed; inset: 0; pointer-events: none; z-index: 9990;
+            animation: bigLossFlash 0.9s ease-out forwards;
+        }
+
+        /* Flash or BJ */
+        @keyframes bjFlash {
+            0%   { background: rgba(255,215,0,0); }
+            15%  { background: rgba(255,215,0,0.28); }
+            50%  { background: rgba(255,215,0,0.12); }
+            100% { background: rgba(255,215,0,0); }
+        }
+        .bj-overlay {
+            position: fixed; inset: 0; pointer-events: none; z-index: 9990;
+            animation: bjFlash 1.2s ease-out forwards;
+        }
+
+        /* ═══ AVATAR ANIMATIONS ═══ */
+        @keyframes avatarBounce {
+            0%,100% { transform: translateY(0) scale(1); }
+            25%     { transform: translateY(-10px) scale(1.15); }
+            50%     { transform: translateY(-5px) scale(1.08); }
+            75%     { transform: translateY(-8px) scale(1.12); }
+        }
+        @keyframes avatarSpin {
+            0%   { transform: rotate(0deg) scale(1); }
+            25%  { transform: rotate(180deg) scale(1.3); }
+            50%  { transform: rotate(360deg) scale(1.5); }
+            75%  { transform: rotate(540deg) scale(1.3); }
+            100% { transform: rotate(720deg) scale(1); }
+        }
+        @keyframes avatarShake {
+            0%,100% { transform: rotate(0); }
+            20%     { transform: rotate(-12deg); }
+            40%     { transform: rotate(12deg); }
+            60%     { transform: rotate(-8deg); }
+            80%     { transform: rotate(8deg); }
+        }
+        @keyframes avatarPush {
+            0%,100% { transform: scale(1); opacity: 1; }
+            50%     { transform: scale(0.85); opacity: 0.7; }
+        }
+        .seat-avatar.anim-win  { animation: avatarBounce 0.8s ease-out; }
+        .seat-avatar.anim-bj   { animation: avatarSpin   1.0s ease-in-out; }
+        .seat-avatar.anim-loss { animation: avatarShake  0.5s ease-out; }
+        .seat-avatar.anim-push { animation: avatarPush   0.4s ease-out; }
+
+        /* ═══ FLASH ÉCRAN tour du joueur ═══ */
+        @keyframes myTurnFlash {
+            0%   { box-shadow: inset 0 0 0px rgba(255,165,0,0); }
+            30%  { box-shadow: inset 0 0 60px rgba(255,165,0,0.35); }
+            100% { box-shadow: inset 0 0 0px rgba(255,165,0,0); }
+        }
+        .felt.my-turn-flash { animation: myTurnFlash 0.7s ease-out; }
+
+        /* ═══ INDICATEUR PUSH NOTIF ═══ */
+        .notif-btn {
+            font-size: 13px; padding: 3px 6px; cursor: pointer; border-radius: 4px;
+            border: 1px solid #444; background: transparent; color: #888;
+            font-family: 'Orbitron'; transition: all 0.2s;
+        }
+        .notif-btn.granted { border-color: #00ff88; color: #00ff88; }
+        .notif-btn.denied  { border-color: #ff4444; color: #ff4444; opacity: 0.5; cursor: not-allowed; }
 
         .seat-name {
             font-family: 'Orbitron'; font-size: 10px; color: #ffa500;
@@ -694,6 +805,8 @@
     <div style="display:flex;align-items:center;gap:8px;">
         <button class="topbar-stats" onclick="showStats()">STATS</button>
         <button class="topbar-stats" id="muteBtn" onclick="toggleMute()" style="font-size:14px;padding:3px 6px;">🔊</button>
+        <button class="notif-btn" id="notifBtn" onclick="requestNotifPermission()" title="Notifications">🔔</button>
+        <button class="topbar-stats" id="themeBtn" onclick="toggleTheme()" style="font-size:13px;padding:3px 6px;" title="Thème">🌙</button>
         <div class="topbar-balance" id="balance"><span class="sat-icon">&#8383;</span>0</div>
     </div>
 </div>
@@ -911,6 +1024,40 @@ function toggleMute() {
 }
 
 // NOTIFICATION TAB ARRIERE-PLAN
+// ═══ NOTIFICATIONS BROWSER ═══
+async function requestNotifPermission() {
+    if (!('Notification' in window)) {
+        showToast('Notifications non supportées', 'loss'); return;
+    }
+    const perm = await Notification.requestPermission();
+    updateNotifBtn(perm);
+    if (perm === 'granted') showToast('🔔 Notifications activées!', 'win');
+    else showToast('Notifications refusées', 'loss');
+}
+function updateNotifBtn(perm) {
+    const btn = document.getElementById('notifBtn');
+    if (!btn) return;
+    const p = perm || (('Notification' in window) ? Notification.permission : 'default');
+    btn.className = `notif-btn ${p === 'granted' ? 'granted' : p === 'denied' ? 'denied' : ''}`;
+    btn.title = p === 'granted' ? 'Notifications actives' : 'Activer notifications';
+}
+function sendBrowserNotif(title, body, icon = '₿') {
+    if (!('Notification' in window) || Notification.permission !== 'granted') return;
+    if (!document.hidden) return; // seulement si onglet caché
+    try {
+        const n = new Notification(`${icon} SATS21 — ${title}`, {
+            body,
+            icon: '/favicon.ico',
+            badge: '/favicon.ico',
+            vibrate: [200, 100, 200],
+            tag: 'sats21-game',
+            renotify: true
+        });
+        setTimeout(() => n.close(), 6000);
+        n.onclick = () => { window.focus(); n.close(); };
+    } catch(e) {}
+}
+
 function notifyIfHidden(msg) {
     if (document.hidden) {
         document.title = `(!) ${msg} - SATS21`;
@@ -926,27 +1073,57 @@ function notifyIfHidden(msg) {
                 document.title = document.title.startsWith('(!)') ? 'SATS JACK 21' : `(!) ${msg}`;
             }, 1500);
         }
-        // Son de notification
-        try {
-            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            const osc = audioCtx.createOscillator();
-            const gain = audioCtx.createGain();
-            osc.connect(gain); gain.connect(audioCtx.destination);
-            osc.type = 'sine'; osc.frequency.value = 600;
-            gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
-            gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.3);
-            osc.start(); osc.stop(audioCtx.currentTime + 0.3);
-            // Deuxieme note
-            const osc2 = audioCtx.createOscillator();
-            const gain2 = audioCtx.createGain();
-            osc2.connect(gain2); gain2.connect(audioCtx.destination);
-            osc2.type = 'sine'; osc2.frequency.value = 900;
-            gain2.gain.setValueAtTime(0.15, audioCtx.currentTime + 0.15);
-            gain2.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.4);
-            osc2.start(audioCtx.currentTime + 0.15); osc2.stop(audioCtx.currentTime + 0.4);
-        } catch(e) {}
+        playTone(600, 'sine', 0.2, 0.3);
+        setTimeout(() => playTone(900, 'sine', 0.15, 0.25), 150);
     }
 }
+
+// ═══ THÈME JOUR/NUIT ═══
+let isDayTheme = localStorage.getItem('sats21_theme') === 'day';
+function applyTheme() {
+    document.documentElement.classList.toggle('day', isDayTheme);
+    const btn = document.getElementById('themeBtn');
+    if (btn) btn.textContent = isDayTheme ? '☀️' : '🌙';
+}
+function toggleTheme() {
+    isDayTheme = !isDayTheme;
+    localStorage.setItem('sats21_theme', isDayTheme ? 'day' : 'night');
+    applyTheme();
+}
+
+// ═══ ANIMATIONS IMMERSIVES ═══
+function triggerFeltShake() {
+    const felt = document.querySelector('.felt');
+    if (!felt) return;
+    felt.classList.remove('shake');
+    void felt.offsetWidth;
+    felt.classList.add('shake');
+    setTimeout(() => felt.classList.remove('shake'), 600);
+}
+function triggerFeltMyTurn() {
+    const felt = document.querySelector('.felt');
+    if (!felt) return;
+    felt.classList.remove('my-turn-flash');
+    void felt.offsetWidth;
+    felt.classList.add('my-turn-flash');
+    setTimeout(() => felt.classList.remove('my-turn-flash'), 800);
+}
+function triggerFlashOverlay(type) {
+    const el = document.createElement('div');
+    el.className = type === 'bj' ? 'bj-overlay' : 'loss-overlay';
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), 1200);
+}
+function animateAvatar(seatEl, result) {
+    const av = seatEl?.querySelector('.seat-avatar');
+    if (!av) return;
+    const cls = result === 'bj' ? 'anim-bj' : result === 'win' ? 'anim-win' : result === 'loss' || result === 'bust' ? 'anim-loss' : 'anim-push';
+    av.classList.remove('anim-win','anim-bj','anim-loss','anim-push');
+    void av.offsetWidth;
+    av.classList.add(cls);
+    setTimeout(() => av.classList.remove(cls), 1100);
+}
+
 // Restaurer le titre quand la tab redevient visible
 document.addEventListener('visibilitychange', () => {
     if (!document.hidden) { document.title = originalTitle; titleBlinking = false; }
@@ -1232,9 +1409,17 @@ function detectPhaseChange(data) {
                 if (hasBJ) {
                     playBJSound();
                     bitcoinBurst();
-                } else if (typeof confetti !== 'undefined') {
-                    confetti({ particleCount: 80, spread: 60, origin: { y: 0.55 }, colors: ['#ff6b00', '#ffa500', '#ffd700', '#00ff00'] });
+                    triggerFlashOverlay('bj');
+                    sendBrowserNotif('BLACKJACK!', `+${gain} sats ⚡`);
+                } else {
+                    triggerFlashOverlay('win');
+                    if (typeof confetti !== 'undefined')
+                        confetti({ particleCount: 80, spread: 60, origin: { y: 0.55 }, colors: ['#ff6b00', '#ffa500', '#ffd700', '#00ff00'] });
+                    sendBrowserNotif('Victoire!', `+${gain} sats 🎉`);
                 }
+                // Animer avatar du siège
+                const mySeatEl = document.querySelector('.my-seat-zone .seat');
+                animateAvatar(mySeatEl, hasBJ ? 'bj' : 'win');
                 if (mySeat.bet) lastBet = mySeat.bet;
                 sessionWins++; sessionTotalWon += gain;
                 sessionCurrentStreak++;
@@ -1244,6 +1429,12 @@ function detectPhaseChange(data) {
                 showToast(`PERDU ${gain} sats`, 'loss');
                 spawnFloatSats(`${gain} ₿`, '#ff4444');
                 playLossSound();
+                const isBigLoss = Math.abs(gain) >= 500;
+                if (isBigLoss) triggerFlashOverlay('loss');
+                triggerFeltShake();
+                const mySeatElL = document.querySelector('.my-seat-zone .seat');
+                const myBustHands = mySeat?.hands?.some(h => h.result === 'bust');
+                animateAvatar(mySeatElL, myBustHands ? 'bust' : 'loss');
                 sessionLosses++;
                 sessionCurrentStreak = 0;
                 resultHistory.push('loss');
@@ -1265,8 +1456,10 @@ function detectPhaseChange(data) {
         addChatSystem('Les cartes sont distribuees!');
     if (data.isMyTurn && (!lastTableState || !lastTableState.isMyTurn)) {
         addChatSystem('A vous de jouer!');
-        if (navigator.vibrate) navigator.vibrate(50);
+        if (navigator.vibrate) navigator.vibrate([80, 40, 80, 40, 120]);
         notifyIfHidden('A vous de jouer!');
+        sendBrowserNotif('Votre tour!', 'Appuyez H/S/D/P pour jouer 🎴');
+        triggerFeltMyTurn();
     }
     if (previousStatus !== 'betting' && data.status === 'betting') addChatSystem('Phase de mise ouverte!');
     if (previousStatus === 'finished' && data.status === 'waiting') addChatSystem('Nouveau round - placez vos mises!');
@@ -1711,6 +1904,8 @@ async function doTip() {
 }
 
 window.onload = async () => {
+    applyTheme();
+    updateNotifBtn();
     await initSession();
     await loadLobby();
     // Initialiser la grille d'avatars

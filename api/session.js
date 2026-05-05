@@ -1,11 +1,16 @@
 import { kv } from '@vercel/kv';
 import cookie from 'cookie';
+import { rateLimit } from './_helpers.js';
 
 export const config = {
   runtime: 'edge',
 };
 
 export default async function handler(req) {
+  // ── Rate limit IP global ──
+  const rl = await rateLimit(req, 'session', 30, 60);
+  if (rl) return rl;
+
   const cookies = cookie.parse(req.headers.get('cookie') || '');
   const sessionId = cookies.session_id;
 

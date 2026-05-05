@@ -1,5 +1,5 @@
 import { kv } from '@vercel/kv';
-import { json, getSessionId } from '../../_helpers.js';
+import { json, getSessionId, rateLimit } from '../../_helpers.js';
 import { checkTimeouts, startDealing, creditPlayers, BETTING_TIMEOUT } from '../[id].js';
 
 export const config = { runtime: 'edge' };
@@ -7,6 +7,10 @@ export const config = { runtime: 'edge' };
 const DEFAULT_BANKROLL = 500000; // 500K sats par défaut
 
 export default async function handler(req) {
+  // ── Rate limit IP global ──
+  const rl = await rateLimit(req, 'bet', 20, 60);
+  if (rl) return rl;
+
   if (req.method !== 'POST') {
     return json(405, { error: 'Method not allowed' });
   }

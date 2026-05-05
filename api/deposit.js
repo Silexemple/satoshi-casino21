@@ -1,10 +1,14 @@
 import { kv } from '@vercel/kv';
-import { json, getSessionId } from './_helpers.js';
+import { json, getSessionId, rateLimit } from './_helpers.js';
 import { nwcRequest } from './_nwc.js';
 
 export const config = { runtime: 'edge' };
 
 export default async function handler(req) {
+  // ── Rate limit IP global ──
+  const rl = await rateLimit(req, 'deposit', 5, 60);
+  if (rl) return rl;
+
   if (req.method !== 'POST') {
     return json(405, { error: 'Method not allowed' });
   }

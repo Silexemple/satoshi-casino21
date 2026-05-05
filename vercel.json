@@ -1,7 +1,11 @@
 {
   "functions": {
-    "api/deposit.js": { "maxDuration": 10 },
-    "api/withdraw.js": { "maxDuration": 10 },
-    "api/check-payment/[hash].js": { "maxDuration": 10 }
+    "api/deposit.js":              { "maxDuration": 15 },
+    "api/withdraw.js":             { "maxDuration": 15 },
+    "api/check-payment/[hash].js": { "maxDuration": 15 },
+    "api/game.js":                 { "maxDuration": 10 },
+    "api/table/[id]/action.js":    { "maxDuration": 10 },
+    "api/table/[id]/bet.js":       { "maxDuration": 10 },
+    "api/tournament/play.js":      { "maxDuration": 10 }
   }
 }
