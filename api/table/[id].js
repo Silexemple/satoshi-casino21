@@ -207,10 +207,18 @@ function startDealing(table) {
   table.lastUpdate = Date.now();
 }
 
+function isSoft17(hand) {
+  // Soft 17: score=17 avec au moins un As comptant pour 11
+  const score = handScore(hand);
+  if (score !== 17) return false;
+  const aces = hand.filter(c => c.value === 'A').length;
+  const hardScore = hand.reduce((s, c) => s + (c.value === 'A' ? 1 : c.num), 0);
+  return aces > 0 && hardScore !== 17;
+}
 function dealerPlay(table) {
   table.status = 'dealer_turn';
-  // Dealer tire jusqu'à 17+
-  while (handScore(table.dealerHand) < 17) {
+  // Dealer hits soft 17 (règle standard H17)
+  while (handScore(table.dealerHand) < 17 || isSoft17(table.dealerHand)) {
     table.dealerHand.push(drawCard(table.deck));
   }
 }
@@ -448,10 +456,9 @@ export default async function handler(req) {
 
 async function creditPlayers(table) {
   const creditKey = `credited:${table.id}:${table.roundNumber}`;
-  const alreadyCredited = await kv.get(creditKey);
-  if (alreadyCredited) return;
-
-  await kv.set(creditKey, true, { ex: 3600 });
+  // Atomic check-and-set: nx:true garantit qu'un seul process crédite (évite double-crédit race condition)
+  const claimed = await kv.set(creditKey, true, { nx: true, ex: 3600 });
+  if (!claimed) return;
 
   for (const seat of table.seats) {
     if (!seat || !seat.payout) continue;

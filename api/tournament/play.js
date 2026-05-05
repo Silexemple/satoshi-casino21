@@ -186,8 +186,14 @@ export default async function handler(req) {
 }
 
 async function finishDealerPlay(gs, tPlayer, tournament, tKey, gsKey) {
-  // Dealer plays
-  while (handScore(gs.dealerHand) < 17) {
+  // Dealer plays - H17: hits on soft 17
+  const isSoft17 = (hand) => {
+    const score = handScore(hand);
+    if (score !== 17) return false;
+    const hardScore = hand.reduce((s,c) => s + (c.value==='A' ? 1 : c.num), 0);
+    return hand.some(c => c.value==='A') && hardScore !== 17;
+  };
+  while (handScore(gs.dealerHand) < 17 || isSoft17(gs.dealerHand)) {
     gs.dealerHand.push(drawCard(gs.deck));
   }
 

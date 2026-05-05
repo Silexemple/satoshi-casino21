@@ -15,7 +15,13 @@ export default async function handler(req) {
   if (!paymentHash) return json(400, { error: 'Payment hash manquant' });
 
   const invoice = await kv.get(`invoice:${paymentHash}`);
-  if (!invoice || invoice.session_id !== sessionId) {
+  if (!invoice) return json(404, { error: 'Invoice non trouvee' });
+
+  // Vérifier ownership: soit par session_id (connexion identique) soit par linkingKey (re-login)
+  const currentLinkingKey = await kv.get(`session:${sessionId}`);
+  const ownsInvoice = invoice.session_id === sessionId ||
+    (currentLinkingKey && invoice.linking_key === currentLinkingKey);
+  if (!ownsInvoice) {
     return json(404, { error: 'Invoice non trouvee' });
   }
 

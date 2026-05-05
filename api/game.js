@@ -422,7 +422,14 @@ async function advanceOrFinish(gs, player, playerKey, gameKey, txKey) {
   }
 
   // Toutes les mains finies -> dealer joue
-  while (handScore(gs.dealerHand) < 17) {
+  // H17: dealer tire sur soft 17 (règle standard)
+  const isSoft17 = (hand) => {
+    const score = handScore(hand);
+    if (score !== 17) return false;
+    const hardScore = hand.reduce((s,c) => s + (c.value==='A' ? 1 : c.num), 0);
+    return hand.some(c => c.value==='A') && hardScore !== 17;
+  };
+  while (handScore(gs.dealerHand) < 17 || isSoft17(gs.dealerHand)) {
     gs.dealerHand.push(drawCard(gs.deck));
   }
 
