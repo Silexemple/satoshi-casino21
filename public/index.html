@@ -8,7 +8,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<meta name="version" content="v2026.05.06.1778078824">
+<meta name="version" content="v2026.05.06.1778081172">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>₿ BITCOIN MAXI CASINO - Sats Jack 21</title>
@@ -1045,7 +1045,7 @@
 <div class="modal" id="lnauthModal" style="z-index:10000;">
     <div class="modal-content" style="max-width:380px;">
         <div class="modal-title">⚡ CONNEXION LIGHTNING</div>
-        <div style="font-size:9px;color:#666;text-align:center;margin-bottom:4px;letter-spacing:1px;">v2026.05.06.1778078824</div>
+        <div style="font-size:9px;color:#666;text-align:center;margin-bottom:4px;letter-spacing:1px;">v2026.05.06.1778081172</div>
         <p style="color:#aaa;font-size:14px;margin-bottom:12px;">Scannez avec votre wallet Bitcoin Lightning pour vous connecter</p>
         <div id="lnauthQR" style="background:#fff;padding:12px;border-radius:8px;margin:0 auto 12px;width:fit-content;min-height:80px;display:flex;align-items:center;justify-content:center;"></div>
         <div id="lnauthLNURL" style="font-size:9px;color:#555;word-break:break-all;margin:8px 0;max-height:40px;overflow:hidden;"></div>
@@ -1863,9 +1863,18 @@ async function processWithdraw() {
 }
 
 function showDepositModal() {
-    document.getElementById('depositModal').classList.add('active');
-    document.getElementById('invoiceBox').style.display = 'none';
-    document.getElementById('paymentStatus').innerHTML = '⏳ En attente du paiement...';
+    console.log('[DEPOSIT] showDepositModal called, balance=', balance, 'nick=', playerNickname);
+    const modal = document.getElementById('depositModal');
+    if (!modal) {
+        alert('Erreur: modal deposit introuvable. Cache navigateur ? Recharge la page (Ctrl+F5).');
+        return;
+    }
+    modal.classList.add('active');
+    const ib = document.getElementById('invoiceBox');
+    if (ib) ib.style.display = 'none';
+    const ps = document.getElementById('paymentStatus');
+    if (ps) ps.innerHTML = '⏳ En attente du paiement...';
+    console.log('[DEPOSIT] Modal opened');
 }
 
 function showWithdrawModal() {
@@ -2389,6 +2398,21 @@ async function checkExistingGame() {
         // Pas de partie en cours, c'est normal
     }
 }
+
+window.addEventListener('error', (e) => {
+    console.error('[GLOBAL ERROR]', e.message, e.filename, e.lineno);
+    if (typeof showToast === 'function') {
+        showToast('JS Error: ' + e.message, 'loss');
+    } else {
+        alert('JS Error: ' + e.message);
+    }
+});
+window.addEventListener('unhandledrejection', (e) => {
+    console.error('[UNHANDLED PROMISE]', e.reason);
+    if (typeof showToast === 'function') {
+        showToast('Promise: ' + (e.reason?.message || e.reason), 'loss');
+    }
+});
 
 window.onload = () => {
     if (isMuted) document.getElementById('muteBtn').textContent = '🔇';
