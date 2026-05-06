@@ -38,7 +38,7 @@ export default async function handler(req) {
   if (req.method !== 'POST') return json(405, { error: 'Method not allowed' });
 
   const sessionId = getSessionId(req);
-  if (!sessionId) return json(401, { error: 'Session invalide' });
+  if (!sessionId) return json(401, { error: 'Session invalide', auth_required: true });
 
   // Auto-create tournaments from templates if none exist
   const activeIds = await kv.smembers('tournaments:active') || [];

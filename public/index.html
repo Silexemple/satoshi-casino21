@@ -1536,6 +1536,9 @@ let currentPaymentHash = null;
 let currentInvoice = null;
 let paymentCheckInterval = null;
 
+// Auth state — true uniquement après initSession() réussi
+let isAuthenticated = false;
+
 // État du jeu reçu du serveur
 let gameState = null;
 
@@ -1581,9 +1584,13 @@ async function apiCall(endpoint, method = 'GET', body = null) {
     if (!response.ok) {
         let error = {};
         try { error = await response.json(); } catch(_) {}
-        // Session expirée → ouvrir LNAuth modal avec message clair
-        if (response.status === 401 && error.auth_required) {
-            showLNAuthModal('🔒 Reconnectez votre wallet Lightning pour continuer');
+        // Session expirée ou absente → ouvrir LNAuth modal
+        // On déclenche aussi sur 401 sans flag auth_required (filet de sécurité)
+        if (response.status === 401) {
+            isAuthenticated = false;
+            showLNAuthModal(error.auth_required
+                ? '🔒 Reconnectez votre wallet Lightning pour continuer'
+                : '🔒 ' + (error.error || 'Session invalide') + ' — reconnectez-vous');
             throw new Error('__auth_required__'); // signal spécial
         }
         throw new Error(error.error || 'Erreur API');
@@ -1607,21 +1614,31 @@ async function initSession() {
 
         if (response.status === 401) {
             const data = await response.json().catch(() => ({}));
-            if (data.auth_required) {
-                showLNAuthModal('⚡ Connectez votre wallet Lightning pour jouer');
-                return;
-            }
+            isAuthenticated = false;
+            // 401 → toujours ouvrir LNAuth modal (avec ou sans flag)
+            showLNAuthModal(data.auth_required
+                ? '⚡ Connectez votre wallet Lightning pour jouer'
+                : '⚡ ' + (data.error || 'Session requise'));
+            return;
         }
 
-        if (!response.ok) throw new Error('Session error');
+        if (!response.ok) {
+            // Autres erreurs (500, 429, etc) — fallback
+            console.error('[initSession] Status non-OK:', response.status);
+            const data = await response.json().catch(() => ({}));
+            showToast('Erreur serveur: ' + (data.error || response.status), 'loss');
+            return;
+        }
 
         const data = await response.json();
+        isAuthenticated = true;
         balance = data.balance;
         playerNickname = data.nickname;
         updateNicknameDisplay();
         updateDisplay();
     } catch (error) {
         console.error('Erreur init session:', error);
+        showToast('Erreur réseau: ' + error.message, 'loss');
     }
 }
 
@@ -1686,12 +1703,14 @@ async function pollLNAuthStatus() {
         if (data.status === 'authenticated') {
             clearInterval(lnauthPollInterval);
             lnauthPollInterval = null;
+            isAuthenticated = true;
             closeModal('lnauthModal');
             balance = data.balance;
             playerNickname = data.nickname;
             updateNicknameDisplay();
             updateDisplay();
             checkExistingGame();
+            showToast('⚡ Connecté !', 'win');
         } else if (data.status === 'expired') {
             // Challenge expire, en generer un nouveau
             await generateLNAuthChallenge();
@@ -1729,7 +1748,7 @@ function showNicknameModal() {
 async function saveNickname() {
     const nick = document.getElementById('nicknameInput').value.trim();
     if (nick.length < 2) {
-        showToast('Pseudo trop court (min 2 caractères)', 'loss'); return;
+        showToast('Pseudo trop court (min 2 caractères)', 'loss');
         return;
     }
     try {
@@ -1738,47 +1757,64 @@ async function saveNickname() {
         updateNicknameDisplay();
         closeModal('nicknameModal');
     } catch (e) {
-        showToast('Erreur: ' + e.message, 'loss'); }
+        if (e.message !== '__auth_required__') {
+            showToast('Erreur: ' + e.message, 'loss');
+        }
+    }
 }
 async function generateInvoice() {
+    // Garde-fou auth (au cas où l'utilisateur arrive ici sans passer par showDepositModal)
+    if (!isAuthenticated) {
+        showLNAuthModal('⚡ Connectez-vous d\'abord pour déposer');
+        return;
+    }
+
     const amount = parseInt(document.getElementById('depositAmount').value);
-    
+
     if (!amount || amount < 100 || amount > 100000) {
-        return showToast('Montant invalide (100-100000 sats)', 'loss');
+        showToast('Montant invalide (100-100000 sats)', 'loss');
         return;
     }
 
     if (balance + amount > 1000000) {
-        return showToast('Solde max atteint (1 000 000 sats)', 'loss');
+        showToast('Solde max atteint (1 000 000 sats)', 'loss');
         return;
     }
-    
+
+    // Désactiver bouton pendant la génération pour éviter double-clic
+    const btn = document.querySelector('#depositModal button[onclick="generateInvoice()"]');
+    if (btn) { btn.disabled = true; btn.textContent = 'GÉNÉRATION...'; }
+
     try {
         const data = await apiCall('/api/deposit', 'POST', { amount });
-        
+
         currentPaymentHash = data.payment_hash;
         currentInvoice = data.payment_request;
-        
+
         document.getElementById('invoiceBox').style.display = 'block';
         document.getElementById('qrcode').innerHTML = '';
         new QRCode(document.getElementById('qrcode'), {
             text: data.payment_request,
             width: 200,
-            height: 200
+            height: 200,
+            colorDark: '#000000',
+            colorLight: '#ffffff'
         });
-        
+
         startPaymentCheck();
-        
+
     } catch (error) {
         // auth_required est géré par apiCall (ouvre LNAuth modal) → ne pas montrer toast
         if (error.message !== '__auth_required__') {
             showToast('Erreur: ' + error.message, 'loss');
         }
+    } finally {
+        if (btn) { btn.disabled = false; btn.textContent = 'GÉNÉRER INVOICE'; }
     }
 }
 async function copyInvoice() {
     if (!currentInvoice) {
-        return showToast('Aucune invoice à copier', 'loss');
+        showToast('Aucune invoice à copier', 'loss');
         return;
     }
     
@@ -1828,32 +1864,37 @@ function startPaymentCheck() {
 }
 
 async function processWithdraw() {
+    if (!isAuthenticated) {
+        showLNAuthModal('⚡ Connectez-vous d\'abord pour retirer');
+        return;
+    }
+
     const invoice = document.getElementById('withdrawInvoice').value.trim().toLowerCase();
 
     if (!invoice || !invoice.startsWith('lnbc')) {
-        return showToast('Invoice invalide', 'loss');
+        showToast('Invoice invalide (doit commencer par lnbc)', 'loss');
         return;
     }
-    
+
     if (balance === 0) {
-        return showToast('Solde insuffisant', 'loss');
+        showToast('Solde insuffisant', 'loss');
         return;
     }
-    
+
     const btn = document.getElementById('withdrawSubmitBtn');
     btn.disabled = true;
     btn.textContent = 'TRAITEMENT...';
-    
+
     try {
         const data = await apiCall('/api/withdraw', 'POST', { invoice });
-        
+
         balance = data.new_balance || 0;
         updateDisplay();
         animateBalanceUpdate();
-        
+
         showToast(`✅ ${data.amount} sats envoyés !`, 'win');
         closeModal('withdrawModal');
-        
+
     } catch (error) {
         if (error.message !== '__auth_required__') showToast('Erreur: ' + error.message, 'loss');
     } finally {
@@ -1863,29 +1904,68 @@ async function processWithdraw() {
 }
 
 function showDepositModal() {
-    console.log('[DEPOSIT] showDepositModal called, balance=', balance, 'nick=', playerNickname);
+    console.log('[DEPOSIT] showDepositModal called, auth=', isAuthenticated, 'balance=', balance, 'nick=', playerNickname);
+
+    // Garde-fou: si pas authentifié, ouvrir directement le modal LNAuth
+    if (!isAuthenticated) {
+        console.log('[DEPOSIT] Non authentifié → ouverture LNAuth');
+        showLNAuthModal('⚡ Connectez-vous d\'abord pour déposer des sats');
+        return;
+    }
+
     const modal = document.getElementById('depositModal');
     if (!modal) {
         alert('Erreur: modal deposit introuvable. Cache navigateur ? Recharge la page (Ctrl+F5).');
         return;
     }
+
+    // Reset état pour éviter les anciennes invoices
+    currentInvoice = null;
+    currentPaymentHash = null;
+    if (paymentCheckInterval) {
+        clearInterval(paymentCheckInterval);
+        paymentCheckInterval = null;
+    }
+
     modal.classList.add('active');
     const ib = document.getElementById('invoiceBox');
     if (ib) ib.style.display = 'none';
     const ps = document.getElementById('paymentStatus');
     if (ps) ps.innerHTML = '⏳ En attente du paiement...';
+    const qr = document.getElementById('qrcode');
+    if (qr) qr.innerHTML = '';
     console.log('[DEPOSIT] Modal opened');
 }
 
 function showWithdrawModal() {
+    console.log('[WITHDRAW] showWithdrawModal called, auth=', isAuthenticated, 'balance=', balance);
+
+    // Garde-fou: si pas authentifié, ouvrir directement le modal LNAuth
+    if (!isAuthenticated) {
+        showLNAuthModal('⚡ Connectez-vous d\'abord pour retirer des sats');
+        return;
+    }
+
+    if (balance <= 0) {
+        showToast('Solde insuffisant pour un retrait', 'loss');
+        return;
+    }
+
     document.getElementById('withdrawBalance').textContent = balance;
     document.getElementById('withdrawInvoice').value = '';
+    const decoded = document.getElementById('withdrawDecodedAmount');
+    if (decoded) decoded.style.display = 'none';
     document.getElementById('withdrawModal').classList.add('active');
 }
 
 function closeModal(id) {
     document.getElementById(id).classList.remove('active');
     if (paymentCheckInterval) clearInterval(paymentCheckInterval);
+    // Stopper aussi le polling LNAuth si on ferme ce modal
+    if (id === 'lnauthModal' && lnauthPollInterval) {
+        clearInterval(lnauthPollInterval);
+        lnauthPollInterval = null;
+    }
 }
 
 function updateDisplay() {
@@ -2354,8 +2434,7 @@ function exportTxCSV() {
         const d = new Date(tx.timestamp).toLocaleString('fr-FR').replace(',', ' ');
         return `"${d}","${tx.type}","${(tx.description || '').replace(/"/g, "''")}",${tx.amount}`;
     });
-    const csv = [header, ...rows].join('
-');
+    const csv = [header, ...rows].join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');

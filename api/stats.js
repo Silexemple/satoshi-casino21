@@ -9,10 +9,10 @@ export default async function handler(req) {
   if (rl) return rl;
 
   const sessionId = getSessionId(req);
-  if (!sessionId) return json(401, { error: 'Session invalide' });
+  if (!sessionId) return json(401, { error: 'Session invalide', auth_required: true });
 
   const linkingKey = await kv.get(`session:${sessionId}`);
-  if (!linkingKey) return json(401, { error: 'Session invalide' });
+  if (!linkingKey) return json(401, { error: 'Session invalide', auth_required: true });
 
   const statsKey = `stats:${linkingKey}`;
 

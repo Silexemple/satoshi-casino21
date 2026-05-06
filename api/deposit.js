@@ -14,7 +14,7 @@ export default async function handler(req) {
   }
 
   const sessionId = getSessionId(req);
-  if (!sessionId) return json(401, { error: 'Session invalide' });
+  if (!sessionId) return json(401, { error: 'Session invalide', auth_required: true });
 
   const rlKey = `ratelimit:deposit:${sessionId}`;
   const rlCount = await kv.incr(rlKey);
@@ -22,7 +22,7 @@ export default async function handler(req) {
   if (rlCount > 3) return json(429, { error: 'Trop de demandes de depot, attendez un instant' });
 
   const linkingKey = await kv.get(`session:${sessionId}`);
-  if (!linkingKey) return json(401, { error: 'Session invalide' });
+  if (!linkingKey) return json(401, { error: 'Session invalide', auth_required: true });
 
   const body = await req.json();
   const MAX_DEPOSIT = 100000;

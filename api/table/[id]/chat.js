@@ -15,7 +15,7 @@ export default async function handler(req) {
   if (req.method !== 'POST') return json(405, { error: 'Method not allowed' });
 
   const sessionId = getSessionId(req);
-  if (!sessionId) return json(401, { error: 'Session invalide' });
+  if (!sessionId) return json(401, { error: 'Session invalide', auth_required: true });
 
   const url = new URL(req.url);
   const pathParts = url.pathname.split('/');

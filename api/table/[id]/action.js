@@ -15,7 +15,7 @@ export default async function handler(req) {
   }
 
   const sessionId = getSessionId(req);
-  if (!sessionId) return json(401, { error: 'Session invalide' });
+  if (!sessionId) return json(401, { error: 'Session invalide', auth_required: true });
 
   const url = new URL(req.url);
   const pathParts = url.pathname.split('/');
@@ -56,7 +56,7 @@ export default async function handler(req) {
     const seat = table.seats[seatIdx];
     // Resoudre linkingKey pour acces au solde
     const linkingKey = seat.linkingKey || await kv.get(`session:${sessionId}`);
-    if (!linkingKey) return json(401, { error: 'Session invalide' });
+    if (!linkingKey) return json(401, { error: 'Session invalide', auth_required: true });
     const resolvedPlayerKey = `player:${linkingKey}`;
 
     const hand = seat.hands[seat.currentHandIdx];

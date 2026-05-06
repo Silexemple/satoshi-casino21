@@ -928,8 +928,8 @@ async function apiCall(endpoint, method = 'GET', body = null) {
     if (!response.ok) {
         let error = {};
         try { error = await response.json(); } catch(_) {}
-        if (response.status === 401 && error.auth_required) {
-            // Session expirée → rediriger vers accueil pour re-auth
+        // Filet de sécurité: tout 401 redirige vers /?auth=required (qui ouvre LNAuth)
+        if (response.status === 401) {
             window.location.href = '/?auth=required';
             throw new Error('__auth_required__');
         }
@@ -946,7 +946,7 @@ async function initSession() {
             headers: { 'Content-Type': 'application/json' }
         });
         if (response.status === 401) {
-            window.location.href = '/'; // Rediriger vers la page de connexion LNAuth
+            window.location.href = '/?auth=required'; // Rediriger vers LNAuth
             return;
         }
         if (!response.ok) throw new Error('Session error');

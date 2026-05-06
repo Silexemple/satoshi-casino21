@@ -7,7 +7,7 @@ export default async function handler(req) {
   if (req.method !== 'GET') return json(405, { error: 'Method not allowed' });
 
   const sessionId = getSessionId(req);
-  if (!sessionId) return json(401, { error: 'Session invalide' });
+  if (!sessionId) return json(401, { error: 'Session invalide', auth_required: true });
 
   // Get active tournament IDs
   const tournamentIds = await kv.smembers('tournaments:active') || [];

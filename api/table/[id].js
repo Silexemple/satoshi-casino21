@@ -386,7 +386,7 @@ export default async function handler(req) {
 
   const sessionId = getSessionId(req);
   if (!sessionId) {
-    return json(401, { error: 'Session invalide' });
+    return json(401, { error: 'Session invalide', auth_required: true });
   }
 
   const url = new URL(req.url);

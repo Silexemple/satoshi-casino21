@@ -7,10 +7,10 @@ export default async function handler(req) {
   if (req.method !== 'GET') return json(405, { error: 'Method not allowed' });
 
   const sessionId = getSessionId(req);
-  if (!sessionId) return json(401, { error: 'Session invalide' });
+  if (!sessionId) return json(401, { error: 'Session invalide', auth_required: true });
 
   const linkingKey = await kv.get(`session:${sessionId}`);
-  if (!linkingKey) return json(401, { error: 'Session invalide' });
+  if (!linkingKey) return json(401, { error: 'Session invalide', auth_required: true });
 
   const player = await kv.get(`player:${linkingKey}`);
   if (!player) return json(404, { error: 'Joueur non trouve' });

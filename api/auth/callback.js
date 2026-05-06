@@ -1,8 +1,11 @@
+// LNURL-auth callback (LUD-04)
+// Refactor: signature verification via @noble/secp256k1 (was 110 lines of hand-rolled BigInt math).
+import { verify } from '@noble/secp256k1';
+
 export const config = { runtime: 'edge' };
 
 // ── Upstash KV REST (pipeline officiel) ─────────────────────────────────────
 async function kvCommand(...command) {
-  // Essayer plusieurs noms de variables (Vercel KV, Upstash Redis, custom)
   const url = process.env.KV_REST_API_URL
     || process.env.UPSTASH_REDIS_REST_URL
     || process.env.REDIS_URL;
@@ -32,90 +35,34 @@ async function kvSet(key, value, ttl) {
   return await kvCommand('SET', key, v);
 }
 
-// ── secp256k1 pure JS ────────────────────────────────────────────────────────
-const P  = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2Fn;
-const N  = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141n;
-const Gx = 0x79BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798n;
-const Gy = 0x483ADA7726A3C4655DA4FBFC0E1108A8FD17B448A68554199C47D08FFB10D4B8n;
-
-function mod(a, m = P) { return ((a % m) + m) % m; }
-function inv(n, m = P) {
-  if (n === 0n) return 0n;
-  let [a, b, x, y] = [mod(n, m), m, 1n, 0n];
-  while (b > 0n) { const q = a / b; [a, b] = [b, a - q * b]; [x, y] = [y, x - q * y]; }
-  return mod(x, m);
-}
-function pointDouble(p) {
-  const [x, y] = p;
-  const l = mod(3n * x * x * inv(2n * y));
-  const x3 = mod(l * l - 2n * x);
-  return [x3, mod(l * (x - x3) - y)];
-}
-function pointAdd(P1, P2) {
-  if (!P1) return P2; if (!P2) return P1;
-  const [x1,y1,x2,y2] = [P1[0],P1[1],P2[0],P2[1]];
-  if (x1 === x2) return y1 === y2 ? pointDouble(P1) : null;
-  const l = mod((y2-y1)*inv(x2-x1));
-  const x3 = mod(l*l-x1-x2);
-  return [x3, mod(l*(x1-x3)-y1)];
-}
-function pointMul(scalar, point = [Gx, Gy]) {
-  let r = null, q = [point[0], point[1]], k = mod(scalar, N);
-  while (k > 0n) { if (k & 1n) r = pointAdd(r, q); q = pointDouble(q); k >>= 1n; }
-  return r;
-}
-function modPow(base, exp, m = P) {
-  let r = 1n; base = mod(base, m);
-  while (exp > 0n) { if (exp & 1n) r = r * base % m; base = base * base % m; exp >>= 1n; }
-  return r;
-}
-function modSqrt(n) { return modPow(n, (P + 1n) / 4n); }
-function parsePoint(bytes) {
-  const prefix = bytes[0];
-  const x = BigInt('0x' + Array.from(bytes.slice(1, 33)).map(b => b.toString(16).padStart(2,'0')).join(''));
-  if (prefix === 4) {
-    const y = BigInt('0x' + Array.from(bytes.slice(33)).map(b => b.toString(16).padStart(2,'0')).join(''));
-    return [x, y];
-  }
-  const ySq = mod(x * x * x + 7n);
-  let y = modSqrt(ySq);
-  if ((y % 2n) !== BigInt(prefix - 2)) y = P - y;
-  return [x, y];
-}
+// ── Helpers DER → compact 64 bytes (noble v3 ne supporte que compact) ───────
 function hexToBytes(hex) {
   const b = new Uint8Array(hex.length / 2);
-  for (let i = 0; i < hex.length; i += 2) b[i/2] = parseInt(hex.slice(i,i+2), 16);
+  for (let i = 0; i < hex.length; i += 2) b[i / 2] = parseInt(hex.slice(i, i + 2), 16);
   return b;
 }
+
 function derToCompact(der) {
+  // Format DER ECDSA: 0x30 [len] 0x02 [rLen] [r...] 0x02 [sLen] [s...]
   let i = 0;
-  if (der[i++] !== 0x30) throw new Error('Bad DER');
-  i++;
-  if (der[i++] !== 0x02) throw new Error('Bad r marker');
-  const rLen = der[i++]; const r = der.slice(i, i + rLen); i += rLen;
-  if (der[i++] !== 0x02) throw new Error('Bad s marker');
-  const sLen = der[i++]; const s = der.slice(i, i + sLen);
+  if (der[i++] !== 0x30) throw new Error('DER: missing sequence tag');
+  const seqLen = der[i++];
+  if (seqLen + 2 !== der.length) throw new Error('DER: bad sequence length');
+  if (der[i++] !== 0x02) throw new Error('DER: missing r tag');
+  const rLen = der[i++];
+  let r = der.slice(i, i + rLen); i += rLen;
+  if (der[i++] !== 0x02) throw new Error('DER: missing s tag');
+  const sLen = der[i++];
+  let s = der.slice(i, i + sLen);
+  // Strip leading zero (encodage DER signé) si présent
+  if (r.length > 32 && r[0] === 0x00) r = r.slice(1);
+  if (s.length > 32 && s[0] === 0x00) s = s.slice(1);
+  if (r.length > 32 || s.length > 32) throw new Error('DER: r/s too large for 256-bit curve');
+  // Pad à gauche pour atteindre 32 bytes chacun
   const compact = new Uint8Array(64);
-  const rClean = r[0] === 0 ? r.slice(1) : r;
-  const sClean = s[0] === 0 ? s.slice(1) : s;
-  compact.set(rClean, 32 - rClean.length);
-  compact.set(sClean, 64 - sClean.length);
+  compact.set(r, 32 - r.length);
+  compact.set(s, 64 - s.length);
   return compact;
-}
-function verifySig(sigCompact, msgBytes, pubBytes) {
-  try {
-    const r = BigInt('0x' + Array.from(sigCompact.slice(0, 32)).map(b => b.toString(16).padStart(2,'0')).join(''));
-    const s = BigInt('0x' + Array.from(sigCompact.slice(32)).map(b => b.toString(16).padStart(2,'0')).join(''));
-    if (r <= 0n || r >= N || s <= 0n || s >= N) return false;
-    const z = BigInt('0x' + Array.from(msgBytes).map(b => b.toString(16).padStart(2,'0')).join(''));
-    const Q = parsePoint(pubBytes);
-    const sInv = inv(s, N);
-    const u1 = mod(z * sInv, N);
-    const u2 = mod(r * sInv, N);
-    const pt = pointAdd(pointMul(u1), pointMul(u2, Q));
-    if (!pt) return false;
-    return mod(pt[0], N) === r;
-  } catch { return false; }
 }
 
 // ── Handler ──────────────────────────────────────────────────────────────────
@@ -135,38 +82,63 @@ export default async function handler(req) {
     if (tag !== 'login') return err('Invalid tag');
     if (!k1 || !/^[0-9a-f]{64}$/i.test(k1)) return err('Invalid k1');
 
+    // Phase 1: GET sans sig/key → renvoyer les paramètres LNURL-auth (LUD-04)
     if (!sig && !key) {
       const challenge = await kvGet(`lnauth:k1:${k1}`);
       if (!challenge) return err('Unknown or expired challenge');
       return J({ tag: 'login', callback: `https://${url.hostname}/api/auth/callback`, k1, action: 'login' });
     }
 
+    // Phase 2: vérification de la signature
     if (!sig || !key) return err('Missing parameters');
     if (!/^[0-9a-f]+$/i.test(sig)) return err('Invalid signature format');
+    if (sig.length < 16 || sig.length > 144) return err('Invalid signature length');
     if (!/^[0-9a-f]{66}$/i.test(key)) return err('Invalid public key format');
+    // Compressed pubkey doit commencer par 02 ou 03
+    const pubPrefix = key.slice(0, 2).toLowerCase();
+    if (pubPrefix !== '02' && pubPrefix !== '03') return err('Invalid public key prefix');
 
     const challenge = await kvGet(`lnauth:k1:${k1}`);
     if (!challenge) return err('Unknown or expired challenge');
     if (challenge.status !== 'pending') return err('Challenge already used');
 
-    const sigCompact = derToCompact(hexToBytes(sig));
-    const valid = verifySig(sigCompact, hexToBytes(k1), hexToBytes(key));
+    // Verify ECDSA: signature DER → compact, puis verify(sig, k1, pub) sans prehash
+    let valid = false;
+    try {
+      const compactSig = derToCompact(hexToBytes(sig));
+      const k1Bytes = hexToBytes(k1);
+      const pubBytes = hexToBytes(key);
+      // prehash: false car k1 est déjà un challenge de 32 bytes (la "message hash")
+      // lowS: false car la spec LNURL-auth n'impose pas low-S
+      valid = verify(compactSig, k1Bytes, pubBytes, { prehash: false, lowS: false });
+    } catch (e) {
+      console.warn('[auth/callback] signature verify exception:', e?.message);
+      return err('Signature invalide (parsing)');
+    }
     if (!valid) return err('Signature invalide');
 
+    // Créer ou rafraîchir le joueur
     const playerKey = `player:${key}`;
     const existing = await kvGet(playerKey);
     if (!existing) {
-      await kvSet(playerKey, { balance: 0, nickname: null, avatar: null, created_at: Date.now(), last_activity: Date.now() }, 2592000);
+      await kvSet(playerKey, {
+        balance: 0, nickname: null, avatar: null,
+        created_at: Date.now(), last_activity: Date.now()
+      }, 2592000);
     } else {
       existing.last_activity = Date.now();
       await kvSet(playerKey, existing, 2592000);
     }
 
-    await kvSet(`lnauth:k1:${k1}`, { status: 'authenticated', linkingKey: key, authenticated_at: Date.now() }, 600);
+    // Marquer le challenge comme authentifié — sera consommé par /api/auth/status
+    await kvSet(`lnauth:k1:${k1}`, {
+      status: 'authenticated', linkingKey: key, authenticated_at: Date.now()
+    }, 600);
+
     return J({ status: 'OK' });
 
   } catch (e) {
-    console.error('[auth/callback]', e?.message);
+    console.error('[auth/callback]', e?.message, e?.stack);
     return J({ status: 'ERROR', reason: e?.message || 'Erreur interne' });
   }
 }

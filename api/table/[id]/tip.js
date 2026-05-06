@@ -12,7 +12,7 @@ export default async function handler(req) {
   }
 
   const sessionId = getSessionId(req);
-  if (!sessionId) return json(401, { error: 'Session invalide' });
+  if (!sessionId) return json(401, { error: 'Session invalide', auth_required: true });
 
   const url = new URL(req.url);
   const pathParts = url.pathname.split('/');
@@ -52,7 +52,7 @@ export default async function handler(req) {
     // Resoudre les linkingKeys des deux joueurs
     const senderSeat = table.seats[senderIdx];
     const senderLk = senderSeat.linkingKey || await kv.get(`session:${sessionId}`);
-    if (!senderLk) return json(401, { error: 'Session invalide' });
+    if (!senderLk) return json(401, { error: 'Session invalide', auth_required: true });
 
     const receiverLk = targetSeat.linkingKey || await kv.get(`session:${targetSeat.sessionId}`);
     if (!receiverLk) return json(400, { error: 'Destinataire non trouve' });

@@ -502,7 +502,8 @@ async function apiCall(endpoint, method = 'GET', body = null) {
     let data = {};
     try { data = await response.json(); } catch(_) {}
     if (!response.ok) {
-        if (response.status === 401 && data.auth_required) {
+        // Filet de sécurité: tout 401 redirige vers la page d'accueil pour LNAuth
+        if (response.status === 401) {
             window.location.href = '/?auth=required';
             throw new Error('__auth_required__');
         }
@@ -518,7 +519,7 @@ async function init() {
             headers: { 'Content-Type': 'application/json' }
         });
         if (response.status === 401) {
-            window.location.href = '/'; // Rediriger vers la page de connexion LNAuth
+            window.location.href = '/?auth=required'; // Rediriger vers LNAuth modal
             return;
         }
         if (!response.ok) throw new Error('Session error');
