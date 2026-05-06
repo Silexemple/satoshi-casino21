@@ -2,102 +2,95 @@ import { kv } from '@vercel/kv';
 
 export const config = { runtime: 'edge' };
 
-// Bech32 encoding inline — évite la dépendance CJS bech32 incompatible avec Edge Runtime
-const BECH32_ALPHABET = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l';
-const BECH32_GEN = [0x3b6a57b2, 0x26508e6d, 0x1ea119fa, 0x3d4233dd, 0x2a1462b3];
+// ── JSON helper ─────────────────────────────────────────────────────────────
+const jsonResp = (status, data) => new Response(JSON.stringify(data), {
+  status,
+  headers: { 'Content-Type': 'application/json' }
+});
 
-function bech32Polymod(values) {
-  let chk = 1;
-  for (const v of values) {
-    const top = chk >> 25;
-    chk = ((chk & 0x1ffffff) << 5) ^ v;
-    for (let i = 0; i < 5; i++) if ((top >> i) & 1) chk ^= BECH32_GEN[i];
+// ── Bech32 inline — zéro dépendance externe, 100% Edge compatible ────────────
+const B32_ABC = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l';
+const B32_GEN = [0x3b6a57b2, 0x26508e6d, 0x1ea119fa, 0x3d4233dd, 0x2a1462b3];
+
+function b32Polymod(v) {
+  let c = 1;
+  for (const x of v) {
+    const t = c >> 25;
+    c = ((c & 0x1ffffff) << 5) ^ x;
+    for (let i = 0; i < 5; i++) if ((t >> i) & 1) c ^= B32_GEN[i];
   }
-  return chk;
+  return c;
 }
-
-function bech32HrpExpand(hrp) {
-  const ret = [];
-  for (let i = 0; i < hrp.length; i++) ret.push(hrp.charCodeAt(i) >> 5);
-  ret.push(0);
-  for (let i = 0; i < hrp.length; i++) ret.push(hrp.charCodeAt(i) & 31);
-  return ret;
+function b32Expand(hrp) {
+  const r = [];
+  for (let i = 0; i < hrp.length; i++) r.push(hrp.charCodeAt(i) >> 5);
+  r.push(0);
+  for (let i = 0; i < hrp.length; i++) r.push(hrp.charCodeAt(i) & 31);
+  return r;
 }
-
-function bech32CreateChecksum(hrp, data) {
-  const values = bech32HrpExpand(hrp).concat(data).concat([0,0,0,0,0,0]);
-  const polymod = bech32Polymod(values) ^ 1;
-  return Array.from({length: 6}, (_, i) => (polymod >> (5 * (5 - i))) & 31);
+function b32Checksum(hrp, data) {
+  const p = b32Polymod(b32Expand(hrp).concat(data, [0,0,0,0,0,0])) ^ 1;
+  return Array.from({length:6}, (_,i) => (p >> (5*(5-i))) & 31);
 }
-
-function bech32ConvertBits(data, fromBits, toBits, pad = true) {
+function b32Convert(data) {
   let acc = 0, bits = 0;
-  const result = [];
-  const maxv = (1 << toBits) - 1;
-  for (const value of data) {
-    acc = (acc << fromBits) | value;
-    bits += fromBits;
-    while (bits >= toBits) {
-      bits -= toBits;
-      result.push((acc >> bits) & maxv);
-    }
+  const out = [];
+  for (const v of data) {
+    acc = (acc << 8) | v; bits += 8;
+    while (bits >= 5) { bits -= 5; out.push((acc >> bits) & 31); }
   }
-  if (pad && bits > 0) result.push((acc << (toBits - bits)) & maxv);
-  return result;
+  if (bits > 0) out.push((acc << (5-bits)) & 31);
+  return out;
+}
+function toLnurl(url) {
+  const bytes = Array.from(new TextEncoder().encode(url));
+  const words = b32Convert(bytes);
+  const all = words.concat(b32Checksum('lnurl', words));
+  return ('lnurl1' + all.map(d => B32_ABC[d]).join('')).toUpperCase();
 }
 
-function bech32Encode(hrp, data) {
-  const combined = data.concat(bech32CreateChecksum(hrp, data));
-  return hrp + '1' + combined.map(d => BECH32_ALPHABET[d]).join('');
-}
-
-function urlToBech32(url) {
-  const encoded = new TextEncoder().encode(url);
-  const words = bech32ConvertBits(Array.from(encoded), 8, 5);
-  return bech32Encode('lnurl', words).toUpperCase();
-}
-
+// ── Handler principal ────────────────────────────────────────────────────────
 export default async function handler(req) {
-  if (req.method !== 'GET') {
-    return new Response(JSON.stringify({ error: 'Method not allowed' }), {
-      status: 405,
-      headers: { 'Content-Type': 'application/json' }
-    });
+  // Tout dans un try/catch global — jamais de 500 non-structuré
+  try {
+    if (req.method !== 'GET') return jsonResp(405, { error: 'Method not allowed' });
+
+    // Rate limit IP — non-fatal si KV indisponible
+    try {
+      const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
+        || req.headers.get('x-real-ip')
+        || 'unknown';
+      const rlKey = `ratelimit:lnauth:${ip}`;
+      // SET NX avec string '0' (plus compatible que integer 0)
+      await kv.set(rlKey, '0', { nx: true, ex: 60 });
+      const rlCount = await kv.incr(rlKey);
+      if (rlCount > 10) return jsonResp(429, { error: 'Trop de requêtes. Réessayez dans 60s.' });
+    } catch (_) {
+      // KV indisponible → on continue sans rate limit plutôt que de crasher
+    }
+
+    // Générer k1 (32 bytes aléatoires)
+    const k1Bytes = crypto.getRandomValues(new Uint8Array(32));
+    const k1 = Array.from(k1Bytes).map(b => b.toString(16).padStart(2, '0')).join('');
+
+    // Construire l'URL callback et l'encoder en LNURL bech32
+    const url = new URL(req.url);
+    const domain = url.hostname;
+    const callbackUrl = `https://${domain}/api/auth/callback?tag=login&k1=${k1}&action=login`;
+    const lnurl = toLnurl(callbackUrl);
+
+    // Stocker le challenge k1 en KV (10 minutes)
+    await kv.set(`lnauth:k1:${k1}`, {
+      status: 'pending',
+      created_at: Date.now(),
+      domain
+    }, { ex: 600 });
+
+    return jsonResp(200, { k1, lnurl });
+
+  } catch (err) {
+    // Erreur inattendue → JSON structuré au lieu de la page 500 Vercel
+    console.error('[auth/generate] Error:', err?.message || err);
+    return jsonResp(500, { error: 'Erreur interne. Réessayez.', detail: err?.message });
   }
-
-  // Rate limit by IP
-  const ip = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown';
-  const rlKey = `ratelimit:lnauth:${ip}`;
-  await kv.set(rlKey, 0, { nx: true, ex: 60 }); // atomique SET NX
-  const rlCount = await kv.incr(rlKey);
-  if (rlCount > 10) {
-    return new Response(JSON.stringify({ error: 'Trop de requetes' }), {
-      status: 429,
-      headers: { 'Content-Type': 'application/json' }
-    });
-  }
-
-  // Generate 32 random bytes for k1 challenge
-  const k1Bytes = crypto.getRandomValues(new Uint8Array(32));
-  const k1 = Array.from(k1Bytes).map(b => b.toString(16).padStart(2, '0')).join('');
-
-  // Build LNURL callback URL
-  const url = new URL(req.url);
-  const domain = url.hostname;
-  const callbackUrl = `https://${domain}/api/auth/callback?tag=login&k1=${k1}&action=login`;
-
-  // Encode as bech32 LNURL (implémentation native Edge-compatible)
-  const lnurl = urlToBech32(callbackUrl);
-
-  // Store k1 challenge with 10-minute TTL
-  await kv.set(`lnauth:k1:${k1}`, {
-    status: 'pending',
-    created_at: Date.now(),
-    domain
-  }, { ex: 600 });
-
-  return new Response(JSON.stringify({ k1, lnurl }), {
-    status: 200,
-    headers: { 'Content-Type': 'application/json' }
-  });
 }

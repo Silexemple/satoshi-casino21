@@ -1633,12 +1633,16 @@ async function showLNAuthModal(message = null) {
 }
 
 async function generateLNAuthChallenge() {
-    document.getElementById('lnauthStatus').textContent = 'Generation du QR code...';
+    document.getElementById('lnauthStatus').textContent = 'Génération du QR code...';
+    document.getElementById('lnauthStatus').style.color = '#888';
     document.getElementById('lnauthQR').innerHTML = '';
     try {
         const resp = await fetch('/api/auth/generate', { credentials: 'include' });
-        const data = await resp.json();
-        if (!resp.ok) throw new Error(data.error || 'Erreur');
+        let data = {};
+        try { data = await resp.json(); } catch(e) {
+            throw new Error('Serveur indisponible — réessayez dans quelques secondes');
+        }
+        if (!resp.ok) throw new Error(data.error || data.detail || 'Erreur serveur');
 
         currentK1 = data.k1;
         currentLNURL = data.lnurl;
