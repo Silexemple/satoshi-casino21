@@ -2,9 +2,16 @@ export const config = { runtime: 'edge' };
 
 // ── Upstash KV REST (pipeline officiel) ─────────────────────────────────────
 async function kvCommand(...command) {
-  const url = process.env.KV_REST_API_URL;
-  const token = process.env.KV_REST_API_TOKEN;
-  if (!url || !token) throw new Error('KV env vars manquantes');
+  // Essayer plusieurs noms de variables (Vercel KV, Upstash Redis, custom)
+  const url = process.env.KV_REST_API_URL
+    || process.env.UPSTASH_REDIS_REST_URL
+    || process.env.REDIS_URL;
+  const token = process.env.KV_REST_API_TOKEN
+    || process.env.UPSTASH_REDIS_REST_TOKEN
+    || process.env.KV_REST_API_READ_ONLY_TOKEN;
+  if (!url || !token) {
+    throw new Error('KV env vars manquantes (vérifié: KV_REST_API_URL, UPSTASH_REDIS_REST_URL, REDIS_URL)');
+  }
   const res = await fetch(url, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
