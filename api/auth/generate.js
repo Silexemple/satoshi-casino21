@@ -1,58 +1,29 @@
 export const config = { runtime: 'edge' };
 
-// ── KV via REST API direct (évite les problèmes de bundle @vercel/kv en Edge) ──
-async function kvSet(key, value, opts = {}) {
+// ── KV via Upstash REST pipeline (format officiel) ──────────────────────────
+async function kvCommand(...command) {
   const url = process.env.KV_REST_API_URL;
   const token = process.env.KV_REST_API_TOKEN;
-  if (!url || !token) return null; // KV non configuré → silencieux
+  if (!url || !token) throw new Error('KV env vars manquantes');
   
-  const args = [key, typeof value === 'string' ? value : JSON.stringify(value)];
-  if (opts.nx) args.push('NX');
-  if (opts.ex) args.push('EX', String(opts.ex));
-  
-  const res = await fetch(`${url}/pipeline`, {
+  const res = await fetch(url, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify([[opts.nx ? 'SET' : 'SET', ...args]])
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(command)
   });
-  return res.ok;
-}
-
-async function kvIncr(key) {
-  const url = process.env.KV_REST_API_URL;
-  const token = process.env.KV_REST_API_TOKEN;
-  if (!url || !token) return 0;
-  const res = await fetch(`${url}/incr/${encodeURIComponent(key)}`, {
-    headers: { Authorization: `Bearer ${token}` }
-  });
-  if (!res.ok) return 0;
-  const data = await res.json();
-  return data.result ?? 0;
-}
-
-async function kvSetJson(key, value, ttl) {
-  const url = process.env.KV_REST_API_URL;
-  const token = process.env.KV_REST_API_TOKEN;
-  if (!url || !token) throw new Error('KV_REST_API_URL manquant dans les variables Vercel');
   
-  const res = await fetch(`${url}/set/${encodeURIComponent(key)}`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(value)
-  });
-  if (!res.ok) throw new Error(`KV set failed: ${res.status}`);
-  
-  // Appliquer TTL séparément
-  if (ttl) {
-    await fetch(`${url}/expire/${encodeURIComponent(key)}/${ttl}`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}` }
-    });
+  if (!res.ok) {
+    throw new Error(`KV ${command[0]} failed: ${res.status} ${await res.text().catch(() => '')}`);
   }
-  return true;
+  
+  const data = await res.json();
+  return data.result;
 }
 
-// ── Bech32 inline — zéro dépendance ────────────────────────────────────────
+// ── Bech32 inline ────────────────────────────────────────────────────────────
 const B32 = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l';
 const GEN = [0x3b6a57b2, 0x26508e6d, 0x1ea119fa, 0x3d4233dd, 0x2a1462b3];
 
@@ -93,23 +64,25 @@ function toLNURL(url) {
   return ('lnurl1' + all.map(d => B32[d]).join('')).toUpperCase();
 }
 
-// ── Handler ─────────────────────────────────────────────────────────────────
-export default async function handler(req) {
-  const J = (s, d) => new Response(JSON.stringify(d), {
-    status: s, headers: { 'Content-Type': 'application/json' }
-  });
+// ── Handler ──────────────────────────────────────────────────────────────────
+const J = (s, d) => new Response(JSON.stringify(d), {
+  status: s, headers: { 'Content-Type': 'application/json' }
+});
 
+export default async function handler(req) {
   try {
     if (req.method !== 'GET') return J(405, { error: 'Method not allowed' });
 
-    // Rate limit — non-fatal (ne bloque pas si KV indisponible)
+    // Rate limit (non-fatal)
     try {
       const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'x';
       const rlKey = `ratelimit:lnauth:${ip}`;
-      await kvSet(rlKey, '0', { nx: true, ex: 60 });
-      const count = await kvIncr(rlKey);
+      const count = await kvCommand('INCR', rlKey);
+      if (count === 1) await kvCommand('EXPIRE', rlKey, 60);
       if (count > 10) return J(429, { error: 'Trop de requêtes. Réessayez dans 60s.' });
-    } catch (_) {}
+    } catch (rlErr) {
+      console.log('[rate limit skip]', rlErr.message);
+    }
 
     // Générer k1
     const k1 = Array.from(crypto.getRandomValues(new Uint8Array(32)))
@@ -120,20 +93,21 @@ export default async function handler(req) {
     const callback = `https://${domain}/api/auth/callback?tag=login&k1=${k1}&action=login`;
     const lnurl = toLNURL(callback);
 
-    // Stocker le challenge (obligatoire pour l'auth)
-    await kvSetJson(`lnauth:k1:${k1}`, {
+    // Stocker le challenge (CRITIQUE pour l'auth)
+    const challengeJson = JSON.stringify({
       status: 'pending',
       created_at: Date.now(),
       domain
-    }, 600);
+    });
+    await kvCommand('SET', `lnauth:k1:${k1}`, challengeJson, 'EX', 600);
 
     return J(200, { k1, lnurl });
 
   } catch (err) {
-    console.error('[auth/generate]', err?.message);
-    return new Response(
-      JSON.stringify({ error: err?.message || 'Erreur interne' }),
-      { status: 500, headers: { 'Content-Type': 'application/json' } }
-    );
+    console.error('[auth/generate]', err?.message, err?.stack);
+    return J(500, {
+      error: 'Erreur serveur: ' + (err?.message || 'inconnue'),
+      hint: 'Vérifiez les variables KV_REST_API_URL et KV_REST_API_TOKEN sur Vercel'
+    });
   }
 }
