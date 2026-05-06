@@ -1892,7 +1892,12 @@ async function processWithdraw() {
         updateDisplay();
         animateBalanceUpdate();
 
-        showToast(`✅ ${data.amount} sats envoyés !`, 'win');
+        // Toast détaillé : montant + fees réels + remboursement de la réserve non-utilisée
+        const fees = data.fees_sat ?? 0;
+        const refunded = data.refunded_sat ?? 0;
+        let msg = `✅ ${data.amount.toLocaleString()} sats envoyés (frais: ${fees} sats)`;
+        if (refunded > 0) msg += ` — ${refunded} sats remboursés`;
+        showToast(msg, 'win');
         closeModal('withdrawModal');
 
     } catch (error) {
@@ -2325,13 +2330,23 @@ function resetRound() {
 
 // ============================================
 // DECODE INVOICE AMOUNT (client-side preview)
+// Affiche le montant + la réserve frais Lightning (politique alignée backend)
 // ============================================
+
+const FEE_RESERVE_PERCENT_FRONT = 0.01; // 1% — DOIT matcher api/withdraw.js
+const FEE_RESERVE_MIN_SAT_FRONT = 10;
+
+function computeFeeReserveFront(amountSat) {
+    return Math.max(FEE_RESERVE_MIN_SAT_FRONT, Math.ceil(amountSat * FEE_RESERVE_PERCENT_FRONT));
+}
 
 function decodeWithdrawInvoice() {
     const invoice = document.getElementById('withdrawInvoice').value.trim().toLowerCase();
     const el = document.getElementById('withdrawDecodedAmount');
+    const btn = document.getElementById('withdrawSubmitBtn');
     if (!invoice || !invoice.startsWith('lnbc')) {
         el.style.display = 'none';
+        if (btn) btn.disabled = false;
         return;
     }
     try {
@@ -2343,9 +2358,22 @@ function decodeWithdrawInvoice() {
         const msat = unit ? amount * multipliers[unit] : amount * 100000000000n;
         const sats = Number(msat / 1000n);
         if (sats > 0) {
-            el.textContent = `Montant: ${sats} sats`;
+            const feeReserve = computeFeeReserveFront(sats);
+            const totalRequired = sats + feeReserve;
+            const insufficient = totalRequired > balance;
+
+            el.innerHTML = `
+                <div>Montant: <strong>${sats.toLocaleString()}</strong> sats</div>
+                <div style="font-size: 13px; color: #888; margin-top: 4px;">
+                    + réserve frais Lightning: ~${feeReserve} sats
+                    <span style="color:#666; font-size: 11px;">(remboursée si non-utilisée)</span>
+                </div>
+                <div style="font-size: 14px; color: ${insufficient ? '#ff0000' : '#00ff88'}; margin-top: 6px; font-family: 'Orbitron';">
+                    Total débité: ${totalRequired.toLocaleString()} sats
+                </div>
+            `;
             el.style.display = 'block';
-            el.style.color = sats > balance ? '#ff0000' : '#ffa500';
+            if (btn) btn.disabled = insufficient;
         } else {
             el.style.display = 'none';
         }
