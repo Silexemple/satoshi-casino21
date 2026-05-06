@@ -1004,7 +1004,7 @@
                 </div>
                 
                 <div style="margin-top: 15px;">
-                    <button onclick="showDepositModal()" style="background: linear-gradient(135deg, #00ff00, #00cc00); border-color: #00ff00; color: #000;">+ DÉPOSER</button>
+                    <button onclick="balance===0 && !playerNickname ? showLNAuthModal('⚡ Connectez votre wallet pour déposer') : showDepositModal()" style="background: linear-gradient(135deg, #00ff00, #00cc00); border-color: #00ff00; color: #000;">+ DÉPOSER</button>
                     <button onclick="showWithdrawModal()" style="background: linear-gradient(135deg, #0080ff, #0060ff); border-color: #0080ff; color: #fff;" id="withdrawBtn" disabled>CASHER</button>
                     <button onclick="showTransactionsModal()" style="background: transparent; border: 2px solid #ff6b00; color: #ff6b00;">HISTORIQUE</button>
                     <button onclick="window.location.href='/table.html'" style="background: linear-gradient(135deg, #ffd700, #ff6b00); border-color: #ffd700; color: #000;">TABLES MULTI</button>
@@ -1574,10 +1574,12 @@ async function apiCall(endpoint, method = 'GET', body = null) {
     const response = await fetch(API_BASE + endpoint, options);
     
     if (!response.ok) {
-        const error = await response.json();
-        // Si session expiree pendant la navigation, afficher la modale LNAuth
+        let error = {};
+        try { error = await response.json(); } catch(_) {}
+        // Session expirée → ouvrir LNAuth modal avec message clair
         if (response.status === 401 && error.auth_required) {
-            showLNAuthModal();
+            showLNAuthModal('🔒 Reconnectez votre wallet Lightning pour continuer');
+            throw new Error('__auth_required__'); // signal spécial
         }
         throw new Error(error.error || 'Erreur API');
     }
@@ -1599,9 +1601,9 @@ async function initSession() {
         });
 
         if (response.status === 401) {
-            const data = await response.json();
+            const data = await response.json().catch(() => ({}));
             if (data.auth_required) {
-                showLNAuthModal();
+                showLNAuthModal('⚡ Connectez votre wallet Lightning pour jouer');
                 return;
             }
         }
@@ -1618,8 +1620,15 @@ async function initSession() {
     }
 }
 
-async function showLNAuthModal() {
-    document.getElementById('lnauthModal').classList.add('active');
+async function showLNAuthModal(message = null) {
+    const modal = document.getElementById('lnauthModal');
+    // Afficher message contextuel si fourni (ex: "reconnectez-vous pour déposer")
+    const statusEl = document.getElementById('lnauthStatus');
+    if (message && statusEl) {
+        statusEl.textContent = message;
+        statusEl.style.color = '#ff6b00';
+    }
+    modal.classList.add('active');
     await generateLNAuthChallenge();
 }
 
@@ -1747,7 +1756,11 @@ async function generateInvoice() {
         startPaymentCheck();
         
     } catch (error) {
-        showToast('Erreur: ' + error.message, 'loss'); }
+        // auth_required est géré par apiCall (ouvre LNAuth modal) → ne pas montrer toast
+        if (error.message !== '__auth_required__') {
+            showToast('Erreur: ' + error.message, 'loss');
+        }
+    }
 }
 async function copyInvoice() {
     if (!currentInvoice) {
@@ -1828,7 +1841,7 @@ async function processWithdraw() {
         closeModal('withdrawModal');
         
     } catch (error) {
-        showToast('Erreur: ' + error.message, 'loss');
+        if (error.message !== '__auth_required__') showToast('Erreur: ' + error.message, 'loss');
     } finally {
         btn.disabled = false;
         btn.textContent = 'ENVOYER PAIEMENT';
@@ -2370,8 +2383,13 @@ window.onload = () => {
         updateStatsDisplay();
         checkExistingGame();
         // Auto-open deposit modal si redirigé depuis table (rebuy)
-        if (new URLSearchParams(window.location.search).get('deposit') === '1') {
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('deposit') === '1') {
             setTimeout(() => showDepositModal(), 500);
+        }
+        // Auto-open LNAuth si redirigé depuis table/tournoi suite à session expirée
+        if (urlParams.get('auth') === 'required') {
+            setTimeout(() => showLNAuthModal('🔒 Session expirée — reconnectez votre wallet'), 300);
         }
     });
 };

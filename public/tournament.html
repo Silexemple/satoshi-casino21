@@ -499,8 +499,15 @@ async function apiCall(endpoint, method = 'GET', body = null) {
     const options = { method, credentials: 'include', headers: { 'Content-Type': 'application/json' } };
     if (body) options.body = JSON.stringify(body);
     const response = await fetch(API_BASE + endpoint, options);
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || 'Erreur');
+    let data = {};
+    try { data = await response.json(); } catch(_) {}
+    if (!response.ok) {
+        if (response.status === 401 && data.auth_required) {
+            window.location.href = '/?auth=required';
+            throw new Error('__auth_required__');
+        }
+        throw new Error(data.error || 'Erreur');
+    }
     return data;
 }
 

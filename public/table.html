@@ -925,7 +925,16 @@ async function apiCall(endpoint, method = 'GET', body = null) {
     const options = { method, credentials: 'include', headers: { 'Content-Type': 'application/json' } };
     if (body) options.body = JSON.stringify(body);
     const response = await fetch(endpoint, options);
-    if (!response.ok) { const error = await response.json(); throw new Error(error.error || 'Erreur API'); }
+    if (!response.ok) {
+        let error = {};
+        try { error = await response.json(); } catch(_) {}
+        if (response.status === 401 && error.auth_required) {
+            // Session expirée → rediriger vers accueil pour re-auth
+            window.location.href = '/?auth=required';
+            throw new Error('__auth_required__');
+        }
+        throw new Error(error.error || 'Erreur API');
+    }
     return await response.json();
 }
 
