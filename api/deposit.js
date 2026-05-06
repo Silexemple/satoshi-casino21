@@ -25,6 +25,10 @@ export default async function handler(req) {
   if (!linkingKey) return json(401, { error: 'Session invalide', auth_required: true });
 
   const body = await req.json();
+  // Lightning Network: les fees de routage sont quasi-fixes par hop (~1 sat × 3-4 hops),
+  // donc en % ils explosent sur les micro-montants. Sous 1000 sats, les wallets payeurs
+  // refusent fréquemment les routes (fees > leur budget max de 1-3%).
+  const MIN_DEPOSIT = 1000;
   const MAX_DEPOSIT = 100000;
   const MAX_BALANCE = 1000000;
   // Validation stricte: entier pur, pas de float/exponentielle
@@ -33,8 +37,10 @@ export default async function handler(req) {
     return json(400, { error: 'Montant invalide' });
   }
   const amount = Number(rawAmount);
-  if (!Number.isInteger(amount) || amount < 100 || amount > MAX_DEPOSIT) {
-    return json(400, { error: `Montant invalide (100-${MAX_DEPOSIT} sats)` });
+  if (!Number.isInteger(amount) || amount < MIN_DEPOSIT || amount > MAX_DEPOSIT) {
+    return json(400, {
+      error: `Montant invalide (${MIN_DEPOSIT}-${MAX_DEPOSIT} sats). Minimum ${MIN_DEPOSIT} sats car les frais de routage Lightning rendent les paiements plus petits non-viables (>3% de fees).`
+    });
   }
 
   const player = await kv.get(`player:${linkingKey}`);
