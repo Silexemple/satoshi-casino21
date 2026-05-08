@@ -6,8 +6,9 @@ export default async function handler(req) {
   const sessionId = getSessionId(req);
   if (!sessionId) return json(401, { error: 'Session invalide', auth_required: true });
 
-  const url = new URL(req.url);
-  const pathParts = url.pathname.split('/');
+  const rawUrl = req.url ?? '';
+  const pathname = rawUrl.startsWith('http') ? new URL(rawUrl).pathname : rawUrl.split('?')[0];
+  const pathParts = pathname.split('/');
   const paymentHash = pathParts[pathParts.length - 1];
 
   if (!paymentHash) return json(400, { error: 'Payment hash manquant' });

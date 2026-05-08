@@ -72,7 +72,7 @@ async function createEvent(secretKeyBytes, walletPubkeyHex, content) {
 
 // ---------- NWC Request ----------
 
-export async function nwcRequest(nwcUrl, method, params, timeoutMs = 8000) {
+export async function nwcRequest(nwcUrl, method, params, timeoutMs = 12000) {
   const { pubkey, relays, secret } = parseNWCUrl(nwcUrl);
 
   // Validation défensive de la NWC URL

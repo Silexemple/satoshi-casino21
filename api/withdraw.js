@@ -1,5 +1,5 @@
 import { kv } from '@vercel/kv';
-import { json, getSessionId, rateLimit, normalizePlayer } from './_helpers.js';
+import { json, getSessionId, rateLimit, normalizePlayer, parseBody } from './_helpers.js';
 import { nwcRequest } from './_nwc.js';
 
 // ── Politique de frais Lightning ──
@@ -52,7 +52,7 @@ export default async function handler(req) {
   }
 
   let body;
-  try { body = await req.json(); } catch (e) { return json(400, { error: 'Body JSON invalide' }); }
+  try { body = await parseBody(req); } catch (e) { return json(400, { error: 'Body JSON invalide' }); }
 
   const invoice = body.invoice?.trim()?.toLowerCase();
   if (!invoice) return json(400, { error: 'Invoice manquante' });
@@ -147,6 +147,7 @@ export default async function handler(req) {
     await kv.set(processedKey, { payment_hash: paymentHash, amount: amountSat, fees_sat: actualFeesSat, timestamp: Date.now() }, { ex: 604800 });
     await kv.set(rateLimitKey, Date.now(), { ex: 120 });
 
+    const finalPlayer = await kv.get(playerKey);
     await kv.rpush(txKey, {
       type: 'withdraw',
       amount: amountSat,
@@ -158,11 +159,10 @@ export default async function handler(req) {
       payment_hash: paymentHash,
       invoice: invoice.substring(0, 50),
       balance_before: currentBalance,
-      balance_after: (finalPlayer ? finalPlayer.balance : (currentBalance - amountSat - actualFeesSat + refundSat))
+      balance_after: finalPlayer ? finalPlayer.balance : (currentBalance - amountSat - actualFeesSat + refundSat)
     });
     await kv.expire(txKey, 2592000);
 
-    const finalPlayer = await kv.get(playerKey);
     return json(200, {
       success: true,
       amount: amountSat,
