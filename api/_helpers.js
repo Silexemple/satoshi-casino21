@@ -15,12 +15,25 @@ function getHeader(req, name) {
 }
 
 // Compatible Node.js IncomingMessage (stream) and Edge Request (req.json())
-export async function parseBody(req) {
+// Limite à 64KB pour empêcher les attaques DoS par body volumineux
+export async function parseBody(req, maxBytes = 65536) {
   if (typeof req.json === 'function') return req.json();
   return new Promise((resolve, reject) => {
     let data = '';
-    req.on('data', c => { data += c; });
-    req.on('end', () => { try { resolve(JSON.parse(data)); } catch (e) { reject(e); } });
+    let aborted = false;
+    req.on('data', c => {
+      if (aborted) return;
+      data += c;
+      if (data.length > maxBytes) {
+        aborted = true;
+        reject(new Error('Body too large'));
+        req.destroy?.();
+      }
+    });
+    req.on('end', () => {
+      if (aborted) return;
+      try { resolve(JSON.parse(data)); } catch (e) { reject(e); }
+    });
     req.on('error', reject);
   });
 }
