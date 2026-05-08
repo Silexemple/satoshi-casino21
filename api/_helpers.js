@@ -8,8 +8,38 @@ export function json(status, data) {
   });
 }
 
+// Compatible Node.js IncomingMessage (headers plain object) and Edge Request (Headers instance)
+function getHeader(req, name) {
+  if (typeof req.headers?.get === 'function') return req.headers.get(name);
+  return req.headers?.[name.toLowerCase()] ?? null;
+}
+
+// Compatible Node.js IncomingMessage (stream) and Edge Request (req.json())
+// Limite à 64KB pour empêcher les attaques DoS par body volumineux
+export async function parseBody(req, maxBytes = 65536) {
+  if (typeof req.json === 'function') return req.json();
+  return new Promise((resolve, reject) => {
+    let data = '';
+    let aborted = false;
+    req.on('data', c => {
+      if (aborted) return;
+      data += c;
+      if (data.length > maxBytes) {
+        aborted = true;
+        reject(new Error('Body too large'));
+        req.destroy?.();
+      }
+    });
+    req.on('end', () => {
+      if (aborted) return;
+      try { resolve(JSON.parse(data)); } catch (e) { reject(e); }
+    });
+    req.on('error', reject);
+  });
+}
+
 export function getSessionId(req) {
-  const cookies = cookie.parse(req.headers.get('cookie') || '');
+  const cookies = cookie.parse(getHeader(req, 'cookie') || '');
   return cookies.session_id || null;
 }
 
@@ -59,8 +89,8 @@ export async function getTxKey(sessionId) {
 // Limite configurable par route: ex. rateLimit(req, 'game', 60, 60)
 // = max 60 actions par 60 secondes par IP pour la route 'game'
 export async function rateLimit(req, route, maxRequests = 30, windowSeconds = 60) {
-  const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
-    || req.headers.get('x-real-ip')
+  const ip = getHeader(req, 'x-forwarded-for')?.split(',')[0]?.trim()
+    || getHeader(req, 'x-real-ip')
     || 'unknown';
 
   if (ip === 'unknown') return null; // pas de rate limit si IP inconnue

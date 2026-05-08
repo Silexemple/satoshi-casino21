@@ -1,5 +1,5 @@
 import { kv } from '@vercel/kv';
-import { json, getSessionId, rateLimit, normalizePlayer } from './_helpers.js';
+import { json, getSessionId, rateLimit, normalizePlayer, parseBody } from './_helpers.js';
 import { nwcRequest } from './_nwc.js';
 
 export default async function handler(req) {
@@ -24,7 +24,7 @@ export default async function handler(req) {
 
   let body;
   try {
-    body = await req.json();
+    body = await parseBody(req);
   } catch (e) {
     return json(400, { error: 'Body JSON invalide' });
   }
