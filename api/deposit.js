@@ -2,8 +2,6 @@ import { kv } from '@vercel/kv';
 import { json, getSessionId, rateLimit } from './_helpers.js';
 import { nwcRequest } from './_nwc.js';
 
-export const config = { runtime: 'edge' };
-
 export default async function handler(req) {
   // ── Rate limit IP global ──
   const rl = await rateLimit(req, 'deposit', 5, 60);
@@ -17,14 +15,19 @@ export default async function handler(req) {
   if (!sessionId) return json(401, { error: 'Session invalide', auth_required: true });
 
   const rlKey = `ratelimit:deposit:${sessionId}`;
+  await kv.set(rlKey, 0, { nx: true, ex: 60 });
   const rlCount = await kv.incr(rlKey);
-  if (rlCount === 1) await kv.expire(rlKey, 60);
   if (rlCount > 3) return json(429, { error: 'Trop de demandes de depot, attendez un instant' });
 
   const linkingKey = await kv.get(`session:${sessionId}`);
   if (!linkingKey) return json(401, { error: 'Session invalide', auth_required: true });
 
-  const body = await req.json();
+  let body;
+  try {
+    body = await req.json();
+  } catch (e) {
+    return json(400, { error: 'Body JSON invalide' });
+  }
   // Lightning Network: les fees de routage sont quasi-fixes par hop (~1 sat × 3-4 hops),
   // donc en % ils explosent sur les micro-montants. Sous 1000 sats, les wallets payeurs
   // refusent fréquemment les routes (fees > leur budget max de 1-3%).

@@ -3,6 +3,7 @@
  * Compatible with Vercel Edge runtime
  */
 import { getSharedSecret, schnorr } from '@noble/secp256k1';
+import WebSocket from 'ws';
 
 // ---------- Byte Helpers ----------
 

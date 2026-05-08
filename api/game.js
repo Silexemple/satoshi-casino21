@@ -56,8 +56,8 @@ export default async function handler(req) {
 
   // Rate limit: max 60 actions/min par session
   const rlKey = `ratelimit:game:${sessionId}`;
+  await kv.set(rlKey, 0, { nx: true, ex: 60 });
   const rlCount = await kv.incr(rlKey);
-  if (rlCount === 1) await kv.expire(rlKey, 60);
   if (rlCount > 60) {
     return json(429, { error: 'Trop de requetes, attendez un instant' });
   }
