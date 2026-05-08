@@ -13,6 +13,15 @@ export function getSessionId(req) {
   return cookies.session_id || null;
 }
 
+// Normalise le solde d'un joueur pour éviter NaN/undefined
+export function normalizePlayer(player) {
+  if (!player) return null;
+  if (typeof player.balance !== 'number' || Number.isNaN(player.balance)) {
+    player.balance = 0;
+  }
+  return player;
+}
+
 // Resolve session UUID -> linkingKey (compressed secp256k1 pubkey hex)
 export async function getLinkingKey(sessionId) {
   return kv.get(`session:${sessionId}`);

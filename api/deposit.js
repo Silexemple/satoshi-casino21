@@ -1,5 +1,5 @@
 import { kv } from '@vercel/kv';
-import { json, getSessionId, rateLimit } from './_helpers.js';
+import { json, getSessionId, rateLimit, normalizePlayer } from './_helpers.js';
 import { nwcRequest } from './_nwc.js';
 
 export default async function handler(req) {
@@ -46,7 +46,7 @@ export default async function handler(req) {
     });
   }
 
-  const player = await kv.get(`player:${linkingKey}`);
+  const player = normalizePlayer(await kv.get(`player:${linkingKey}`));
   if (!player) return json(404, { error: 'Joueur non trouve' });
 
   if (player.balance + amount > MAX_BALANCE) {

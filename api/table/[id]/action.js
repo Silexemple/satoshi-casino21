@@ -1,5 +1,5 @@
 import { kv } from '@vercel/kv';
-import { json, getSessionId, rateLimit } from '../../_helpers.js';
+import { json, getSessionId, rateLimit, normalizePlayer } from '../../_helpers.js';
 import { handScore, isPair, drawCard, isBlackjack } from '../../_game-helpers.js';
 import { checkTimeouts, advanceToNextPlayer, creditPlayers, tableStateForClient } from '../[id].js';
 
@@ -21,7 +21,12 @@ export default async function handler(req) {
   const pathParts = url.pathname.split('/');
   const tableId = pathParts[pathParts.length - 2];
 
-  const body = await req.json();
+  let body;
+  try {
+    body = await req.json();
+  } catch (e) {
+    return json(400, { error: 'Body JSON invalide' });
+  }
   const { action } = body;
 
   if (!['hit', 'stand', 'double', 'split', 'insurance', 'surrender'].includes(action)) {
@@ -83,7 +88,7 @@ export default async function handler(req) {
 
       if (accept) {
         const playerKey = resolvedPlayerKey;
-        const player = await kv.get(playerKey);
+        const player = normalizePlayer(await kv.get(playerKey));
         if (!player || player.balance < insuranceCost) {
           return json(400, { error: 'Solde insuffisant pour l\'assurance' });
         }
@@ -99,7 +104,7 @@ export default async function handler(req) {
         // Insurance gagne 2:1
         if (seat.insuranceBet > 0) {
           const playerKey = resolvedPlayerKey;
-          const player = await kv.get(playerKey);
+          const player = normalizePlayer(await kv.get(playerKey));
           if (player) {
             const insurancePayout = seat.insuranceBet * 3;
             player.balance += insurancePayout;
@@ -130,7 +135,7 @@ export default async function handler(req) {
       // Rembourser la moitié de la mise
       const refund = Math.floor(hand.bet / 2);
       const playerKey = resolvedPlayerKey;
-      const player = await kv.get(playerKey);
+      const player = normalizePlayer(await kv.get(playerKey));
       if (player) {
         player.balance += refund;
         await kv.set(playerKey, player, { ex: 2592000 });
@@ -173,7 +178,7 @@ export default async function handler(req) {
 
       // Vérifier le solde
       const playerKey = resolvedPlayerKey;
-      const player = await kv.get(playerKey);
+      const player = normalizePlayer(await kv.get(playerKey));
       if (!player || player.balance < hand.bet) {
         return json(400, { error: 'Solde insuffisant pour doubler' });
       }
@@ -203,7 +208,7 @@ export default async function handler(req) {
       }
 
       const playerKey = resolvedPlayerKey;
-      const player = await kv.get(playerKey);
+      const player = normalizePlayer(await kv.get(playerKey));
       const originalBet = seat.bet; // bet initial de la table
 
       if (!player || player.balance < originalBet) {

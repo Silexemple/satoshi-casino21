@@ -1,5 +1,5 @@
 import { kv } from '@vercel/kv';
-import { json, getSessionId, rateLimit } from './_helpers.js';
+import { json, getSessionId, rateLimit, normalizePlayer } from './_helpers.js';
 import { nwcRequest } from './_nwc.js';
 
 // ── Politique de frais Lightning ──
@@ -80,10 +80,10 @@ export default async function handler(req) {
   let debitedAmount = 0; // montant réellement débité (utilisé pour refund en cas d'erreur)
 
   try {
-    const player = await kv.get(playerKey);
+    const player = normalizePlayer(await kv.get(playerKey));
     if (!player) return json(404, { error: 'Joueur non trouve' });
 
-    const currentBalance = player.balance || 0;
+    const currentBalance = player.balance;
     if (currentBalance <= 0) return json(400, { error: 'Solde insuffisant' });
     if (totalDebit > currentBalance) {
       return json(400, {
@@ -158,7 +158,7 @@ export default async function handler(req) {
       payment_hash: paymentHash,
       invoice: invoice.substring(0, 50),
       balance_before: currentBalance,
-      balance_after: currentBalance - amountSat - actualFeesSat
+      balance_after: (finalPlayer ? finalPlayer.balance : (currentBalance - amountSat - actualFeesSat + refundSat))
     });
     await kv.expire(txKey, 2592000);
 
@@ -187,9 +187,9 @@ export default async function handler(req) {
 }
 
 async function atomicRefund(playerKey, amount) {
-  const player = await kv.get(playerKey);
+  const player = normalizePlayer(await kv.get(playerKey));
   if (player) {
-    player.balance = (player.balance || 0) + amount;
+    player.balance += amount;
     player.last_activity = Date.now();
     await kv.set(playerKey, player, { ex: 2592000 });
   }

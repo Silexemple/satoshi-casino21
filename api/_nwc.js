@@ -95,7 +95,8 @@ export async function nwcRequest(nwcUrl, method, params, timeoutMs = 8000) {
     const ws = new WebSocket(relays[0]);
 
     ws.onopen = () => {
-      ws.send(JSON.stringify(['REQ', 'sub1', { kinds: [23195], '#p': [myPubkey], limit: 1 }]));
+      const since = Math.floor(Date.now() / 1000) - 30;
+      ws.send(JSON.stringify(['REQ', 'sub1', { kinds: [23195], '#p': [myPubkey], since, limit: 1 }]));
       ws.send(JSON.stringify(['EVENT', event]));
     };
 

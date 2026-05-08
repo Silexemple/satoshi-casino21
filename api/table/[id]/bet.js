@@ -1,5 +1,5 @@
 import { kv } from '@vercel/kv';
-import { json, getSessionId, rateLimit } from '../../_helpers.js';
+import { json, getSessionId, rateLimit, normalizePlayer } from '../../_helpers.js';
 import { checkTimeouts, startDealing, creditPlayers, BETTING_TIMEOUT } from '../[id].js';
 
 export const config = { runtime: 'edge' };
@@ -22,7 +22,12 @@ export default async function handler(req) {
   const pathParts = url.pathname.split('/');
   const tableId = pathParts[pathParts.length - 2];
 
-  const body = await req.json();
+  let body;
+  try {
+    body = await req.json();
+  } catch (e) {
+    return json(400, { error: 'Body JSON invalide' });
+  }
   const amount = parseInt(body.amount);
 
   const lockKey = `lock:table:${tableId}`;
@@ -64,7 +69,7 @@ export default async function handler(req) {
 
     // Verifier le solde du joueur
     const playerKey = `player:${linkingKey}`;
-    const player = await kv.get(playerKey);
+    const player = normalizePlayer(await kv.get(playerKey));
     if (!player || player.balance < amount) {
       return json(400, { error: 'Solde insuffisant' });
     }

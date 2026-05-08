@@ -1,5 +1,5 @@
 import { kv } from '@vercel/kv';
-import { json, getSessionId } from '../_helpers.js';
+import { json, getSessionId, normalizePlayer } from '../_helpers.js';
 import { nwcRequest } from '../_nwc.js';
 
 export default async function handler(req) {
@@ -57,10 +57,18 @@ export default async function handler(req) {
         }
 
         const playerKey = `player:${linkingKey}`;
-        let player = await kv.get(playerKey) || {
-          balance: 0, nickname: null,
-          created_at: Date.now(), last_activity: Date.now()
-        };
+        let player = normalizePlayer(await kv.get(playerKey));
+        if (!player) {
+          player = { balance: 0, nickname: null, created_at: Date.now(), last_activity: Date.now() };
+        }
+
+        // Idempotence: éviter le double-crédit si crash entre crédit et suppression invoice
+        const creditedKey = `credited:${paymentHash}`;
+        const alreadyCredited = await kv.set(creditedKey, '1', { nx: true, ex: 3600 });
+        if (!alreadyCredited) {
+          await kv.del(lockKey);
+          return json(200, { paid: true, new_balance: player.balance });
+        }
 
         const newBalance = player.balance + freshInvoice.amount;
         player.balance = newBalance;
