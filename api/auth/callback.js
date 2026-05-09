@@ -86,7 +86,11 @@ export default async function handler(req) {
     if (!sig && !key) {
       const challenge = await kvGet(`lnauth:k1:${k1}`);
       if (!challenge) return err('Unknown or expired challenge');
-      return J({ tag: 'login', callback: `https://${url.hostname}/api/auth/callback`, k1, action: 'login' });
+      // Meme rationale que generate.js: pointer vers l'URL publique de prod
+      // pour que le wallet (qui n'a pas de cookie Vercel SSO) puisse hit
+      // l'URL phase-2 sans etre bloque par la deployment protection.
+      const callbackHost = process.env.VERCEL_PROJECT_PRODUCTION_URL || url.hostname;
+      return J({ tag: 'login', callback: `https://${callbackHost}/api/auth/callback`, k1, action: 'login' });
     }
 
     // Phase 2: vérification de la signature

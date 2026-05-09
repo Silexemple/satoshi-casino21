@@ -95,8 +95,20 @@ export default async function handler(req) {
     const k1 = Array.from(crypto.getRandomValues(new Uint8Array(32)))
       .map(b => b.toString(16).padStart(2, '0')).join('');
 
-    // Construire LNURL
-    const domain = new URL(req.url).hostname;
+    // Construire LNURL.
+    //
+    // Le hostname pour le callback DOIT etre l'URL publique de production,
+    // pas le hostname du request. Pourquoi: si l'user accede au site via
+    // une deployment URL avec hash (ex satoshi-casino21-abc123.vercel.app),
+    // celle-ci est protegee par Vercel SSO (ssoProtection=all_except_custom_domains).
+    // L'user passe le SSO car il a un cookie Vercel; son wallet n'en a pas.
+    // Le wallet hit la deployment URL → recoit du HTML Vercel SSO → echec
+    // avec "unreadable response".
+    //
+    // VERCEL_PROJECT_PRODUCTION_URL est l'URL publique stable (ex
+    // satoshi-casino21.vercel.app) qui n'est PAS bloquee par le SSO.
+    // Fallback sur req.url pour le dev local.
+    const domain = process.env.VERCEL_PROJECT_PRODUCTION_URL || new URL(req.url).hostname;
     const callback = `https://${domain}/api/auth/callback?tag=login&k1=${k1}&action=login`;
     const lnurl = toLNURL(callback);
 
