@@ -1,7 +1,17 @@
 export const config = { runtime: 'edge' };
 
+// Endpoint de debug — exige le ADMIN_TOKEN. Avant: accessible publiquement
+// et leakait la LONGUEUR exacte de chaque secret (ADMIN_TOKEN, NWC_URL,
+// tokens KV). Connaitre la longueur d'un secret reduit drastiquement
+// l'espace de recherche brute-force.
 export default async function handler(req) {
-  // Lister toutes les env vars qui contiennent KV, REDIS, UPSTASH (sans valeurs)
+  const adminToken = req.headers.get('x-admin-token');
+  if (!adminToken || !process.env.ADMIN_TOKEN || adminToken !== process.env.ADMIN_TOKEN) {
+    return new Response(JSON.stringify({ error: 'Non autorise' }), {
+      status: 401, headers: { 'Content-Type': 'application/json' }
+    });
+  }
+
   const envKeys = [
     'KV_REST_API_URL',
     'KV_REST_API_TOKEN',
