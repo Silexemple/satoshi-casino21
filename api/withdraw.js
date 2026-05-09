@@ -2,6 +2,8 @@ import { kv } from '@vercel/kv';
 import { json, getSessionId, rateLimit, normalizePlayer, parseBody } from './_helpers.js';
 import { nwcRequest } from './_nwc.js';
 
+export const config = { runtime: 'edge' };
+
 // ── Politique de frais Lightning ──
 // Réserve = max(FEE_RESERVE_PERCENT * montant, FEE_RESERVE_MIN_SAT)
 // Couvre les fees de routage Lightning. La différence non-utilisée

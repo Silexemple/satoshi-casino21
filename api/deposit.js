@@ -2,6 +2,8 @@ import { kv } from '@vercel/kv';
 import { json, getSessionId, rateLimit, normalizePlayer, parseBody } from './_helpers.js';
 import { nwcRequest } from './_nwc.js';
 
+export const config = { runtime: 'edge' };
+
 export default async function handler(req) {
   // ── Rate limit IP global ──
   const rl = await rateLimit(req, 'deposit', 5, 60);

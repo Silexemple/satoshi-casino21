@@ -1691,12 +1691,13 @@ async function generateLNAuthChallenge() {
 
         // Demarrer le polling
         if (lnauthPollInterval) clearInterval(lnauthPollInterval);
-        lnauthPollInterval = setInterval(pollLNAuthStatus, 2000);
+        lnauthPollInterval = setInterval(pollLNAuthStatus, 3000);
     } catch (e) {
         document.getElementById('lnauthStatus').textContent = 'Erreur: ' + e.message;
     }
 }
 
+let _renewingChallenge = false;
 async function pollLNAuthStatus() {
     if (!currentK1) return;
     try {
@@ -1714,9 +1715,10 @@ async function pollLNAuthStatus() {
             updateDisplay();
             checkExistingGame();
             showToast('⚡ Connecté !', 'win');
-        } else if (data.status === 'expired') {
-            // Challenge expire, en generer un nouveau
-            await generateLNAuthChallenge();
+        } else if (data.status === 'expired' && !_renewingChallenge) {
+            // Challenge expiré → renouveler une seule fois à la fois
+            _renewingChallenge = true;
+            try { await generateLNAuthChallenge(); } finally { _renewingChallenge = false; }
         }
     } catch (e) {
         // Ignorer les erreurs de polling

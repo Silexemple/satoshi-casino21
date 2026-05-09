@@ -1,9 +1,17 @@
 /**
  * Minimal NWC (NIP-47) client using only @noble/secp256k1 v3 + Web Crypto API
- * Compatible with Vercel Edge runtime
+ * Compatible with Vercel Edge runtime and Node.js runtime
  */
 import { getSharedSecret, schnorr } from '@noble/secp256k1';
-import WebSocket from 'ws';
+
+// WebSocket: natif sur Edge runtime, sinon importer le package 'ws' (Node.js)
+async function getWebSocket(url) {
+  if (typeof globalThis.WebSocket !== 'undefined') {
+    return new globalThis.WebSocket(url);
+  }
+  const { default: WS } = await import('ws');
+  return new WS(url);
+}
 
 // ---------- Byte Helpers ----------
 
@@ -86,13 +94,27 @@ export async function nwcRequest(nwcUrl, method, params, timeoutMs = 12000) {
   const content = await nip04Encrypt(secretKeyBytes, pubkey, JSON.stringify({ method, params }));
   const event = await createEvent(secretKeyBytes, pubkey, content);
 
-  return new Promise((resolve, reject) => {
+  return new Promise(async (resolve, reject) => {
+    let settled = false;
+    const settle = (fn, val) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      fn(val);
+    };
+
     const timeout = setTimeout(() => {
-      try { ws.close(); } catch (_) {}
-      reject(new Error('NWC timeout'));
+      try { ws?.close(); } catch (_) {}
+      settle(reject, new Error('NWC timeout'));
     }, timeoutMs);
 
-    const ws = new WebSocket(relays[0]);
+    let ws;
+    try {
+      ws = await getWebSocket(relays[0]);
+    } catch (err) {
+      settle(reject, new Error(`WebSocket init failed: ${err.message}`));
+      return;
+    }
 
     ws.onopen = () => {
       const since = Math.floor(Date.now() / 1000) - 30;
@@ -106,34 +128,29 @@ export async function nwcRequest(nwcUrl, method, params, timeoutMs = 12000) {
         if (data[0] !== 'EVENT' || data[2]?.kind !== 23195) return;
 
         const responseEvent = data[2];
-        // Verify response is from the wallet service
         if (responseEvent.pubkey !== pubkey) return;
 
         const decrypted = await nip04Decrypt(secretKeyBytes, pubkey, responseEvent.content);
         const response = JSON.parse(decrypted);
 
-        clearTimeout(timeout);
-        ws.close();
-
+        try { ws.close(); } catch (_) {}
         if (response.error) {
-          reject(new Error(response.error.message || JSON.stringify(response.error)));
+          settle(reject, new Error(response.error.message || JSON.stringify(response.error)));
         } else {
-          resolve(response.result);
+          settle(resolve, response.result);
         }
       } catch (_) {
         // ignore parse errors, keep waiting
       }
     };
 
-    ws.onerror = () => {
-      clearTimeout(timeout);
-      reject(new Error('WebSocket connection failed'));
+    ws.onerror = (err) => {
+      settle(reject, new Error(`WebSocket connection failed: ${err?.message || ''}`));
     };
 
     ws.onclose = (e) => {
-      if (e.code !== 1000) {
-        clearTimeout(timeout);
-        reject(new Error(`WebSocket closed unexpectedly: ${e.code}`));
+      if (!settled && e.code !== 1000) {
+        settle(reject, new Error(`WebSocket closed unexpectedly: ${e.code}`));
       }
     };
   });
