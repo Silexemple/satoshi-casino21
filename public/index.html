@@ -1179,6 +1179,35 @@
 <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
 <script>
 // ============================================
+// TOAST (self-contained, pas de dépendance DOM/CSS)
+// ============================================
+// Cette fonction est utilisée 20+ fois dans le fichier mais n'était plus
+// définie nulle part dans index.html (régression d'un refactor).
+// Résultat: processWithdraw() throw "ReferenceError: showToast is not defined"
+// avant même d'envoyer la requête, et l'utilisateur voyait "rien ne se passe".
+function showToast(text, type, duration = 2800) {
+    let toast = document.getElementById('toast');
+    if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'toast';
+        toast.style.cssText = 'position:fixed;bottom:30px;left:50%;transform:translateX(-50%) translateY(100px);background:#222;color:#fff;padding:14px 22px;border-radius:8px;font-family:Orbitron,sans-serif;font-size:14px;z-index:9999;opacity:0;transition:opacity .25s,transform .25s;box-shadow:0 4px 16px rgba(0,0,0,.4);max-width:90%;text-align:center;border:2px solid #ff6b00;';
+        document.body.appendChild(toast);
+    }
+    const colors = { win: '#00ff88', loss: '#ff4444', bj: '#ffa500', push: '#888', info: '#00bfff' };
+    toast.style.borderColor = colors[type] || '#ff6b00';
+    toast.textContent = text;
+    requestAnimationFrame(() => {
+        toast.style.opacity = '1';
+        toast.style.transform = 'translateX(-50%) translateY(0)';
+    });
+    clearTimeout(showToast._t);
+    showToast._t = setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateX(-50%) translateY(100px)';
+    }, duration);
+}
+
+// ============================================
 // THREE.JS BACKGROUND (réduit sur mobile)
 // ============================================
 
