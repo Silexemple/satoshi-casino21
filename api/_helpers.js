@@ -8,6 +8,21 @@ export function json(status, data) {
   });
 }
 
+// Adapter: deposit/withdraw/check-payment must run on the Vercel Node.js
+// runtime (outbound WebSocket to nostr relays — Edge doesn't allow it
+// reliably). The Node runtime expects (req, res) => res.send(...) — a
+// returned Web Response is silently dropped and the function 504s at
+// maxDuration. This bridges a Web Response back to Vercel's res object.
+export async function sendNodeResponse(res, webResponse) {
+  if (!webResponse || typeof webResponse.text !== 'function') {
+    return res.status(500).send('Internal error: no response');
+  }
+  res.status(webResponse.status);
+  webResponse.headers.forEach((value, key) => res.setHeader(key, value));
+  const body = await webResponse.text();
+  res.send(body);
+}
+
 // Compatible Node.js IncomingMessage (headers plain object) and Edge Request (Headers instance)
 function getHeader(req, name) {
   if (typeof req.headers?.get === 'function') return req.headers.get(name);

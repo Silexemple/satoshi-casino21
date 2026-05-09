@@ -1,9 +1,9 @@
 import { kv } from '@vercel/kv';
-import { json, getSessionId, rateLimit, normalizePlayer, parseBody } from './_helpers.js';
+import { json, getSessionId, rateLimit, normalizePlayer, parseBody, sendNodeResponse } from './_helpers.js';
 import { nwcRequest } from './_nwc.js';
 
 // Runtime Node.js (default): WebSocket sortant requis pour NWC.
-// parseBody dans _helpers.js gère req.body pré-parsé par Vercel Node runtime.
+// Node runtime attend (req, res) — bridge via sendNodeResponse.
 
 // ── Politique de frais Lightning ──
 // Réserve = max(FEE_RESERVE_PERCENT * montant, FEE_RESERVE_MIN_SAT)
@@ -31,7 +31,12 @@ function decodeInvoiceAmount(invoice) {
   } catch (e) { return null; }
 }
 
-export default async function handler(req) {
+export default async function handler(req, res) {
+  const out = await impl(req);
+  return sendNodeResponse(res, out);
+}
+
+async function impl(req) {
   // ── Rate limit IP global ──
   const rl = await rateLimit(req, 'withdraw', 5, 60);
   if (rl) return rl;

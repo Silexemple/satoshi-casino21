@@ -1,10 +1,16 @@
 import { kv } from '@vercel/kv';
-import { json, getSessionId, normalizePlayer } from '../_helpers.js';
+import { json, getSessionId, normalizePlayer, sendNodeResponse } from '../_helpers.js';
 import { nwcRequest } from '../_nwc.js';
 
 // Runtime Node.js (default): WebSocket sortant requis pour NWC.
+// Node runtime attend (req, res) — bridge via sendNodeResponse.
 
-export default async function handler(req) {
+export default async function handler(req, res) {
+  const out = await impl(req);
+  return sendNodeResponse(res, out);
+}
+
+async function impl(req) {
   const sessionId = getSessionId(req);
   if (!sessionId) return json(401, { error: 'Session invalide', auth_required: true });
 
