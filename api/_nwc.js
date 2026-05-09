@@ -1,10 +1,15 @@
 /**
  * Minimal NWC (NIP-47) client using only @noble/secp256k1 v3 + Web Crypto API
- * Compatible with Vercel Edge runtime and Node.js runtime
+ * Compatible with Vercel Node.js runtime.
+ *
+ * Strategy: subscribe + publish on ALL relays in parallel, first valid response wins.
+ * Per Alby docs (https://docs.nwc.dev), wallets may listen on any of the relays
+ * advertised in the connection URL — using only relays[0] silently fails when the
+ * wallet is bound to relays[1+], producing the symptom we hit (504 / NWC timeout).
  */
 import { getSharedSecret, schnorr } from '@noble/secp256k1';
 
-// WebSocket: natif sur Edge runtime, sinon importer le package 'ws' (Node.js)
+// WebSocket: native on Node 22+ / Edge runtime, fallback to 'ws' package on older Node.
 async function getWebSocket(url) {
   if (typeof globalThis.WebSocket !== 'undefined') {
     return new globalThis.WebSocket(url);
@@ -33,10 +38,9 @@ function parseNWCUrl(url) {
 // ---------- NIP-04 Encryption ----------
 
 async function sharedKey(secretKeyBytes, pubkeyHex) {
-  // getSharedSecret requires Uint8Array for both args
   const pubkeyBytes = hexToBytes('02' + pubkeyHex);
-  const shared = getSharedSecret(secretKeyBytes, pubkeyBytes); // returns 33 bytes (compressed)
-  return shared.slice(1, 33); // x-coordinate only
+  const shared = getSharedSecret(secretKeyBytes, pubkeyBytes); // 33 bytes (compressed)
+  return shared.slice(1, 33); // x-coordinate only (NIP-04 spec)
 }
 
 async function nip04Encrypt(secretKeyBytes, pubkeyHex, text) {
@@ -65,25 +69,98 @@ async function sha256Hex(str) {
 }
 
 async function createEvent(secretKeyBytes, walletPubkeyHex, content) {
-  const pubkeyHex = bytesToHex(schnorr.getPublicKey(secretKeyBytes)); // 32-byte x-only pubkey
+  const pubkeyHex = bytesToHex(schnorr.getPublicKey(secretKeyBytes)); // 32-byte x-only
   const created_at = Math.floor(Date.now() / 1000);
   const kind = 23194;
   const tags = [['p', walletPubkeyHex]];
   const serialized = JSON.stringify([0, pubkeyHex, created_at, kind, tags, content]);
 
   const id = await sha256Hex(serialized);
-  // schnorr.sign(msg: Uint8Array, secretKey: Uint8Array) - both must be Uint8Array
   const sig = bytesToHex(await schnorr.signAsync(hexToBytes(id), secretKeyBytes));
 
   return { id, pubkey: pubkeyHex, created_at, kind, tags, content, sig };
 }
 
-// ---------- NWC Request ----------
+// ---------- Per-relay worker ----------
+// Returns a promise that resolves with the decrypted NWC response, or rejects on
+// connection failure. The caller cancels via abort() on timeout / sibling success.
 
-export async function nwcRequest(nwcUrl, method, params, timeoutMs = 12000) {
+function relayWorker({ relayUrl, event, myPubkey, walletPubkey, secretKeyBytes, abortSignal }) {
+  return new Promise(async (resolve, reject) => {
+    let ws;
+    let settled = false;
+
+    const cleanup = () => {
+      try { ws?.close(); } catch (_) {}
+    };
+
+    const settle = (ok, val) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      ok ? resolve(val) : reject(val);
+    };
+
+    abortSignal.addEventListener('abort', () => settle(false, new Error('aborted')), { once: true });
+
+    try {
+      ws = await getWebSocket(relayUrl);
+    } catch (err) {
+      settle(false, new Error(`relay ${relayUrl}: init failed (${err.message})`));
+      return;
+    }
+
+    ws.onopen = () => {
+      const since = Math.floor(Date.now() / 1000) - 30;
+      try {
+        ws.send(JSON.stringify(['REQ', 'sub1', { kinds: [23195], '#p': [myPubkey], since, limit: 1 }]));
+        ws.send(JSON.stringify(['EVENT', event]));
+      } catch (err) {
+        settle(false, new Error(`relay ${relayUrl}: send failed (${err.message})`));
+      }
+    };
+
+    ws.onmessage = async (msg) => {
+      try {
+        const data = JSON.parse(msg.data);
+        if (data[0] !== 'EVENT' || data[2]?.kind !== 23195) return;
+
+        const responseEvent = data[2];
+        if (responseEvent.pubkey !== walletPubkey) return;
+        // Ensure the response is tagged for us (filters out stale events for other clients).
+        const tagsForUs = (responseEvent.tags || []).some(t => t[0] === 'p' && t[1] === myPubkey);
+        if (!tagsForUs) return;
+
+        const decrypted = await nip04Decrypt(secretKeyBytes, walletPubkey, responseEvent.content);
+        const response = JSON.parse(decrypted);
+
+        if (response.error) {
+          settle(false, new Error(response.error.message || JSON.stringify(response.error)));
+        } else {
+          settle(true, response.result);
+        }
+      } catch (_) {
+        // ignore parse errors, keep waiting on this relay
+      }
+    };
+
+    ws.onerror = (err) => {
+      settle(false, new Error(`relay ${relayUrl}: ws error (${err?.message || 'unknown'})`));
+    };
+
+    ws.onclose = (e) => {
+      if (!settled && e?.code !== 1000) {
+        settle(false, new Error(`relay ${relayUrl}: closed (code=${e?.code})`));
+      }
+    };
+  });
+}
+
+// ---------- Public API ----------
+
+export async function nwcRequest(nwcUrl, method, params, timeoutMs = 9000) {
   const { pubkey, relays, secret } = parseNWCUrl(nwcUrl);
 
-  // Validation défensive de la NWC URL
   if (!pubkey || !/^[a-f0-9]{64}$/i.test(pubkey)) throw new Error('NWC: pubkey invalide');
   if (!secret || !/^[a-f0-9]{64}$/i.test(secret)) throw new Error('NWC: secret invalide');
   if (!relays || relays.length === 0) throw new Error('NWC: aucun relay configuré');
@@ -94,64 +171,37 @@ export async function nwcRequest(nwcUrl, method, params, timeoutMs = 12000) {
   const content = await nip04Encrypt(secretKeyBytes, pubkey, JSON.stringify({ method, params }));
   const event = await createEvent(secretKeyBytes, pubkey, content);
 
-  return new Promise(async (resolve, reject) => {
-    let settled = false;
-    const settle = (fn, val) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timeout);
-      fn(val);
-    };
+  const abortController = new AbortController();
+  const workers = relays.map(relayUrl =>
+    relayWorker({
+      relayUrl,
+      event,
+      myPubkey,
+      walletPubkey: pubkey,
+      secretKeyBytes,
+      abortSignal: abortController.signal
+    })
+  );
 
-    const timeout = setTimeout(() => {
-      try { ws?.close(); } catch (_) {}
-      settle(reject, new Error('NWC timeout'));
-    }, timeoutMs);
+  // Race: first relay to deliver a valid response (or NWC error) wins.
+  // Promise.any rejects only if EVERY relay fails before timeout.
+  const winnerPromise = Promise.any(workers);
 
-    let ws;
-    try {
-      ws = await getWebSocket(relays[0]);
-    } catch (err) {
-      settle(reject, new Error(`WebSocket init failed: ${err.message}`));
-      return;
-    }
-
-    ws.onopen = () => {
-      const since = Math.floor(Date.now() / 1000) - 30;
-      ws.send(JSON.stringify(['REQ', 'sub1', { kinds: [23195], '#p': [myPubkey], since, limit: 1 }]));
-      ws.send(JSON.stringify(['EVENT', event]));
-    };
-
-    ws.onmessage = async (msg) => {
-      try {
-        const data = JSON.parse(msg.data);
-        if (data[0] !== 'EVENT' || data[2]?.kind !== 23195) return;
-
-        const responseEvent = data[2];
-        if (responseEvent.pubkey !== pubkey) return;
-
-        const decrypted = await nip04Decrypt(secretKeyBytes, pubkey, responseEvent.content);
-        const response = JSON.parse(decrypted);
-
-        try { ws.close(); } catch (_) {}
-        if (response.error) {
-          settle(reject, new Error(response.error.message || JSON.stringify(response.error)));
-        } else {
-          settle(resolve, response.result);
-        }
-      } catch (_) {
-        // ignore parse errors, keep waiting
-      }
-    };
-
-    ws.onerror = (err) => {
-      settle(reject, new Error(`WebSocket connection failed: ${err?.message || ''}`));
-    };
-
-    ws.onclose = (e) => {
-      if (!settled && e.code !== 1000) {
-        settle(reject, new Error(`WebSocket closed unexpectedly: ${e.code}`));
-      }
-    };
+  const timeoutPromise = new Promise((_, reject) => {
+    setTimeout(() => reject(new Error(`NWC timeout (${timeoutMs}ms, tried ${relays.length} relay${relays.length > 1 ? 's' : ''})`)), timeoutMs);
   });
+
+  try {
+    const result = await Promise.race([winnerPromise, timeoutPromise]);
+    abortController.abort(); // close the losing sockets
+    return result;
+  } catch (err) {
+    abortController.abort();
+    if (err instanceof AggregateError) {
+      // All relays failed — surface the first concrete error.
+      const messages = err.errors.map(e => e.message).join('; ');
+      throw new Error(`NWC all relays failed: ${messages}`);
+    }
+    throw err;
+  }
 }
