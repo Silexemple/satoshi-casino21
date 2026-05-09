@@ -41,22 +41,34 @@ export default async function handler(req) {
 
   // POST: update nickname/avatar
   if (req.method === 'POST') {
-    try {
-      const body = await req.json();
-      if (body.nickname !== undefined) {
-        const nick = (body.nickname || '').trim().slice(0, 16);
-        const sanitized = nick.replace(/[^a-zA-Z0-9 _\-]/g, '').trim();
-        if (sanitized.length >= 2 && sanitized.length <= 16) {
-          player.nickname = sanitized;
-        }
+    let body;
+    try { body = await req.json(); } catch(e) {
+      return new Response(JSON.stringify({ error: 'Body JSON invalide' }), {
+        status: 400, headers: { 'Content-Type': 'application/json' }
+      });
+    }
+    if (body.nickname !== undefined) {
+      const nick = (body.nickname || '').trim().slice(0, 16);
+      const sanitized = nick.replace(/[^a-zA-Z0-9 _\-]/g, '').trim();
+      if (sanitized.length < 2 || sanitized.length > 16) {
+        // Avant: silent no-op si invalide, le frontend croyait avoir reussi
+        // l'update et l'utilisateur ne comprenait pas pourquoi son pseudo ne
+        // changeait pas.
+        return new Response(JSON.stringify({
+          error: 'Pseudo invalide (2-16 caracteres alphanumeriques, espaces, _ ou -)'
+        }), { status: 400, headers: { 'Content-Type': 'application/json' } });
       }
-      if (body.avatar !== undefined) {
-        const validAvatars = ['💀','👑','♠️','💎','🔥','🚀','🎯','🐺','⚡','🦅','🎰','🃏'];
-        if (validAvatars.includes(body.avatar)) {
-          player.avatar = body.avatar;
-        }
+      player.nickname = sanitized;
+    }
+    if (body.avatar !== undefined) {
+      const validAvatars = ['💀','👑','♠️','💎','🔥','🚀','🎯','🐺','⚡','🦅','🎰','🃏'];
+      if (!validAvatars.includes(body.avatar)) {
+        return new Response(JSON.stringify({ error: 'Avatar invalide' }), {
+          status: 400, headers: { 'Content-Type': 'application/json' }
+        });
       }
-    } catch(e) {}
+      player.avatar = body.avatar;
+    }
   }
 
   player.last_activity = Date.now();

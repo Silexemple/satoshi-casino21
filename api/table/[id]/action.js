@@ -70,6 +70,12 @@ export default async function handler(req) {
       return json(400, { error: 'Main déjà terminée' });
     }
 
+    // Tracker des debits/credits pour rollback si le kv.set du tableau echoue
+    // a la fin. Sans ca, un debit (insurance, double, split, surrender) cote
+    // player KV pouvait reussir alors que le tableau n'etait pas sauvegarde
+    // → joueur paie deux fois sur retry.
+    let netDebit = 0; // delta a annuler en cas de rollback (positif = debit)
+
     // ===================== INSURANCE =====================
     if (action === 'insurance') {
       // L'assurance doit être sur les 2 premières cartes, dealer montre un As
@@ -95,6 +101,7 @@ export default async function handler(req) {
         player.balance -= insuranceCost;
         await kv.set(playerKey, player, { ex: 2592000 });
         seat.insuranceBet = insuranceCost;
+        netDebit += insuranceCost;
       } else {
         seat.insuranceBet = 0; // refusé
       }
@@ -109,6 +116,7 @@ export default async function handler(req) {
             const insurancePayout = seat.insuranceBet * 3;
             player.balance += insurancePayout;
             await kv.set(playerKey, player, { ex: 2592000 });
+            netDebit -= insurancePayout; // un credit reduit la dette de rollback
           }
           seat.insuranceResult = 'win';
         }
@@ -139,6 +147,7 @@ export default async function handler(req) {
       if (player) {
         player.balance += refund;
         await kv.set(playerKey, player, { ex: 2592000 });
+        netDebit -= refund; // refund est un credit
       }
 
       hand.finished = true;
@@ -184,8 +193,10 @@ export default async function handler(req) {
       }
 
       // Débiter le supplément
-      player.balance -= hand.bet;
+      const doubleDebit = hand.bet;
+      player.balance -= doubleDebit;
       await kv.set(playerKey, player, { ex: 2592000 });
+      netDebit += doubleDebit;
 
       hand.bet *= 2;
       hand.cards.push(drawCard(table.deck));
@@ -218,6 +229,7 @@ export default async function handler(req) {
       // Débiter
       player.balance -= originalBet;
       await kv.set(playerKey, player, { ex: 2592000 });
+      netDebit += originalBet;
 
       const card1 = hand.cards[0];
       const card2 = hand.cards[1];
@@ -246,12 +258,39 @@ export default async function handler(req) {
     }
 
     table.lastUpdate = Date.now();
-    await kv.set(tableKey, table, { ex: 604800 });
-
-    // Si la round est finie, créditer les joueurs
-    if (table.status === 'finished') {
-      await creditPlayers(table);
+    // Sauvegarde du tableau avec rollback du netDebit cumule pour cette
+    // action (insurance/double/split/surrender debitent/creditent le joueur
+    // AVANT la sauvegarde du tableau). Sans ce filet, un kv.set qui throw
+    // laisse les KV joueur+tableau desynchronisees: les sats sortent du
+    // solde mais l'action n'est pas enregistree → joueur peut rejouer
+    // l'action et payer 2x.
+    try {
       await kv.set(tableKey, table, { ex: 604800 });
+    } catch (err) {
+      console.error(`[ACTION] table save failed for ${tableId} (action=${action}), rolling back netDebit=${netDebit} for ${linkingKey}:`, err);
+      if (netDebit !== 0) {
+        try {
+          const freshPlayer = await kv.get(resolvedPlayerKey);
+          if (freshPlayer) {
+            freshPlayer.balance = (freshPlayer.balance || 0) + netDebit;
+            await kv.set(resolvedPlayerKey, freshPlayer, { ex: 2592000 });
+          }
+        } catch (rollbackErr) {
+          console.error(`[ACTION] CRITICAL: rollback FAILED for ${linkingKey}, netDebit=${netDebit} sats incoherent:`, rollbackErr);
+        }
+      }
+      return json(500, { error: 'Action échouée, solde restauré. Réessayez.' });
+    }
+
+    // Si la round est finie, créditer les joueurs (idempotent via creditKey)
+    if (table.status === 'finished') {
+      try {
+        await creditPlayers(table);
+        await kv.set(tableKey, table, { ex: 604800 });
+      } catch (err) {
+        // Non-fatal: creditPlayers est idempotent, le prochain GET re-tentera
+        console.error(`[ACTION] post-finish credit failed (will retry on next GET):`, err);
+      }
     }
 
     return json(200, tableStateForClient(table, sessionId));

@@ -69,46 +69,76 @@ export default async function handler(req) {
     const receiver = await kv.get(receiverKey);
     if (!receiver) return json(400, { error: 'Destinataire non trouve' });
 
-    // Transfer
+    // Transfert sequentiel avec rollback si le credit echoue. Promise.all sur
+    // les 2 kv.set creait un risque de creation/destruction de sats: si le
+    // debit du sender succede et le credit du receiver echoue (timeout reseau),
+    // les sats etaient detruits. L'inverse creait des sats du neant.
     sender.balance -= amount;
+    await kv.set(senderKey, sender, { ex: 2592000 });
+
     receiver.balance += amount;
+    try {
+      await kv.set(receiverKey, receiver, { ex: 2592000 });
+    } catch (err) {
+      // Credit failed: rollback sender debit (best-effort).
+      console.error(`[TIP] credit failed for ${receiverLk}, rolling back ${amount} sats from ${senderLk}:`, err);
+      try {
+        const freshSender = await kv.get(senderKey);
+        if (freshSender) {
+          freshSender.balance = (freshSender.balance || 0) + amount;
+          await kv.set(senderKey, freshSender, { ex: 2592000 });
+        } else {
+          sender.balance += amount;
+          await kv.set(senderKey, sender, { ex: 2592000 });
+        }
+      } catch (rollbackErr) {
+        console.error(`[TIP] CRITICAL: rollback FAILED for ${senderLk}, lost ${amount} sats:`, rollbackErr);
+      }
+      return json(500, { error: 'Transfert échoué, solde restauré. Réessayez.' });
+    }
 
-    await Promise.all([
-      kv.set(senderKey, sender, { ex: 2592000 }),
-      kv.set(receiverKey, receiver, { ex: 2592000 })
-    ]);
-
-    // Log transactions (keyed by linkingKey for cross-session history)
+    // Log transactions (best-effort, non-bloquant: si rpush echoue, le tip
+    // a deja ete effectue cote balance — on log et on continue)
     const senderTxKey = `transactions:${senderLk}`;
     const receiverTxKey = `transactions:${receiverLk}`;
-    await Promise.all([
-      kv.rpush(senderTxKey, {
-        type: 'tip_sent',
-        amount: -amount,
-        timestamp: Date.now(),
-        description: `Pourboire a ${targetSeat.playerName}`
-      }),
-      kv.rpush(receiverTxKey, {
-        type: 'tip_received',
-        amount: amount,
-        timestamp: Date.now(),
-        description: `Pourboire de ${table.seats[senderIdx].playerName}`
-      })
-    ]);
-    await Promise.all([
-      kv.expire(senderTxKey, 2592000),
-      kv.expire(receiverTxKey, 2592000)
-    ]);
+    try {
+      await Promise.all([
+        kv.rpush(senderTxKey, {
+          type: 'tip_sent',
+          amount: -amount,
+          timestamp: Date.now(),
+          description: `Pourboire a ${targetSeat.playerName}`
+        }),
+        kv.rpush(receiverTxKey, {
+          type: 'tip_received',
+          amount: amount,
+          timestamp: Date.now(),
+          description: `Pourboire de ${table.seats[senderIdx].playerName}`
+        })
+      ]);
+      await Promise.all([
+        kv.expire(senderTxKey, 2592000),
+        kv.expire(receiverTxKey, 2592000)
+      ]);
+    } catch (err) {
+      console.error(`[TIP] tx log failed (non-blocking, transfer succeeded):`, err);
+    }
 
-    // Post a chat message about the tip
+    // Post a chat message about the tip (avec TTL — sans expire la cle pouvait
+    // survivre indefiniment si elle etait creee par cet rpush sur cle vide)
     const chatKey = `chat:${tableId}`;
-    await kv.rpush(chatKey, {
-      seatIdx: senderIdx,
-      playerName: table.seats[senderIdx].playerName,
-      message: `a envoye ${amount} sats a ${targetSeat.playerName}!`,
-      timestamp: Date.now(),
-      isSystem: true
-    });
+    try {
+      await kv.rpush(chatKey, {
+        seatIdx: senderIdx,
+        playerName: table.seats[senderIdx].playerName,
+        message: `a envoye ${amount} sats a ${targetSeat.playerName}!`,
+        timestamp: Date.now(),
+        isSystem: true
+      });
+      await kv.expire(chatKey, 3600);
+    } catch (err) {
+      console.error('[TIP] chat post failed (non-blocking):', err);
+    }
 
     return json(200, {
       success: true,

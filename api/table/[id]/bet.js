@@ -123,7 +123,27 @@ export default async function handler(req) {
     }
 
     table.lastUpdate = Date.now();
-    await kv.set(tableKey, table, { ex: 604800 });
+    // Sauvegarde du tableau sous try/catch avec rollback du debit. Si la
+    // sauvegarde echoue (timeout, KV down), le joueur est debite mais sa
+    // mise n'est pas enregistree → sur retry il rebet et est debite 2x.
+    try {
+      await kv.set(tableKey, table, { ex: 604800 });
+    } catch (err) {
+      console.error(`[BET] table save failed for ${tableId}, rolling back ${amount} sats for ${linkingKey}:`, err);
+      try {
+        const freshPlayer = await kv.get(playerKey);
+        if (freshPlayer) {
+          freshPlayer.balance = (freshPlayer.balance || 0) + amount;
+          await kv.set(playerKey, freshPlayer, { ex: 2592000 });
+        } else {
+          player.balance += amount;
+          await kv.set(playerKey, player, { ex: 2592000 });
+        }
+      } catch (rollbackErr) {
+        console.error(`[BET] CRITICAL: rollback FAILED for ${linkingKey}, lost ${amount} sats:`, rollbackErr);
+      }
+      return json(500, { error: 'Mise échouée, solde restauré. Réessayez.' });
+    }
 
     // Si le round s'est terminé pendant la distribution (BJ dealer/joueur)
     if (table.status === 'finished') {

@@ -40,29 +40,49 @@ export default async function handler(req) {
       return json(400, { error: 'Impossible de quitter pendant la distribution' });
     }
 
-    // Rembourser la mise si le joueur quitte pendant la phase de mises
+    // Rembourser la mise si le joueur quitte pendant la phase de mises.
+    // Ordre: ZERO seat.bet AVANT refund pour eviter un double-refund si on
+    // crash entre le refund et le table.save (sur retry de leave, seat.bet
+    // serait toujours > 0 dans le KV → refund deja fait + nouveau refund).
+    // En zeroant d'abord, on perd au pire le refund (recoverable via log)
+    // mais on ne paie jamais 2x.
     let refunded = 0;
+    let refundIntent = 0;
+    let refundLk = null;
     if (['betting', 'waiting'].includes(table.status) && seat.bet > 0) {
-      const lk = seat.linkingKey || await kv.get(`session:${sessionId}`);
-      if (!lk) {
-        table.seats[seatIdx] = null;
-        table.lastUpdate = Date.now();
-        await kv.set(tableKey, table, { ex: 604800 });
-        return json(200, { success: true, refunded: 0 });
-      }
-      const playerKey = `player:${lk}`;
-      const player = await kv.get(playerKey);
-      if (player) {
-        player.balance += seat.bet;
-        await kv.set(playerKey, player, { ex: 2592000 });
-        refunded = seat.bet;
-      }
+      refundIntent = seat.bet;
+      refundLk = seat.linkingKey || await kv.get(`session:${sessionId}`);
+      seat.bet = 0; // marqueur "refund traite" — sauvegarde dans le table.save plus bas
     }
 
     table.seats[seatIdx] = null;
     table.lastUpdate = Date.now();
 
+    // Sauvegarder d'abord la liberation du siege (avec seat.bet=0 implicite via
+    // seats[i]=null), puis crediter. Si le credit echoue apres la sauvegarde,
+    // on log loud — mieux qu'un double-refund ou un siege bloque.
     await kv.set(tableKey, table, { ex: 604800 });
+
+    if (refundIntent > 0) {
+      if (!refundLk) {
+        console.error(`[LEAVE] cannot refund ${refundIntent} sats: no linkingKey for ${sessionId} on ${tableId}`);
+      } else {
+        try {
+          const playerKey = `player:${refundLk}`;
+          const player = await kv.get(playerKey);
+          if (player) {
+            player.balance += refundIntent;
+            player.last_activity = Date.now();
+            await kv.set(playerKey, player, { ex: 2592000 });
+            refunded = refundIntent;
+          } else {
+            console.error(`[LEAVE] player ${refundLk} not found, lost refund ${refundIntent} sats on ${tableId}`);
+          }
+        } catch (err) {
+          console.error(`[LEAVE] refund FAILED for ${refundLk}, lost ${refundIntent} sats on ${tableId}:`, err);
+        }
+      }
+    }
 
     return json(200, { success: true, refunded });
   } finally {

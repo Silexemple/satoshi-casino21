@@ -465,7 +465,12 @@ async function creditPlayers(table) {
 
     // Resolve linkingKey: use stored one from join, fallback to session lookup
     const lk = seat.linkingKey || await kv.get(`session:${seat.sessionId}`);
-    if (!lk) continue; // Session expired, skip credit
+    if (!lk) {
+      // Sans linkingKey, impossible de creditrer. Loggons explicitement —
+      // un continue silencieux faisait disparaitre les payouts sans trace.
+      console.error(`[TABLE] credit SKIPPED (no linkingKey) for ${table.id}, lost ${seat.payout} sats for seat ${seat.seatIdx} (${seat.playerName})`);
+      continue;
+    }
 
     const playerKey = `player:${lk}`;
     // Verrou joueur par linkingKey (stable cross-session)
