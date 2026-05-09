@@ -32,7 +32,13 @@ function decodeInvoiceAmount(invoice) {
 }
 
 export default async function handler(req, res) {
-  const out = await impl(req);
+  let out;
+  try {
+    out = await impl(req);
+  } catch (err) {
+    console.error('withdraw unhandled:', err);
+    out = json(500, { error: `Erreur interne: ${err.message}` });
+  }
   return sendNodeResponse(res, out);
 }
 

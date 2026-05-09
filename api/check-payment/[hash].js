@@ -6,7 +6,13 @@ import { nwcRequest } from '../_nwc.js';
 // Node runtime attend (req, res) — bridge via sendNodeResponse.
 
 export default async function handler(req, res) {
-  const out = await impl(req);
+  let out;
+  try {
+    out = await impl(req);
+  } catch (err) {
+    console.error('check-payment unhandled:', err);
+    out = json(500, { error: `Erreur interne: ${err.message}` });
+  }
   return sendNodeResponse(res, out);
 }
 
@@ -14,9 +20,14 @@ async function impl(req) {
   const sessionId = getSessionId(req);
   if (!sessionId) return json(401, { error: 'Session invalide', auth_required: true });
 
-  const { pathname } = new URL(req.url);
-  const pathParts = pathname.split('/');
-  const paymentHash = pathParts[pathParts.length - 1];
+  // Vercel Node runtime: req.url est un path relatif ("/api/check-payment/abc?x=1"),
+  // donc new URL(req.url) throw "Invalid URL". On utilise req.query.hash exposé
+  // par Vercel pour les routes dynamiques [hash].js, avec fallback parsing path brut.
+  let paymentHash = req.query?.hash;
+  if (!paymentHash) {
+    const path = (req.url || '').split('?')[0];
+    paymentHash = path.split('/').filter(Boolean).pop();
+  }
 
   if (!paymentHash) return json(400, { error: 'Payment hash manquant' });
   // Validation stricte: un payment hash Lightning est exactement 64 hex chars

@@ -8,7 +8,13 @@ import { nwcRequest } from './_nwc.js';
 // puis on bridge vers res via sendNodeResponse à la fin.
 
 export default async function handler(req, res) {
-  const out = await impl(req);
+  let out;
+  try {
+    out = await impl(req);
+  } catch (err) {
+    console.error('deposit unhandled:', err);
+    out = json(500, { error: `Erreur interne: ${err.message}` });
+  }
   return sendNodeResponse(res, out);
 }
 
