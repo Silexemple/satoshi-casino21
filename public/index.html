@@ -1947,18 +1947,43 @@ async function processWithdraw() {
 
     try {
         const data = await apiCall('/api/withdraw', 'POST', { invoice });
+        console.log('[WITHDRAW] response:', data);
 
-        balance = data.new_balance || 0;
+        // Mise à jour du solde — on prend new_balance si présent, sinon on
+        // refetch /api/balance pour avoir une source de vérité serveur.
+        // (Avant : `balance = data.new_balance || 0` → si new_balance était
+        // absent ou égal à 0, l'UI restait désynchronisée jusqu'au F5.)
+        if (typeof data.new_balance === 'number') {
+            balance = data.new_balance;
+        } else {
+            try {
+                const b = await apiCall('/api/balance');
+                if (typeof b.balance === 'number') balance = b.balance;
+            } catch (e) { console.warn('[WITHDRAW] balance refresh failed:', e); }
+        }
         updateDisplay();
         animateBalanceUpdate();
 
         // Toast détaillé : montant + fees réels + remboursement de la réserve non-utilisée
         const fees = data.fees_sat ?? 0;
         const refunded = data.refunded_sat ?? 0;
-        let msg = `✅ ${data.amount.toLocaleString()} sats envoyés (frais: ${fees} sats)`;
+        const amount = data.amount ?? 0;
+        let msg = `✅ ${amount.toLocaleString()} sats envoyés (frais: ${fees} sats)`;
         if (refunded > 0) msg += ` — ${refunded} sats remboursés`;
         showToast(msg, 'win');
         closeModal('withdrawModal');
+
+        // Filet de sécurité : refetch après 1.5s pour capturer un éventuel
+        // refund ou ajustement asynchrone côté serveur.
+        setTimeout(async () => {
+            try {
+                const b = await apiCall('/api/balance');
+                if (typeof b.balance === 'number' && b.balance !== balance) {
+                    balance = b.balance;
+                    updateDisplay();
+                }
+            } catch (_) {}
+        }, 1500);
 
     } catch (error) {
         if (error.message !== '__auth_required__') showToast('Erreur: ' + error.message, 'loss');
