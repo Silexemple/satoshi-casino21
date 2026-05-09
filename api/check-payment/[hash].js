@@ -99,6 +99,16 @@ async function impl(req) {
         }
 
         const newBalance = player.balance + freshInvoice.amount;
+        // Soft-cap warning: la verification MAX_BALANCE (1M) cote deposit.js
+        // est faite a la GENERATION de l'invoice, pas au CREDIT. Un user peut
+        // generer N invoices avant qu'aucune ne soit payee, puis toutes les
+        // payer → solde > MAX. On ne peut PAS refuser le credit (Lightning
+        // payment deja recu = on volerait le user). On log pour visibilite
+        // operationnelle et on credite quand meme.
+        const SOFT_MAX = 1000000;
+        if (newBalance > SOFT_MAX) {
+          console.warn(`[DEPOSIT] balance soft-cap exceeded for ${linkingKey}: ${newBalance} > ${SOFT_MAX} (credited anyway, paymentHash=${paymentHash})`);
+        }
         player.balance = newBalance;
         player.last_activity = Date.now();
         await kv.set(playerKey, player, { ex: 2592000 });
