@@ -14,10 +14,19 @@ function getHeader(req, name) {
   return req.headers?.[name.toLowerCase()] ?? null;
 }
 
-// Compatible Node.js IncomingMessage (stream) and Edge Request (req.json())
-// Limite à 64KB pour empêcher les attaques DoS par body volumineux
+// Compatible Web API (Edge / Vercel Node fluid compute) ET Node Express-style.
+// Trois chemins, dans cet ordre:
+//   1. req.json() — Web Request (Edge runtime ou Node runtime en mode Web Handler)
+//   2. req.body  — Vercel Node.js runtime: pré-parse JSON/urlencoded et CONSOMME le stream.
+//                  Sans ce check on se retrouvait à attendre 'data'/'end' qui n'arrivent
+//                  jamais → 504 timeout (cause du retour à Edge runtime auparavant).
+//   3. Stream raw — IncomingMessage non-Vercel ou body non auto-parsé (ex: Content-Type
+//                   exotique). 64KB max pour bloquer les DoS.
 export async function parseBody(req, maxBytes = 65536) {
   if (typeof req.json === 'function') return req.json();
+  if (req.body !== undefined && req.body !== null) {
+    return typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
+  }
   return new Promise((resolve, reject) => {
     let data = '';
     let aborted = false;
@@ -32,7 +41,7 @@ export async function parseBody(req, maxBytes = 65536) {
     });
     req.on('end', () => {
       if (aborted) return;
-      try { resolve(JSON.parse(data)); } catch (e) { reject(e); }
+      try { resolve(JSON.parse(data || '{}')); } catch (e) { reject(e); }
     });
     req.on('error', reject);
   });

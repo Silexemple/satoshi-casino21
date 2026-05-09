@@ -2,7 +2,8 @@ import { kv } from '@vercel/kv';
 import { json, getSessionId, rateLimit, normalizePlayer, parseBody } from './_helpers.js';
 import { nwcRequest } from './_nwc.js';
 
-export const config = { runtime: 'edge' };
+// Runtime Node.js (default): WebSocket sortant requis pour NWC.
+// parseBody dans _helpers.js gère req.body pré-parsé par Vercel Node runtime.
 
 // ── Politique de frais Lightning ──
 // Réserve = max(FEE_RESERVE_PERCENT * montant, FEE_RESERVE_MIN_SAT)

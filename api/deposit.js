@@ -2,7 +2,9 @@ import { kv } from '@vercel/kv';
 import { json, getSessionId, rateLimit, normalizePlayer, parseBody } from './_helpers.js';
 import { nwcRequest } from './_nwc.js';
 
-export const config = { runtime: 'edge' };
+// Runtime Node.js (default): WebSocket sortant requis pour NWC.
+// Edge runtime ne supporte pas les WebSocket sortants vers les relays nostr.
+// parseBody dans _helpers.js gère req.body pré-parsé par Vercel Node runtime.
 
 export default async function handler(req) {
   // ── Rate limit IP global ──

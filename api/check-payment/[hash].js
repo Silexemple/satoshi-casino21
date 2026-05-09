@@ -2,7 +2,7 @@ import { kv } from '@vercel/kv';
 import { json, getSessionId, normalizePlayer } from '../_helpers.js';
 import { nwcRequest } from '../_nwc.js';
 
-export const config = { runtime: 'edge' };
+// Runtime Node.js (default): WebSocket sortant requis pour NWC.
 
 export default async function handler(req) {
   const sessionId = getSessionId(req);
