@@ -54,8 +54,14 @@ async function impl(req) {
     try {
       const freshInvoice = await kv.get(`invoice:${paymentHash}`);
       if (!freshInvoice) {
+        // Invoice key absente : soit on l'a delete après crédit (succès),
+        // soit elle a expiré par TTL sans avoir été payée. Distinguer via
+        // le flag credited:* (TTL ≥ invoice). Sans ce check, le frontend
+        // affichait "✅ Paiement reçu !" pour des invoices expirées non-payées.
+        const credited = await kv.get(`credited:${paymentHash}`);
         await kv.del(lockKey);
-        return json(200, { paid: true });
+        if (credited) return json(200, { paid: true });
+        return json(200, { paid: false, expired: true });
       }
 
       let isPaid = false;
@@ -81,9 +87,12 @@ async function impl(req) {
           player = { balance: 0, nickname: null, created_at: Date.now(), last_activity: Date.now() };
         }
 
-        // Idempotence: éviter le double-crédit si crash entre crédit et suppression invoice
+        // Idempotence: éviter le double-crédit si crash entre crédit et suppression invoice.
+        // TTL aligné sur celui de invoice:* (7200s côté deposit.js) +marge, sinon le marker
+        // peut expirer pendant que la clé invoice survit, et le `if (!freshInvoice)` plus
+        // haut ne saurait plus distinguer "crédité" de "expiré non-payé".
         const creditedKey = `credited:${paymentHash}`;
-        const alreadyCredited = await kv.set(creditedKey, '1', { nx: true, ex: 3600 });
+        const alreadyCredited = await kv.set(creditedKey, '1', { nx: true, ex: 86400 });
         if (!alreadyCredited) {
           await kv.del(lockKey);
           return json(200, { paid: true, new_balance: player.balance });

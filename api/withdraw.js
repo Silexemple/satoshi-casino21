@@ -136,6 +136,12 @@ async function impl(req) {
       });
     }
 
+    // Paiement Lightning RÉUSSI — point de non-retour. Les sats ont quitté
+    // le casino. Toute erreur après ce point ne doit PLUS rembourser le
+    // joueur (sinon le casino paie deux fois). On désarme le filet de
+    // refund du catch externe immédiatement.
+    debited = false;
+
     const paymentHash = payment.payment_hash || invoice.substring(4, 20);
 
     // ── Calculer fees réellement consommés et rembourser la différence ──

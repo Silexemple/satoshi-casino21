@@ -1878,18 +1878,31 @@ async function copyInvoice() {
 
 function startPaymentCheck() {
     if (paymentCheckInterval) clearInterval(paymentCheckInterval);
-    
+
     paymentCheckInterval = setInterval(async () => {
         try {
             const data = await apiCall(`/api/check-payment/${currentPaymentHash}`);
-            
+
             if (data.paid) {
                 clearInterval(paymentCheckInterval);
-                balance = data.new_balance;
+                paymentCheckInterval = null;
+
+                // Source de vérité = serveur. Si new_balance manque (cas du
+                // 2e check après idempotence où il n'est pas systématiquement
+                // renvoyé), on refetch /api/balance plutôt que de mettre
+                // balance à undefined → "undefined" affiché.
+                if (typeof data.new_balance === 'number') {
+                    balance = data.new_balance;
+                } else {
+                    try {
+                        const b = await apiCall('/api/balance');
+                        if (typeof b.balance === 'number') balance = b.balance;
+                    } catch (_) {}
+                }
                 updateDisplay();
                 animateBalanceUpdate();
                 playSound('win');
-                
+
                 document.getElementById('paymentStatus').innerHTML = '✅ Paiement reçu !';
                 setTimeout(() => {
                     closeModal('depositModal');
@@ -1899,6 +1912,13 @@ function startPaymentCheck() {
             console.error('Erreur check payment:', error);
         }
     }, 2000);
+}
+
+function stopPaymentCheck() {
+    if (paymentCheckInterval) {
+        clearInterval(paymentCheckInterval);
+        paymentCheckInterval = null;
+    }
 }
 
 async function processWithdraw() {
@@ -2054,7 +2074,10 @@ function showWithdrawModal() {
 
 function closeModal(id) {
     document.getElementById(id).classList.remove('active');
-    if (paymentCheckInterval) clearInterval(paymentCheckInterval);
+    if (paymentCheckInterval) {
+        clearInterval(paymentCheckInterval);
+        paymentCheckInterval = null;
+    }
     // Stopper aussi le polling LNAuth si on ferme ce modal
     if (id === 'lnauthModal' && lnauthPollInterval) {
         clearInterval(lnauthPollInterval);
