@@ -1089,6 +1089,10 @@
         <div style="margin: 20px 0;">
             <div style="font-size: 14px; color: #888;">Solde disponible</div>
             <div style="font-size: 36px; font-family: 'Orbitron'; background: linear-gradient(135deg, #ff6b00, #ffa500); -webkit-background-clip: text; -webkit-text-fill-color: transparent;" id="withdrawBalance">0</div>
+            <div style="font-size: 13px; color: #00ff88; margin-top: 8px;">
+                Max retirable : <strong id="withdrawMax">0</strong> sats
+                <span style="color:#666; font-size: 11px;">(solde − réserve frais 1%, min 10 sats)</span>
+            </div>
         </div>
         <input type="text" id="withdrawInvoice" placeholder="Collez votre invoice Lightning (lnbc...)" oninput="decodeWithdrawInvoice()">
         <div id="withdrawDecodedAmount" style="font-size: 18px; color: #ffa500; font-family: 'Orbitron'; margin: 10px 0; display: none;"></div>
@@ -1886,6 +1890,28 @@ async function processWithdraw() {
         return;
     }
 
+    // Pré-validation montant + réserve frais — évite un round-trip serveur
+    // qui échouera de toute façon, et donne un message clair (avant ce fix
+    // le bouton était désactivé silencieusement → "rien ne se passe au clic").
+    const match = invoice.match(/^lnbc(\d+)([munp])?1/);
+    if (match) {
+        try {
+            const [, amountStr, unit] = match;
+            const amount = BigInt(amountStr);
+            const multipliers = { 'm': 100000000n, 'u': 100000n, 'n': 100n, 'p': 1n };
+            const msat = unit ? amount * multipliers[unit] : amount * 100000000000n;
+            const sats = Number(msat / 1000n);
+            if (sats > 0) {
+                const feeReserve = computeFeeReserveFront(sats);
+                if (sats + feeReserve > balance) {
+                    const maxWithdrawable = Math.max(0, balance - computeFeeReserveFront(balance));
+                    showToast(`Solde insuffisant. Max retirable : ${maxWithdrawable.toLocaleString()} sats (réserve frais 1% incluse).`, 'loss');
+                    return;
+                }
+            }
+        } catch (_) { /* laisser le serveur gérer */ }
+    }
+
     const btn = document.getElementById('withdrawSubmitBtn');
     btn.disabled = true;
     btn.textContent = 'TRAITEMENT...';
@@ -1962,9 +1988,13 @@ function showWithdrawModal() {
     }
 
     document.getElementById('withdrawBalance').textContent = balance;
+    const maxEl = document.getElementById('withdrawMax');
+    if (maxEl) maxEl.textContent = Math.max(0, balance - computeFeeReserveFront(balance)).toLocaleString();
     document.getElementById('withdrawInvoice').value = '';
     const decoded = document.getElementById('withdrawDecodedAmount');
     if (decoded) decoded.style.display = 'none';
+    const submitBtn = document.getElementById('withdrawSubmitBtn');
+    if (submitBtn) submitBtn.disabled = false;
     document.getElementById('withdrawModal').classList.add('active');
 }
 
@@ -2376,14 +2406,17 @@ function decodeWithdrawInvoice() {
                 <div style="font-size: 14px; color: ${insufficient ? '#ff0000' : '#00ff88'}; margin-top: 6px; font-family: 'Orbitron';">
                     Total débité: ${totalRequired.toLocaleString()} sats
                 </div>
+                ${insufficient ? `<div style="font-size: 12px; color: #ff6b00; margin-top: 4px;">⚠️ Dépasse ton solde (${balance.toLocaleString()} sats). Max retirable: ${Math.max(0, balance - computeFeeReserveFront(balance)).toLocaleString()} sats.</div>` : ''}
             `;
             el.style.display = 'block';
-            if (btn) btn.disabled = insufficient;
+            if (btn) btn.disabled = false;
         } else {
             el.style.display = 'none';
+            if (btn) btn.disabled = false;
         }
     } catch (e) {
         el.style.display = 'none';
+        if (btn) btn.disabled = false;
     }
 }
 
