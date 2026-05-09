@@ -1381,7 +1381,7 @@ async function loadStats() {
                         if (ach) ach.unlocked = sa.unlocked;
                     });
                 }
-                updateStatsDisplay();
+                updateDisplay();
                 return;
             }
         }
@@ -2530,7 +2530,7 @@ window.onload = () => {
     if (isMuted) document.getElementById('muteBtn').textContent = '🔇';
     initSession().then(async () => {
         await loadStats();
-        updateStatsDisplay();
+        updateDisplay();
         checkExistingGame();
         // Auto-open deposit modal si redirigé depuis table (rebuy)
         const urlParams = new URLSearchParams(window.location.search);
