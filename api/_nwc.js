@@ -111,9 +111,17 @@ function relayWorker({ relayUrl, event, myPubkey, walletPubkey, secretKeyBytes, 
     }
 
     ws.onopen = () => {
-      const since = Math.floor(Date.now() / 1000) - 30;
       try {
-        ws.send(JSON.stringify(['REQ', 'sub1', { kinds: [23195], '#p': [myPubkey], since, limit: 1 }]));
+        // Subscribe to responses tied to THIS request id via the NIP-47 'e' tag.
+        // Without this filter the relay can replay a recent response from a
+        // previous request (since-window) and we'd take it for ours.
+        ws.send(JSON.stringify(['REQ', 'sub1', {
+          kinds: [23195],
+          '#p': [myPubkey],
+          '#e': [event.id],
+          since: event.created_at,
+          limit: 1
+        }]));
         ws.send(JSON.stringify(['EVENT', event]));
       } catch (err) {
         settle(false, new Error(`relay ${relayUrl}: send failed (${err.message})`));
@@ -127,9 +135,11 @@ function relayWorker({ relayUrl, event, myPubkey, walletPubkey, secretKeyBytes, 
 
         const responseEvent = data[2];
         if (responseEvent.pubkey !== walletPubkey) return;
-        // Ensure the response is tagged for us (filters out stale events for other clients).
-        const tagsForUs = (responseEvent.tags || []).some(t => t[0] === 'p' && t[1] === myPubkey);
-        if (!tagsForUs) return;
+        const tags = responseEvent.tags || [];
+        // Must reply to OUR request id (NIP-47 correlation).
+        if (!tags.some(t => t[0] === 'e' && t[1] === event.id)) return;
+        // And be addressed to us.
+        if (!tags.some(t => t[0] === 'p' && t[1] === myPubkey)) return;
 
         const decrypted = await nip04Decrypt(secretKeyBytes, walletPubkey, responseEvent.content);
         const response = JSON.parse(decrypted);
