@@ -17,6 +17,9 @@ export default async function handler(req) {
   const { tournamentId } = body;
 
   if (!tournamentId) return json(400, { error: 'ID tournoi manquant' });
+  if (!/^tourney-\d{10,}-[a-z0-9]{4}$/.test(tournamentId)) {
+    return json(400, { error: 'ID tournoi invalide' });
+  }
 
   const lockKey = `lock:tournament:${tournamentId}`;
   const locked = await kv.set(lockKey, '1', { nx: true, ex: 10 });
@@ -54,7 +57,9 @@ export default async function handler(req) {
     }
 
     // Debit buy-in
+    const balanceBefore = player.balance;
     player.balance -= tournament.buyIn;
+    player.last_activity = Date.now();
     await kv.set(playerKey, player, { ex: 2592000 });
 
     // Register player (stocker linkingKey pour distribution des prix)
@@ -82,17 +87,47 @@ export default async function handler(req) {
       tournament.startTime = Date.now();
     }
 
-    await kv.set(tKey, tournament, { ex: 86400 });
+    // Sauvegarde du tournoi sous try/catch pour rollback du debit en cas
+    // d'echec. KV n'est pas transactionnel: si on debite puis kv.set du
+    // tournoi throw (timeout, erreur reseau), le joueur perd ses sats sans
+    // etre inscrit. Le rollback restaure le solde best-effort, et on log
+    // un message critique si meme le rollback echoue (necessite reconciliation
+    // manuelle).
+    try {
+      await kv.set(tKey, tournament, { ex: 86400 });
+    } catch (err) {
+      console.error(`[TOURNAMENT] register save failed for ${tournamentId}, rolling back debit ${tournament.buyIn} sats for ${linkingKey}:`, err);
+      try {
+        const fresh = await kv.get(playerKey);
+        if (fresh) {
+          fresh.balance = (fresh.balance || 0) + tournament.buyIn;
+          fresh.last_activity = Date.now();
+          await kv.set(playerKey, fresh, { ex: 2592000 });
+        } else {
+          // Joueur disparu entre debit et rollback — refund par balance reset
+          player.balance = balanceBefore;
+          await kv.set(playerKey, player, { ex: 2592000 });
+        }
+      } catch (rollbackErr) {
+        console.error(`[TOURNAMENT] CRITICAL: rollback FAILED for ${linkingKey}, lost ${tournament.buyIn} sats:`, rollbackErr);
+      }
+      return json(500, { error: 'Inscription échouée, solde restauré. Réessayez.' });
+    }
 
-    // Log transaction
+    // Log transaction (post-success: si rpush echoue, on a tout de meme le
+    // tournoi a jour et le solde debite — non-bloquant pour le user)
     const txKey = `transactions:${linkingKey}`;
-    await kv.rpush(txKey, {
-      type: 'tournament_buyin',
-      amount: -tournament.buyIn,
-      timestamp: Date.now(),
-      description: `Buy-in: ${tournament.name}`
-    });
-    await kv.expire(txKey, 2592000);
+    try {
+      await kv.rpush(txKey, {
+        type: 'tournament_buyin',
+        amount: -tournament.buyIn,
+        timestamp: Date.now(),
+        description: `Buy-in: ${tournament.name}`
+      });
+      await kv.expire(txKey, 2592000);
+    } catch (err) {
+      console.error(`[TOURNAMENT] tx log failed for ${linkingKey} (non-blocking):`, err);
+    }
 
     return json(200, {
       success: true,

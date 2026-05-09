@@ -22,14 +22,17 @@ export default async function handler(req) {
   const tableId = pathParts[pathParts.length - 2];
 
   const body = await req.json();
-  // Sanitiser le message côté serveur (défense en profondeur vs XSS via API directe)
-  const rawMsg = (body.message || '').trim().slice(0, MAX_MSG_LENGTH);
-  const message = rawMsg
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#x27;')
-    .replace(/\//g, '&#x2F;');
+  // Stocker le message en TEXTE BRUT. Le client est responsable de
+  // l'echappement HTML au rendu (cf. addChatMessage / escapeHtml dans
+  // public/table.html). Encoder ici cassait l'UX: un user tapant "<3"
+  // voyait "&lt;3" affiche, parce que escapeHtml cote client re-encodait
+  // le "&" du "&lt;" → "&amp;lt;3".
+  // On filtre uniquement les caracteres de controle (newlines, NUL, etc.)
+  // qui n'ont aucun usage en chat et peuvent casser le rendu.
+  const rawMsg = (body.message || '');
+  if (typeof rawMsg !== 'string') return json(400, { error: 'Message invalide' });
+  // Strip control chars (sauf espace), trim, puis tronquer.
+  const message = rawMsg.replace(/[\x00-\x1F\x7F]/g, ' ').trim().slice(0, MAX_MSG_LENGTH);
 
   if (!message) return json(400, { error: 'Message vide' });
 
@@ -39,13 +42,17 @@ export default async function handler(req) {
   const seatIdx = table.seats.findIndex(s => s && s.sessionId === sessionId);
   if (seatIdx < 0) return json(400, { error: "Vous n'etes pas a cette table" });
 
-  // Rate limiting
+  // Rate limiting: SET NX atomique. L'ancien GET-puis-SET creait une race
+  // ou 2 requetes paralleles passaient toutes les deux le check (lastMsg
+  // identique pour les deux), permettant de spammer N messages en parallele.
+  // Le NX ne reussit qu'une seule fois par fenetre TTL, peu importe la
+  // concurrence.
   const rateLimitKey = `chat_rate:${sessionId}`;
-  const lastMsg = await kv.get(rateLimitKey);
-  if (lastMsg && Date.now() - lastMsg < RATE_LIMIT_MS) {
-    return json(429, { error: 'Trop rapide' });
-  }
-  await kv.set(rateLimitKey, Date.now(), { ex: 10 });
+  const acquired = await kv.set(rateLimitKey, '1', {
+    nx: true,
+    ex: Math.ceil(RATE_LIMIT_MS / 1000)
+  });
+  if (!acquired) return json(429, { error: 'Trop rapide' });
 
   const chatKey = `chat:${tableId}`;
   const chatMsg = {

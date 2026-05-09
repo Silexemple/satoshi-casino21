@@ -24,6 +24,12 @@ export default async function handler(req) {
   const { tournamentId, action } = body;
 
   if (!tournamentId) return json(400, { error: 'ID tournoi manquant' });
+  // Validation stricte: format `tourney-${ms}-${4chars}` (cf. create.js & finishTournament)
+  // Évite l'usage d'un ID arbitraire comme clé KV (defense in depth, KV ne parse pas les
+  // clés mais on ne veut pas qu'un ID malformé pollue les locks ou clés transverses).
+  if (!/^tourney-\d{10,}-[a-z0-9]{4}$/.test(tournamentId)) {
+    return json(400, { error: 'ID tournoi invalide' });
+  }
 
   // Resoudre linkingKey une seule fois
   const currentLinkingKey = await kv.get(`session:${sessionId}`);
@@ -57,9 +63,15 @@ export default async function handler(req) {
     });
   }
 
-  const lockKey = `lock:tplay:${tournamentId}:${sessionId}`;
+  // Lock par tournoi (pas par-session) : les actions modifient un document
+  // partagé (tournament.players[]) avec read-modify-write. Un lock par-session
+  // permettait à 2 joueurs concurrents de lost-update mutuellement, et de
+  // skip finishTournament() (chacun voit l'autre comme pas-encore-fini dans
+  // sa copie locale stale). Sérialise tous les writes du tournoi.
+  // 8 joueurs × 1s/action ≈ 8s d'attente max — acceptable au temps humain.
+  const lockKey = `lock:tplay:${tournamentId}`;
   const locked = await kv.set(lockKey, '1', { nx: true, ex: 10 });
-  if (!locked) return json(429, { error: 'Action en cours' });
+  if (!locked) return json(429, { error: 'Action en cours, réessayez' });
 
   try {
     const tKey = `tournament:${tournamentId}`;
@@ -270,26 +282,47 @@ async function finishTournament(tournament) {
 
   for (let i = 0; i < Math.min(prizes.length, ranked.length); i++) {
     const p = ranked[i];
-    if (prizes[i] > 0) {
-      // Utiliser linkingKey stocke a l'inscription, sinon tenter via session
-      const lk = p.linkingKey || await kv.get(`session:${p.sessionId}`);
-      if (!lk) { p.prize = prizes[i]; continue; } // session expiree, prize log impossible
+    if (prizes[i] <= 0) continue;
 
-      const pk = `player:${lk}`;
+    // Resoudre linkingKey (stocke a l'inscription, fallback session)
+    const lk = p.linkingKey || await kv.get(`session:${p.sessionId}`);
+    if (!lk) {
+      // Session expiree ET pas de linkingKey: impossible de creditrer.
+      // On NE met PAS p.prize pour ne pas mentir au frontend (le joueur
+      // verrait "vous avez gagne X sats" sans credit BDD).
+      console.error(`[TOURNAMENT] cannot credit prize: no linkingKey for player rank ${i+1} in ${tournament.id} (prize=${prizes[i]})`);
+      p.prizeUncredited = prizes[i]; // marqueur pour audit/recovery offline
+      continue;
+    }
+
+    const pk = `player:${lk}`;
+    try {
       const player = await kv.get(pk);
-      if (player) {
-        player.balance += prizes[i];
-        await kv.set(pk, player, { ex: 2592000 });
-        const txKey = `transactions:${lk}`;
-        await kv.rpush(txKey, {
-          type: 'tournament_prize',
-          amount: prizes[i],
-          timestamp: Date.now(),
-          description: `${tournament.name} - ${i + 1}${i === 0 ? 'er' : 'eme'} place`
-        });
-        await kv.expire(txKey, 2592000);
+      if (!player) {
+        console.error(`[TOURNAMENT] player ${lk} not found, prize ${prizes[i]} uncredited (tournament=${tournament.id})`);
+        p.prizeUncredited = prizes[i];
+        continue;
       }
+      player.balance += prizes[i];
+      player.last_activity = Date.now();
+      await kv.set(pk, player, { ex: 2592000 });
+
+      const txKey = `transactions:${lk}`;
+      await kv.rpush(txKey, {
+        type: 'tournament_prize',
+        amount: prizes[i],
+        timestamp: Date.now(),
+        description: `${tournament.name} - ${i + 1}${i === 0 ? 'er' : 'eme'} place`
+      });
+      await kv.expire(txKey, 2592000);
+
+      // Marquer le prix UNIQUEMENT apres credit reussi.
+      // Le frontend lit p.prize pour afficher "VOUS AVEZ GAGNE X SATS" — ne le
+      // setter qu'en cas de succes evite le mensonge UI/BDD.
       p.prize = prizes[i];
+    } catch (err) {
+      console.error(`[TOURNAMENT] credit failed for ${lk}, prize ${prizes[i]} uncredited:`, err);
+      p.prizeUncredited = prizes[i];
     }
   }
 

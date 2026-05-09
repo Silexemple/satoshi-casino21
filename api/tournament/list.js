@@ -27,14 +27,23 @@ export default async function handler(req) {
         // Refund all players (utiliser linkingKey stocké à l'inscription, pas sessionId)
         for (const p of t.players) {
           const lk = p.linkingKey || await kv.get(`session:${p.sessionId}`);
-          if (!lk) continue; // session expirée, remboursement impossible
+          if (!lk) {
+            // Session expirée ET pas de linkingKey: refund impossible. Logger
+            // pour audit/recovery manuel — un `continue` silencieux faisait
+            // disparaitre les sats sans trace.
+            console.error(`[TOURNAMENT] refund SKIPPED (no linkingKey) for ${t.id}, lost ${t.buyIn} sats for player ${p.nickname || p.sessionId}`);
+            continue;
+          }
           const pk = `player:${lk}`;
-          const player = await kv.get(pk);
-          if (player) {
+          try {
+            const player = await kv.get(pk);
+            if (!player) {
+              console.error(`[TOURNAMENT] refund SKIPPED (player not found) for ${t.id}, ${lk}, lost ${t.buyIn} sats`);
+              continue;
+            }
             player.balance += t.buyIn;
             player.last_activity = Date.now();
             await kv.set(pk, player, { ex: 2592000 });
-            // Log transaction remboursement
             const txKey = `transactions:${lk}`;
             await kv.rpush(txKey, {
               type: 'deposit',
@@ -43,6 +52,8 @@ export default async function handler(req) {
               description: `Remboursement tournoi annulé: ${t.name}`
             });
             await kv.expire(txKey, 2592000);
+          } catch (err) {
+            console.error(`[TOURNAMENT] refund FAILED for ${lk} on ${t.id}, lost ${t.buyIn} sats:`, err);
           }
         }
         t.status = 'cancelled';

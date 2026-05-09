@@ -472,6 +472,15 @@ function playSound(name) {
 }
 
 // ============================================
+// HTML escape (defense XSS pour tout user-content rendu via innerHTML)
+// ============================================
+function escapeHtml(str) {
+    const d = document.createElement('div');
+    d.appendChild(document.createTextNode(String(str ?? '')));
+    return d.innerHTML;
+}
+
+// ============================================
 // TOAST SYSTEM
 // ============================================
 let toastTimeout = null;
@@ -790,15 +799,37 @@ function startWaitingPoll() {
                 stopWaitingPoll();
                 showToast('Tournoi termine!', 'info');
                 showLeaderboard(data);
-                const session = await apiCall('/api/session');
-                balance = session.balance;
-                document.getElementById('balance').textContent = balance;
-                const balEl = document.getElementById('balance');
-                balEl.classList.add('updated');
-                setTimeout(() => balEl.classList.remove('updated'), 600);
+                await refreshBalanceAfterTournament();
             }
         } catch (e) { console.error('Status poll error:', e); }
     }, 3000);
+}
+
+// Refetch le solde apres fin de tournoi avec fallback robuste:
+// /api/session peut echouer (reseau, session expiree). On retry sur /api/balance
+// avant d'abandonner — le joueur ne doit pas voir son ancien solde alors qu'il
+// vient d'etre credite des prix.
+async function refreshBalanceAfterTournament() {
+    const balEl = document.getElementById('balance');
+    const tryFetch = async (endpoint, key) => {
+        const data = await apiCall(endpoint);
+        if (typeof data[key] === 'number') {
+            balance = data[key];
+            balEl.textContent = balance;
+            balEl.classList.add('updated');
+            setTimeout(() => balEl.classList.remove('updated'), 600);
+            return true;
+        }
+        return false;
+    };
+    try {
+        if (await tryFetch('/api/session', 'balance')) return;
+    } catch (_) {}
+    try {
+        if (await tryFetch('/api/balance', 'balance')) return;
+    } catch (e) {
+        console.error('Balance refresh failed (both endpoints):', e);
+    }
 }
 
 function stopWaitingPoll() {
@@ -816,12 +847,17 @@ function showLeaderboard(data) {
 
     data.leaderboard.forEach((p, i) => {
         const topClass = i === 0 ? 'top1' : (i === 1 ? 'top2' : (i === 2 ? 'top3' : ''));
-        const prizeHTML = p.prize ? `<span class="lb-prize">+${p.prize} sats</span>` : '';
+        // Escape user-controlled fields. nickname est libre (set par le joueur),
+        // donc XSS possible si rendu brut. rank/chips/prize sont des Number cote
+        // serveur, on les coerce explicitement pour bloquer toute injection si
+        // un futur change le typage.
+        const prize = Number(p.prize) || 0;
+        const prizeHTML = prize ? `<span class="lb-prize">+${prize} sats</span>` : '';
         rows.innerHTML += `
             <div class="lb-row ${topClass}">
-                <span class="lb-rank">#${p.rank} ${medals[i] || ''}</span>
-                <span class="lb-name">${p.nickname}</span>
-                <span class="lb-chips">${p.chips} jetons ${prizeHTML}</span>
+                <span class="lb-rank">#${Number(p.rank) || 0} ${medals[i] || ''}</span>
+                <span class="lb-name">${escapeHtml(p.nickname)}</span>
+                <span class="lb-chips">${Number(p.chips) || 0} jetons ${prizeHTML}</span>
             </div>
         `;
     });
@@ -846,6 +882,15 @@ function showLeaderboard(data) {
 }
 
 window.onload = init;
+
+// Cleanup avant fermeture page / navigation: les intervals de polling
+// fuient sinon (specialement waitingPoll qui hit /api/tournament/play
+// toutes les 3s). Sans ca, un user qui navigue entre tournois accumule
+// des intervals fantomes et l'onglet finit par lagger.
+window.addEventListener('beforeunload', () => {
+    stopLobbyPolling();
+    stopWaitingPoll();
+});
 </script>
 </body>
 </html>
