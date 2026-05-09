@@ -2,12 +2,13 @@ import { kv } from '@vercel/kv';
 import { json, getSessionId, normalizePlayer } from '../_helpers.js';
 import { nwcRequest } from '../_nwc.js';
 
+export const config = { runtime: 'edge' };
+
 export default async function handler(req) {
   const sessionId = getSessionId(req);
   if (!sessionId) return json(401, { error: 'Session invalide', auth_required: true });
 
-  const rawUrl = req.url ?? '';
-  const pathname = rawUrl.startsWith('http') ? new URL(rawUrl).pathname : rawUrl.split('?')[0];
+  const { pathname } = new URL(req.url);
   const pathParts = pathname.split('/');
   const paymentHash = pathParts[pathParts.length - 1];
 
