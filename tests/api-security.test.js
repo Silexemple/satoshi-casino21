@@ -346,6 +346,35 @@ test('httpOnly empêche accès JS au cookie de session', () => {
   assert(httpOnly, 'httpOnly doit être true');
 });
 
+// ── Comparaison token admin à temps constant (safeEqual) ─────────────────────
+// Mirroir de api/_helpers.js::safeEqual
+function safeEqual(a, b) {
+  if (typeof a !== 'string' || typeof b !== 'string') return false;
+  const len = Math.max(a.length, b.length);
+  let diff = a.length ^ b.length;
+  for (let i = 0; i < len; i++) diff |= (a.charCodeAt(i) || 0) ^ (b.charCodeAt(i) || 0);
+  return diff === 0;
+}
+test('safeEqual: vrai pour chaînes identiques', () => assert(safeEqual('s3cret-token', 's3cret-token')));
+test('safeEqual: faux si un caractère diffère', () => assert(!safeEqual('s3cret-token', 's3cret-toketX'.slice(0,12))));
+test('safeEqual: faux si longueur différente', () => assert(!safeEqual('abc', 'abcd')));
+test('safeEqual: faux pour non-string (null/undefined)', () => {
+  assert(!safeEqual(null, 'x')); assert(!safeEqual('x', undefined)); assert(!safeEqual(undefined, undefined));
+});
+test('safeEqual: faux pour chaîne vide vs token', () => assert(!safeEqual('', 'token')));
+
+import { readFileSync as _rfs } from 'fs';
+import { dirname as _dn, join as _jn } from 'path';
+import { fileURLToPath as _fup } from 'url';
+test('admin.js & auth/test.js utilisent safeEqual (pas de comparaison ===)', () => {
+  const base = _jn(_dn(_fup(import.meta.url)), '..', 'api');
+  const admin = _rfs(_jn(base, 'admin.js'), 'utf8');
+  const authTest = _rfs(_jn(base, 'auth', 'test.js'), 'utf8');
+  assert(admin.includes('safeEqual('), 'admin.js doit utiliser safeEqual');
+  assert(authTest.includes('safeEqual('), 'auth/test.js doit utiliser safeEqual');
+  assert(!/adminToken !== process\.env\.ADMIN_TOKEN/.test(admin), 'admin.js ne doit plus comparer avec !==');
+});
+
 // ────────────────────────────────────────────────────────────────────────────
 console.log(`\n${passed + failed} tests, ${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);

@@ -93,6 +93,17 @@ async function impl(req) {
 
   } catch (error) {
     console.error('Erreur creation invoice:', error);
-    return json(500, { error: `Erreur creation invoice: ${error.message}` });
+    const m = error.message || '';
+    // NWC timeout / relays injoignables = le wallet du casino (ex. Alby Hub) est
+    // hors-ligne ou ne répond pas. Message utilisateur clair plutôt que la stack
+    // technique opaque "NWC timeout (9000ms…)".
+    const walletDown = /timeout|relays? failed|aucun relay|ws error|closed|init failed/i.test(m);
+    if (walletDown) {
+      return json(503, {
+        error: 'Le wallet du casino est momentanément indisponible. Réessayez dans un instant.',
+        detail: m
+      });
+    }
+    return json(500, { error: `Erreur creation invoice: ${m}` });
   }
 }

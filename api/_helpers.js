@@ -109,6 +109,20 @@ export async function getTxKey(sessionId) {
   return linkingKey ? `transactions:${linkingKey}` : null;
 }
 
+// Comparaison de chaînes à temps (quasi) constant — évite la timing attack sur
+// les secrets (ADMIN_TOKEN). `!==` court-circuite au premier octet différent, ce
+// qui fuit la position de divergence; ici on parcourt toujours la longueur max.
+// Pas de crypto.timingSafeEqual en Edge runtime, d'où l'implémentation manuelle.
+export function safeEqual(a, b) {
+  if (typeof a !== 'string' || typeof b !== 'string') return false;
+  const len = Math.max(a.length, b.length);
+  let diff = a.length ^ b.length;
+  for (let i = 0; i < len; i++) {
+    diff |= (a.charCodeAt(i) || 0) ^ (b.charCodeAt(i) || 0);
+  }
+  return diff === 0;
+}
+
 // ═══ VERROU SOLDE JOUEUR (sérialise TOUTES les mutations de balance) ═══
 //
 // Le solde est stocké dans un blob JSON `player:{linkingKey}` et muté en

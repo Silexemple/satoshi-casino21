@@ -9,6 +9,9 @@
     "api/check-payment/[hash].js": {
       "maxDuration": 20
     },
+    "api/nwc-health.js": {
+      "maxDuration": 20
+    },
     "api/game.js": {
       "maxDuration": 10
     },

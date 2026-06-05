@@ -84,12 +84,16 @@ export default async function handler(req) {
       }
     }
 
-    // Vérifier la bankroll de la maison
+    // Vérifier la bankroll de la maison. Init race-safe via SET NX (deux bets
+    // concurrents ne peuvent plus initialiser deux valeurs différentes).
+    // NOTE: ce gate vérifie l'exposition mais ne RÉSERVE pas la bankroll —
+    // deux grosses mises sur deux tables peuvent passer simultanément (TOCTOU
+    // inter-tables, risque de solvabilité maison, pas de vol joueur). Une vraie
+    // réservation nécessiterait un ledger house:reserved libéré sur tous les
+    // chemins de settle/timeout — à concevoir séparément.
+    await kv.set('house:bankroll', DEFAULT_BANKROLL, { nx: true });
     let bankroll = await kv.get('house:bankroll');
-    if (bankroll === null) {
-      bankroll = DEFAULT_BANKROLL;
-      await kv.set('house:bankroll', bankroll);
-    }
+    if (bankroll === null) bankroll = DEFAULT_BANKROLL;
 
     if (bankroll < totalExposure) {
       // Calculer la mise max acceptable
