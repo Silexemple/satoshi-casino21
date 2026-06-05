@@ -1,3 +1,5 @@
+import { safeEqual } from '../_helpers.js';
+
 export const config = { runtime: 'edge' };
 
 // Endpoint de debug — exige le ADMIN_TOKEN. Avant: accessible publiquement
@@ -6,7 +8,7 @@ export const config = { runtime: 'edge' };
 // l'espace de recherche brute-force.
 export default async function handler(req) {
   const adminToken = req.headers.get('x-admin-token');
-  if (!adminToken || !process.env.ADMIN_TOKEN || adminToken !== process.env.ADMIN_TOKEN) {
+  if (!process.env.ADMIN_TOKEN || !safeEqual(adminToken || '', process.env.ADMIN_TOKEN)) {
     return new Response(JSON.stringify({ error: 'Non autorise' }), {
       status: 401, headers: { 'Content-Type': 'application/json' }
     });

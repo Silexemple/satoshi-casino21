@@ -1,5 +1,5 @@
 import { kv } from '@vercel/kv';
-import { json, getSessionId } from '../../_helpers.js';
+import { json, getSessionId, withTwoPlayerLocks } from '../../_helpers.js';
 
 export const config = { runtime: 'edge' };
 
@@ -57,43 +57,44 @@ export default async function handler(req) {
     const receiverLk = targetSeat.linkingKey || await kv.get(`session:${targetSeat.sessionId}`);
     if (!receiverLk) return json(400, { error: 'Destinataire non trouve' });
 
-    // Check sender balance
     const senderKey = `player:${senderLk}`;
-    const sender = await kv.get(senderKey);
-    if (!sender || sender.balance < amount) {
-      return json(400, { error: 'Solde insuffisant' });
-    }
-
-    // Check receiver exists
     const receiverKey = `player:${receiverLk}`;
-    const receiver = await kv.get(receiverKey);
-    if (!receiver) return json(400, { error: 'Destinataire non trouve' });
 
-    // Transfert sequentiel avec rollback si le credit echoue. Promise.all sur
-    // les 2 kv.set creait un risque de creation/destruction de sats: si le
-    // debit du sender succede et le credit du receiver echoue (timeout reseau),
-    // les sats etaient detruits. L'inverse creait des sats du neant.
-    sender.balance -= amount;
-    await kv.set(senderKey, sender, { ex: 2592000 });
-
-    receiver.balance += amount;
+    // Transfert atomique sous DOUBLE verrou solde (ordre canonique → pas de
+    // deadlock croisé). Read-modify-write des deux soldes sérialisé avec tous
+    // les autres sous-systèmes. KV n'étant pas transactionnel, on rollback le
+    // débit émetteur si le crédit destinataire échoue (toujours sous verrou).
+    let senderBalanceAfter;
     try {
-      await kv.set(receiverKey, receiver, { ex: 2592000 });
-    } catch (err) {
-      // Credit failed: rollback sender debit (best-effort).
-      console.error(`[TIP] credit failed for ${receiverLk}, rolling back ${amount} sats from ${senderLk}:`, err);
-      try {
-        const freshSender = await kv.get(senderKey);
-        if (freshSender) {
-          freshSender.balance = (freshSender.balance || 0) + amount;
-          await kv.set(senderKey, freshSender, { ex: 2592000 });
-        } else {
-          sender.balance += amount;
-          await kv.set(senderKey, sender, { ex: 2592000 });
+      const tres = await withTwoPlayerLocks(senderLk, receiverLk, async () => {
+        const sender = await kv.get(senderKey);
+        if (!sender || sender.balance < amount) return { code: 'INSUFFICIENT' };
+        const receiver = await kv.get(receiverKey);
+        if (!receiver) return { code: 'NO_RECEIVER' };
+
+        sender.balance -= amount;
+        await kv.set(senderKey, sender, { ex: 2592000 });
+
+        receiver.balance += amount;
+        try {
+          await kv.set(receiverKey, receiver, { ex: 2592000 });
+        } catch (err) {
+          console.error(`[TIP] credit failed for ${receiverLk}, rolling back ${amount} sats from ${senderLk}:`, err);
+          const freshSender = await kv.get(senderKey);
+          if (freshSender) {
+            freshSender.balance = (freshSender.balance || 0) + amount;
+            await kv.set(senderKey, freshSender, { ex: 2592000 });
+          }
+          throw err;
         }
-      } catch (rollbackErr) {
-        console.error(`[TIP] CRITICAL: rollback FAILED for ${senderLk}, lost ${amount} sats:`, rollbackErr);
-      }
+        return { balance: sender.balance };
+      });
+      if (tres.code === 'INSUFFICIENT') return json(400, { error: 'Solde insuffisant' });
+      if (tres.code === 'NO_RECEIVER') return json(400, { error: 'Destinataire non trouve' });
+      senderBalanceAfter = tres.balance;
+    } catch (e) {
+      if (e?.code === 'PLAYER_LOCKED') return json(429, { error: 'Action en cours, réessayez' });
+      console.error(`[TIP] CRITICAL: transfer failed ${senderLk}->${receiverLk}, ${amount} sats:`, e);
       return json(500, { error: 'Transfert échoué, solde restauré. Réessayez.' });
     }
 
@@ -142,7 +143,7 @@ export default async function handler(req) {
 
     return json(200, {
       success: true,
-      balance: sender.balance,
+      balance: senderBalanceAfter,
       amount,
       to: targetSeat.playerName
     });

@@ -1,5 +1,5 @@
 import { kv } from '@vercel/kv';
-import { json, rateLimit } from './_helpers.js';
+import { json, rateLimit, safeEqual } from './_helpers.js';
 
 export const config = { runtime: 'edge' };
 
@@ -9,7 +9,7 @@ export default async function handler(req) {
   if (rl) return rl;
 
   const adminToken = req.headers.get('x-admin-token');
-  if (!adminToken || adminToken !== process.env.ADMIN_TOKEN) {
+  if (!process.env.ADMIN_TOKEN || !safeEqual(adminToken || '', process.env.ADMIN_TOKEN)) {
     return json(401, { error: 'Non autorise' });
   }
 

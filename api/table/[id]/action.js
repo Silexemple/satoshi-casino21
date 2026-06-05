@@ -1,5 +1,5 @@
 import { kv } from '@vercel/kv';
-import { json, getSessionId, rateLimit, normalizePlayer } from '../../_helpers.js';
+import { json, getSessionId, rateLimit, normalizePlayer, withPlayerLock } from '../../_helpers.js';
 import { handScore, isPair, drawCard, isBlackjack } from '../../_game-helpers.js';
 import { checkTimeouts, advanceToNextPlayer, creditPlayers, tableStateForClient } from '../[id].js';
 
@@ -93,13 +93,14 @@ export default async function handler(req) {
       const insuranceCost = Math.floor(hand.bet / 2);
 
       if (accept) {
-        const playerKey = resolvedPlayerKey;
-        const player = normalizePlayer(await kv.get(playerKey));
-        if (!player || player.balance < insuranceCost) {
-          return json(400, { error: 'Solde insuffisant pour l\'assurance' });
-        }
-        player.balance -= insuranceCost;
-        await kv.set(playerKey, player, { ex: 2592000 });
+        const ok = await withPlayerLock(linkingKey, async () => {
+          const player = normalizePlayer(await kv.get(resolvedPlayerKey));
+          if (!player || player.balance < insuranceCost) return false;
+          player.balance -= insuranceCost;
+          await kv.set(resolvedPlayerKey, player, { ex: 2592000 });
+          return true;
+        });
+        if (!ok) return json(400, { error: 'Solde insuffisant pour l\'assurance' });
         seat.insuranceBet = insuranceCost;
         netDebit += insuranceCost;
       } else {
@@ -110,14 +111,15 @@ export default async function handler(req) {
       if (isBlackjack(table.dealerHand)) {
         // Insurance gagne 2:1
         if (seat.insuranceBet > 0) {
-          const playerKey = resolvedPlayerKey;
-          const player = normalizePlayer(await kv.get(playerKey));
-          if (player) {
-            const insurancePayout = seat.insuranceBet * 3;
+          const insurancePayout = seat.insuranceBet * 3;
+          const applied = await withPlayerLock(linkingKey, async () => {
+            const player = normalizePlayer(await kv.get(resolvedPlayerKey));
+            if (!player) return 0;
             player.balance += insurancePayout;
-            await kv.set(playerKey, player, { ex: 2592000 });
-            netDebit -= insurancePayout; // un credit reduit la dette de rollback
-          }
+            await kv.set(resolvedPlayerKey, player, { ex: 2592000 });
+            return insurancePayout;
+          });
+          netDebit -= applied; // un credit reduit la dette de rollback
           seat.insuranceResult = 'win';
         }
         // Main perd (ou push si joueur aussi BJ)
@@ -142,13 +144,14 @@ export default async function handler(req) {
 
       // Rembourser la moitié de la mise
       const refund = Math.floor(hand.bet / 2);
-      const playerKey = resolvedPlayerKey;
-      const player = normalizePlayer(await kv.get(playerKey));
-      if (player) {
+      const applied = await withPlayerLock(linkingKey, async () => {
+        const player = normalizePlayer(await kv.get(resolvedPlayerKey));
+        if (!player) return 0;
         player.balance += refund;
-        await kv.set(playerKey, player, { ex: 2592000 });
-        netDebit -= refund; // refund est un credit
-      }
+        await kv.set(resolvedPlayerKey, player, { ex: 2592000 });
+        return refund;
+      });
+      netDebit -= applied; // refund est un credit
 
       hand.finished = true;
       hand.result = 'surrender';
@@ -185,17 +188,16 @@ export default async function handler(req) {
         return json(400, { error: 'Double seulement sur 2 cartes' });
       }
 
-      // Vérifier le solde
-      const playerKey = resolvedPlayerKey;
-      const player = normalizePlayer(await kv.get(playerKey));
-      if (!player || player.balance < hand.bet) {
-        return json(400, { error: 'Solde insuffisant pour doubler' });
-      }
-
-      // Débiter le supplément
+      // Débiter le supplément sous verrou solde (check + debit atomiques)
       const doubleDebit = hand.bet;
-      player.balance -= doubleDebit;
-      await kv.set(playerKey, player, { ex: 2592000 });
+      const okDouble = await withPlayerLock(linkingKey, async () => {
+        const player = normalizePlayer(await kv.get(resolvedPlayerKey));
+        if (!player || player.balance < doubleDebit) return false;
+        player.balance -= doubleDebit;
+        await kv.set(resolvedPlayerKey, player, { ex: 2592000 });
+        return true;
+      });
+      if (!okDouble) return json(400, { error: 'Solde insuffisant pour doubler' });
       netDebit += doubleDebit;
 
       hand.bet *= 2;
@@ -218,17 +220,17 @@ export default async function handler(req) {
         return json(400, { error: 'Maximum 4 mains' });
       }
 
-      const playerKey = resolvedPlayerKey;
-      const player = normalizePlayer(await kv.get(playerKey));
       const originalBet = seat.bet; // bet initial de la table
 
-      if (!player || player.balance < originalBet) {
-        return json(400, { error: 'Solde insuffisant pour split' });
-      }
-
-      // Débiter
-      player.balance -= originalBet;
-      await kv.set(playerKey, player, { ex: 2592000 });
+      // Débit du split sous verrou solde (check + debit atomiques)
+      const okSplit = await withPlayerLock(linkingKey, async () => {
+        const player = normalizePlayer(await kv.get(resolvedPlayerKey));
+        if (!player || player.balance < originalBet) return false;
+        player.balance -= originalBet;
+        await kv.set(resolvedPlayerKey, player, { ex: 2592000 });
+        return true;
+      });
+      if (!okSplit) return json(400, { error: 'Solde insuffisant pour split' });
       netDebit += originalBet;
 
       const card1 = hand.cards[0];
@@ -270,11 +272,13 @@ export default async function handler(req) {
       console.error(`[ACTION] table save failed for ${tableId} (action=${action}), rolling back netDebit=${netDebit} for ${linkingKey}:`, err);
       if (netDebit !== 0) {
         try {
-          const freshPlayer = await kv.get(resolvedPlayerKey);
-          if (freshPlayer) {
-            freshPlayer.balance = (freshPlayer.balance || 0) + netDebit;
-            await kv.set(resolvedPlayerKey, freshPlayer, { ex: 2592000 });
-          }
+          await withPlayerLock(linkingKey, async () => {
+            const freshPlayer = await kv.get(resolvedPlayerKey);
+            if (freshPlayer) {
+              freshPlayer.balance = (freshPlayer.balance || 0) + netDebit;
+              await kv.set(resolvedPlayerKey, freshPlayer, { ex: 2592000 });
+            }
+          });
         } catch (rollbackErr) {
           console.error(`[ACTION] CRITICAL: rollback FAILED for ${linkingKey}, netDebit=${netDebit} sats incoherent:`, rollbackErr);
         }
@@ -294,6 +298,9 @@ export default async function handler(req) {
     }
 
     return json(200, tableStateForClient(table, sessionId));
+  } catch (e) {
+    if (e?.code === 'PLAYER_LOCKED') return json(429, { error: 'Solde occupé par une autre action, réessayez' });
+    throw e;
   } finally {
     await kv.del(lockKey);
   }

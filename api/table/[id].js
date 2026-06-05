@@ -1,5 +1,5 @@
 import { kv } from '@vercel/kv';
-import { json, getSessionId } from '../_helpers.js';
+import { json, getSessionId, withPlayerLock } from '../_helpers.js';
 import { handScore, cardForClient, isBlackjack, createAndShuffleDeck, drawCard } from '../_game-helpers.js';
 
 export const config = { runtime: 'edge' };
@@ -473,33 +473,30 @@ async function creditPlayers(table) {
     }
 
     const playerKey = `player:${lk}`;
-    // Verrou joueur par linkingKey (stable cross-session)
-    const playerLock = `lock:player:${lk}`;
-    let gotLock = false;
-    for (let attempt = 0; attempt < 3; attempt++) {
-      gotLock = await kv.set(playerLock, '1', { nx: true, ex: 10 });
-      if (gotLock) break;
-      await new Promise(r => setTimeout(r, 200));
-    }
-
-    try {
+    // Crédit du payout, sérialisé via le verrou solde partagé (lock:player:{lk}).
+    const doCredit = async () => {
       const player = await kv.get(playerKey);
-      if (player) {
-        player.balance += seat.payout;
-        player.last_activity = Date.now();
-        await kv.set(playerKey, player, { ex: 2592000 });
+      if (!player) return;
+      player.balance += seat.payout;
+      player.last_activity = Date.now();
+      await kv.set(playerKey, player, { ex: 2592000 });
 
-        const txKey = `transactions:${lk}`;
-        await kv.rpush(txKey, {
-          type: seat.netGain > 0 ? 'win' : (seat.netGain < 0 ? 'loss' : 'push'),
-          amount: seat.netGain,
-          timestamp: Date.now(),
-          description: `Table ${table.name} (round ${table.roundNumber})`
-        });
-        await kv.expire(txKey, 2592000);
-      }
-    } finally {
-      if (gotLock) await kv.del(playerLock);
+      const txKey = `transactions:${lk}`;
+      await kv.rpush(txKey, {
+        type: seat.netGain > 0 ? 'win' : (seat.netGain < 0 ? 'loss' : 'push'),
+        amount: seat.netGain,
+        timestamp: Date.now(),
+        description: `Table ${table.name} (round ${table.roundNumber})`
+      });
+      await kv.expire(txKey, 2592000);
+    };
+    try {
+      await withPlayerLock(lk, doCredit);
+    } catch (e) {
+      // Verrou inacquérable après retries: créditer quand même pour ne pas
+      // spolier le joueur de son gain (lost-update improbable), en loggant.
+      console.error(`[TABLE] credit lock unavailable for ${lk}, crediting without lock (payout=${seat.payout}):`, e?.message);
+      try { await doCredit(); } catch (ce) { console.error(`[TABLE] CRITICAL credit failed for ${lk}:`, ce); }
     }
   }
 

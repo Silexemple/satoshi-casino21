@@ -1,6 +1,6 @@
 import { kv } from '@vercel/kv';
 import cookie from 'cookie';
-import { rateLimit } from './_helpers.js';
+import { rateLimit, withPlayerLock } from './_helpers.js';
 
 export const config = {
   runtime: 'edge',
@@ -39,7 +39,9 @@ export default async function handler(req) {
     );
   }
 
-  // POST: update nickname/avatar
+  // POST: valider les updates pseudo/avatar AVANT d'acquérir le verrou (pure).
+  let pendingNickname; // undefined = pas de changement
+  let pendingAvatar;
   if (req.method === 'POST') {
     let body;
     try { body = await req.json(); } catch(e) {
@@ -58,7 +60,7 @@ export default async function handler(req) {
           error: 'Pseudo invalide (2-16 caracteres alphanumeriques, espaces, _ ou -)'
         }), { status: 400, headers: { 'Content-Type': 'application/json' } });
       }
-      player.nickname = sanitized;
+      pendingNickname = sanitized;
     }
     if (body.avatar !== undefined) {
       const validAvatars = ['💀','👑','♠️','💎','🔥','🚀','🎯','🐺','⚡','🦅','🎰','🃏'];
@@ -67,21 +69,30 @@ export default async function handler(req) {
           status: 400, headers: { 'Content-Type': 'application/json' }
         });
       }
-      player.avatar = body.avatar;
+      pendingAvatar = body.avatar;
     }
   }
 
-  player.last_activity = Date.now();
-  await kv.set(playerKey, player, { ex: 2592000 });
-  // Refresh session TTL
+  // Verrou solde: on RELIT le joueur frais pour ne pas écraser un crédit/débit
+  // concurrent (jeu, dépôt, tournoi…) en réécrivant le blob entier.
+  const fresh = await withPlayerLock(linkingKey, async () => {
+    const p = await kv.get(playerKey) || player;
+    if (pendingNickname !== undefined) p.nickname = pendingNickname;
+    if (pendingAvatar !== undefined) p.avatar = pendingAvatar;
+    p.last_activity = Date.now();
+    await kv.set(playerKey, p, { ex: 2592000 });
+    return p;
+  });
+
+  // Refresh session TTL (hors verrou solde)
   await kv.set(`session:${sessionId}`, linkingKey, { ex: 2592000 });
 
   return new Response(
     JSON.stringify({
       session_id: sessionId,
-      balance: player.balance,
-      nickname: player.nickname,
-      avatar: player.avatar
+      balance: fresh.balance,
+      nickname: fresh.nickname,
+      avatar: fresh.avatar
     }),
     {
       status: 200,

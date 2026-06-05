@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Satoshi 21 — Vérificateur Provably Fair</title>
+<style>
+  :root { --bg:#0a0e14; --fg:#e6e6e6; --accent:#ff6b00; --green:#00ff88; --red:#ff4466; --muted:#7a8290; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font-family:'Courier New',monospace; padding:20px; }
+  .wrap { max-width:760px; margin:0 auto; }
+  h1 { color:var(--accent); font-size:1.4rem; }
+  p.lead { color:var(--muted); line-height:1.5; }
+  label { display:block; margin:14px 0 4px; color:var(--accent); font-size:.85rem; }
+  input { width:100%; padding:10px; background:#121821; border:1px solid #2a3340; color:var(--fg); font-family:inherit; border-radius:6px; }
+  button { margin-top:18px; width:100%; padding:12px; background:var(--accent); border:none; color:#000; font-weight:bold; font-family:inherit; border-radius:6px; cursor:pointer; font-size:1rem; }
+  button:hover { filter:brightness(1.1); }
+  .result { margin-top:22px; padding:16px; border:1px solid #2a3340; border-radius:8px; background:#0d131c; display:none; }
+  .ok { color:var(--green); } .bad { color:var(--red); }
+  .row { word-break:break-all; margin:6px 0; font-size:.85rem; }
+  .cards { display:flex; flex-wrap:wrap; gap:6px; margin-top:12px; }
+  .card { padding:6px 8px; background:#121821; border:1px solid #2a3340; border-radius:6px; min-width:44px; text-align:center; }
+  .red { color:#ff6b8b; }
+  .note { color:var(--muted); font-size:.8rem; margin-top:10px; line-height:1.5; }
+  a { color:var(--accent); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🔒 Vérificateur Provably Fair — Satoshi 21</h1>
+  <p class="lead">
+    Le casino s'engage <b>avant</b> chaque main sur <code>serverSeedHash = sha256(serverSeed)</code>,
+    puis révèle <code>serverSeed</code> <b>après</b>. Colle ci-dessous les valeurs affichées en fin de
+    partie : cette page recalcule le mélange et prouve que les cartes n'ont pas été truquées.
+    Tout le calcul est local (rien n'est envoyé).
+  </p>
+
+  <label for="serverSeed">serverSeed (révélé en fin de partie)</label>
+  <input id="serverSeed" placeholder="hex 64 caractères" autocomplete="off">
+
+  <label for="clientSeed">clientSeed</label>
+  <input id="clientSeed" placeholder="ex: joueur-123" autocomplete="off">
+
+  <label for="nonce">nonce</label>
+  <input id="nonce" type="number" placeholder="ex: 42" autocomplete="off">
+
+  <label for="expectedHash">serverSeedHash attendu (engagement, optionnel)</label>
+  <input id="expectedHash" placeholder="hex 64 — affiché au début de la main" autocomplete="off">
+
+  <button id="go">Vérifier</button>
+
+  <div class="result" id="result"></div>
+
+  <p class="note">
+    Ordre de distribution : les cartes sont tirées depuis la <b>fin</b> du deck mélangé.
+    La liste ci-dessous est déjà dans l'ordre de tir (1ʳᵉ carte distribuée en premier).
+    Distribution blackjack : joueur, croupier, joueur, croupier, puis tirages.
+  </p>
+</div>
+
+<script>
+const SUITS = ['♠','♥','♦','♣'];
+const RANKS = ['A','2','3','4','5','6','7','8','9','10','J','Q','K'];
+
+function createOrderedDeck() {
+  const deck = [];
+  for (const suit of SUITS) for (const rank of RANKS) {
+    const num = rank === 'A' ? 11 : (isNaN(rank) ? 10 : parseInt(rank));
+    deck.push({ suit, value: rank, num });
+  }
+  return deck;
+}
+async function sha256Hex(str) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
+}
+async function shuffleDeckProvablyFair(deck, seedHex) {
+  let counter = 0, pool = [];
+  const nextByte = async () => {
+    if (pool.length === 0) {
+      const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`${seedHex}:${counter++}`));
+      pool = Array.from(new Uint8Array(buf));
+    }
+    return pool.shift();
+  };
+  const randInt = async (max) => {
+    if (max <= 1) return 0;
+    const limit = 256 - (256 % max);
+    let b; do { b = await nextByte(); } while (b >= limit);
+    return b % max;
+  };
+  for (let i = deck.length - 1; i > 0; i--) {
+    const j = await randInt(i + 1);
+    [deck[i], deck[j]] = [deck[j], deck[i]];
+  }
+  return deck;
+}
+async function buildProvablyFairDeck(serverSeed, clientSeed, nonce) {
+  const seedHex = await sha256Hex(`${serverSeed}:${clientSeed}:${nonce}`);
+  const deck = createOrderedDeck();
+  await shuffleDeckProvablyFair(deck, seedHex);
+  return deck;
+}
+
+document.getElementById('go').addEventListener('click', async () => {
+  const serverSeed = document.getElementById('serverSeed').value.trim();
+  const clientSeed = document.getElementById('clientSeed').value.trim();
+  const nonce = document.getElementById('nonce').value.trim();
+  const expected = document.getElementById('expectedHash').value.trim().toLowerCase();
+  const box = document.getElementById('result');
+  box.style.display = 'block';
+
+  if (!serverSeed || !clientSeed || nonce === '') {
+    box.innerHTML = '<span class="bad">⚠️ Remplis serverSeed, clientSeed et nonce.</span>';
+    return;
+  }
+
+  const commitment = await sha256Hex(serverSeed);
+  let html = `<div class="row">sha256(serverSeed) = <b>${commitment}</b></div>`;
+  if (expected) {
+    if (commitment === expected) html += '<div class="row ok">✅ Engagement vérifié : le serverSeed révélé correspond bien au hash publié avant la main.</div>';
+    else html += '<div class="row bad">❌ MISMATCH : le hash ne correspond PAS à l\'engagement. Cartes potentiellement truquées !</div>';
+  } else {
+    html += '<div class="row note">(Compare ce hash au serverSeedHash affiché au début de ta main pour confirmer l\'engagement.)</div>';
+  }
+
+  const deck = await buildProvablyFairDeck(serverSeed, clientSeed, Number(nonce));
+  const drawOrder = [...deck].reverse(); // tirage = pop depuis la fin
+  html += '<div class="row">Ordre de distribution recalculé :</div><div class="cards">';
+  drawOrder.forEach((c, i) => {
+    const isRed = c.suit === '♥' || c.suit === '♦';
+    html += `<div class="card"><small>${i+1}</small><br><span class="${isRed?'red':''}">${c.value}${c.suit}</span></div>`;
+  });
+  html += '</div>';
+  box.innerHTML = html;
+});
+
+// Pré-remplissage depuis l'URL (lien "Vérifier" du jeu) + vérification auto.
+(function prefillFromUrl() {
+  const q = new URLSearchParams(location.search);
+  const map = { serverSeed: 'serverSeed', clientSeed: 'clientSeed', nonce: 'nonce', hash: 'expectedHash' };
+  let any = false;
+  for (const [param, id] of Object.entries(map)) {
+    const v = q.get(param);
+    if (v != null) { document.getElementById(id).value = v; any = true; }
+  }
+  if (any && q.get('serverSeed')) document.getElementById('go').click();
+})();
+</script>
+</body>
+</html>

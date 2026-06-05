@@ -1,5 +1,5 @@
 import { kv } from '@vercel/kv';
-import { json, getSessionId, normalizePlayer, sendNodeResponse } from '../_helpers.js';
+import { json, getSessionId, normalizePlayer, sendNodeResponse, withPlayerLock } from '../_helpers.js';
 import { nwcRequest } from '../_nwc.js';
 
 // Runtime Node.js (default): WebSocket sortant requis pour NWC.
@@ -82,10 +82,6 @@ async function impl(req) {
         }
 
         const playerKey = `player:${linkingKey}`;
-        let player = normalizePlayer(await kv.get(playerKey));
-        if (!player) {
-          player = { balance: 0, nickname: null, created_at: Date.now(), last_activity: Date.now() };
-        }
 
         // Idempotence: éviter le double-crédit si crash entre crédit et suppression invoice.
         // TTL aligné sur celui de invoice:* (7200s côté deposit.js) +marge, sinon le marker
@@ -94,24 +90,34 @@ async function impl(req) {
         const creditedKey = `credited:${paymentHash}`;
         const alreadyCredited = await kv.set(creditedKey, '1', { nx: true, ex: 86400 });
         if (!alreadyCredited) {
+          const existing = normalizePlayer(await kv.get(playerKey));
           await kv.del(lockKey);
-          return json(200, { paid: true, new_balance: player.balance });
+          return json(200, { paid: true, new_balance: existing ? existing.balance : undefined });
         }
 
-        const newBalance = player.balance + freshInvoice.amount;
-        // Soft-cap warning: la verification MAX_BALANCE (1M) cote deposit.js
-        // est faite a la GENERATION de l'invoice, pas au CREDIT. Un user peut
-        // generer N invoices avant qu'aucune ne soit payee, puis toutes les
-        // payer → solde > MAX. On ne peut PAS refuser le credit (Lightning
-        // payment deja recu = on volerait le user). On log pour visibilite
-        // operationnelle et on credite quand meme.
+        // Crédit sous verrou solde: relire frais pour ne pas écraser un débit
+        // concurrent (mise, retrait…). Le marker `credited:*` ci-dessus garantit
+        // déjà l'idempotence inter-requêtes; le verrou garantit l'atomicité du RMW.
         const SOFT_MAX = 1000000;
-        if (newBalance > SOFT_MAX) {
-          console.warn(`[DEPOSIT] balance soft-cap exceeded for ${linkingKey}: ${newBalance} > ${SOFT_MAX} (credited anyway, paymentHash=${paymentHash})`);
-        }
-        player.balance = newBalance;
-        player.last_activity = Date.now();
-        await kv.set(playerKey, player, { ex: 2592000 });
+        const newBalance = await withPlayerLock(linkingKey, async () => {
+          let player = normalizePlayer(await kv.get(playerKey));
+          if (!player) {
+            player = { balance: 0, nickname: null, created_at: Date.now(), last_activity: Date.now() };
+          }
+          const nb = player.balance + freshInvoice.amount;
+          // Soft-cap warning: la verification MAX_BALANCE (1M) cote deposit.js
+          // est faite a la GENERATION de l'invoice, pas au CREDIT. Un user peut
+          // generer N invoices avant qu'aucune ne soit payee, puis toutes les
+          // payer → solde > MAX. On ne peut PAS refuser le credit (Lightning
+          // payment deja recu = on volerait le user). On log et on credite.
+          if (nb > SOFT_MAX) {
+            console.warn(`[DEPOSIT] balance soft-cap exceeded for ${linkingKey}: ${nb} > ${SOFT_MAX} (credited anyway, paymentHash=${paymentHash})`);
+          }
+          player.balance = nb;
+          player.last_activity = Date.now();
+          await kv.set(playerKey, player, { ex: 2592000 });
+          return nb;
+        });
 
         const txKey = `transactions:${linkingKey}`;
         await kv.rpush(txKey, {

@@ -1,6 +1,6 @@
 import { kv } from '@vercel/kv';
 import { json, getSessionId, rateLimit } from './_helpers.js';
-import { createAndShuffleDeck, handScore, isBlackjack, isPair, cardForClient, drawCard } from './_game-helpers.js';
+import { createAndShuffleDeck, handScore, isBlackjack, isPair, cardForClient, drawCard, buildProvablyFairDeck, sha256Hex, randomSeedHex } from './_game-helpers.js';
 
 export const config = {
   runtime: 'edge',
@@ -62,8 +62,12 @@ export default async function handler(req) {
     return json(429, { error: 'Trop de requetes, attendez un instant' });
   }
 
-  // Lock pour eviter les race conditions
-  const lockKey = `lock:game:${sessionId}`;
+  // Verrou SOLDE par-joueur (et non par-session): le solde mute ici (mise,
+  // payouts) doit être sérialisé avec TOUS les autres sous-systèmes (table,
+  // tournoi, dépôt, retrait, tip, session) qui partagent lock:player:{linkingKey}.
+  // Un lock par-session laissait 2 sessions du même joueur (ou un retrait
+  // concurrent) se lost-update → double dépense.
+  const lockKey = `lock:player:${linkingKey}`;
   const lockAcquired = await kv.set(lockKey, '1', { nx: true, ex: 10 });
   if (!lockAcquired) {
     return json(429, { error: 'Action en cours, reessayez' });
@@ -98,7 +102,15 @@ export default async function handler(req) {
         return json(400, { error: 'Partie déjà en cours' });
       }
 
-      const deck = createAndShuffleDeck();
+      // ── Provably fair: engagement avant la main ──
+      // clientSeed fourni par le joueur (sinon aléatoire), nonce monotone par
+      // joueur, serverSeed secret jusqu'à la fin. Le deck est mélangé de façon
+      // déterministe et vérifiable depuis sha256(serverSeed:clientSeed:nonce).
+      const clientSeed = (body.client_seed || '').toString().replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 64) || randomSeedHex(8);
+      const nonce = await kv.incr(`pf_nonce:${linkingKey}`);
+      const serverSeed = randomSeedHex(32);
+      const serverSeedHash = await sha256Hex(serverSeed);
+      const deck = await buildProvablyFairDeck({ serverSeed, clientSeed, nonce });
       const pHand = [drawCard(deck), drawCard(deck)];
       const dHand = [drawCard(deck), drawCard(deck)];
 
@@ -106,6 +118,7 @@ export default async function handler(req) {
 
       const gs = {
         deck, bet,
+        pf: { serverSeed, serverSeedHash, clientSeed, nonce },
         playerHands: [{ cards: pHand, bet, finished: false, result: null }],
         dealerHand: dHand,
         currentHandIdx: 0,
@@ -167,7 +180,8 @@ export default async function handler(req) {
         canSplit: isPair(pHand) && player.balance >= bet,
         canInsurance: dealerUpIsAce && player.balance >= Math.floor(bet / 2),
         canSurrender: true,
-        status: 'playing'
+        status: 'playing',
+        provablyFair: { serverSeedHash, clientSeed, nonce } // engagement (serverSeed révélé à la fin)
       };
       return json(200, resp);
     }
@@ -506,7 +520,9 @@ function playingResponse(gs, player) {
     canSplit: isPair(hand.cards) && player.balance >= gs.bet && gs.playerHands.length < 4,
     canInsurance: gs.phase === 'insurance_offered' && player.balance >= Math.floor(gs.bet / 2),
     canSurrender: isFirstAction && !gs.phase,
-    insuranceResult: gs.insuranceResult
+    insuranceResult: gs.insuranceResult,
+    // Engagement provably-fair (serverSeed PAS encore révélé pendant le jeu)
+    provablyFair: gs.pf ? { serverSeedHash: gs.pf.serverSeedHash, clientSeed: gs.pf.clientSeed, nonce: gs.pf.nonce } : undefined
   };
 }
 
@@ -525,7 +541,14 @@ function finishResponse(gs, player, globalResult) {
     balance: player.balance,
     totalBet: gs.totalBet,
     insuranceResult: gs.insuranceResult,
-    surrendered: gs.surrendered
+    surrendered: gs.surrendered,
+    // Révélation provably-fair: serverSeed dévoilé → le joueur vérifie sur /verify.html
+    provablyFair: gs.pf ? {
+      serverSeed: gs.pf.serverSeed,
+      serverSeedHash: gs.pf.serverSeedHash,
+      clientSeed: gs.pf.clientSeed,
+      nonce: gs.pf.nonce
+    } : undefined
   };
 }
 

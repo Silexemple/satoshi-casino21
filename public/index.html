@@ -2135,6 +2135,31 @@ function renderGameState(data) {
     } else if (data.playerHands && data.playerHands.length === 1) {
         renderSingleHand(data.playerHands[0]);
     }
+
+    renderFairness(data.provablyFair);
+}
+
+// Badge "provably fair": engagement (hash) pendant la main, révélation
+// (serverSeed) + lien de vérification à la fin. clientSeed est restreint
+// côté serveur à [a-zA-Z0-9_-], donc sûr à injecter.
+function renderFairness(pf) {
+    let el = document.getElementById('fairnessBadge');
+    if (!el) {
+        el = document.createElement('div');
+        el.id = 'fairnessBadge';
+        el.style.cssText = 'margin:14px auto;max-width:440px;padding:10px 12px;border:1px solid #2a3340;border-radius:8px;background:rgba(13,19,28,.85);font-size:.72rem;color:#7a8290;text-align:left;word-break:break-all;line-height:1.5;';
+        const area = document.getElementById('playerArea');
+        if (area && area.parentNode) area.parentNode.insertBefore(el, area.nextSibling);
+        else document.body.appendChild(el);
+    }
+    if (!pf) { el.style.display = 'none'; return; }
+    el.style.display = 'block';
+    if (pf.serverSeed) {
+        const url = `/verify.html?serverSeed=${encodeURIComponent(pf.serverSeed)}&clientSeed=${encodeURIComponent(pf.clientSeed)}&nonce=${encodeURIComponent(pf.nonce)}&hash=${encodeURIComponent(pf.serverSeedHash)}`;
+        el.innerHTML = `🔓 <b style="color:#00ff88">Provably fair — révélé</b><br>serverSeed: ${pf.serverSeed.slice(0,20)}…<br>clientSeed: ${pf.clientSeed} · nonce: ${pf.nonce}<br><a href="${url}" target="_blank" rel="noopener" style="color:#ff6b00">▶ Vérifier l'équité de cette main</a>`;
+    } else {
+        el.innerHTML = `🔒 <b style="color:#ff6b00">Provably fair</b> — engagement<br>serverSeedHash: ${pf.serverSeedHash.slice(0,24)}…<br>clientSeed: ${pf.clientSeed} · nonce: ${pf.nonce}`;
+    }
 }
 
 function renderSingleHand(hand) {

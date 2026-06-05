@@ -1,0 +1,21 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # La suite de tests (tests/*.test.js) n'importe que des modules natifs
+      # (fs, path, url, child_process) et réimplémente la logique métier — aucune
+      # dépendance npm requise. On évite donc `npm ci` (et tout risque de
+      # désynchro du package-lock cross-plateforme) pour un CI rapide et fiable.
+      - name: Run test suite
+        run: npm run test:all
