@@ -1,5 +1,5 @@
 import { kv } from '@vercel/kv';
-import { json, getSessionId, rateLimit } from '../_helpers.js';
+import { json, getSessionId, rateLimit, withPlayerLock } from '../_helpers.js';
 import { createAndShuffleDeck, handScore, isBlackjack, cardForClient, drawCard } from '../_game-helpers.js';
 
 export const config = { runtime: 'edge' };
@@ -297,15 +297,20 @@ async function finishTournament(tournament) {
 
     const pk = `player:${lk}`;
     try {
-      const player = await kv.get(pk);
-      if (!player) {
+      // Crédit sous verrou solde (sérialisé avec jeu/table/retrait du gagnant).
+      const credited = await withPlayerLock(lk, async () => {
+        const player = await kv.get(pk);
+        if (!player) return false;
+        player.balance += prizes[i];
+        player.last_activity = Date.now();
+        await kv.set(pk, player, { ex: 2592000 });
+        return true;
+      });
+      if (!credited) {
         console.error(`[TOURNAMENT] player ${lk} not found, prize ${prizes[i]} uncredited (tournament=${tournament.id})`);
         p.prizeUncredited = prizes[i];
         continue;
       }
-      player.balance += prizes[i];
-      player.last_activity = Date.now();
-      await kv.set(pk, player, { ex: 2592000 });
 
       const txKey = `transactions:${lk}`;
       await kv.rpush(txKey, {

@@ -1,5 +1,5 @@
 import { kv } from '@vercel/kv';
-import { json, getSessionId, rateLimit } from '../_helpers.js';
+import { json, getSessionId, rateLimit, withPlayerLock } from '../_helpers.js';
 
 export const config = { runtime: 'edge' };
 
@@ -47,20 +47,28 @@ export default async function handler(req) {
       return json(400, { error: 'Tournoi plein' });
     }
 
-    // Check balance
+    // Débit buy-in sous VERROU SOLDE (check + debit atomiques, sérialisé avec
+    // jeu/table/retrait/dépôt). buyIn est figé pour le rollback éventuel.
     const playerKey = `player:${linkingKey}`;
-    const player = await kv.get(playerKey);
-    if (!player) return json(404, { error: 'Joueur non trouve' });
-
-    if (player.balance < tournament.buyIn) {
-      return json(400, { error: `Solde insuffisant (buy-in: ${tournament.buyIn} sats)` });
+    const buyIn = tournament.buyIn;
+    let balanceAfter;
+    try {
+      const dbres = await withPlayerLock(linkingKey, async () => {
+        const player = await kv.get(playerKey);
+        if (!player) return { code: 404 };
+        if (player.balance < buyIn) return { code: 400 };
+        player.balance -= buyIn;
+        player.last_activity = Date.now();
+        await kv.set(playerKey, player, { ex: 2592000 });
+        return { balance: player.balance };
+      });
+      if (dbres.code === 404) return json(404, { error: 'Joueur non trouve' });
+      if (dbres.code === 400) return json(400, { error: `Solde insuffisant (buy-in: ${buyIn} sats)` });
+      balanceAfter = dbres.balance;
+    } catch (e) {
+      if (e.code === 'PLAYER_LOCKED') return json(429, { error: 'Action en cours, réessayez' });
+      throw e;
     }
-
-    // Debit buy-in
-    const balanceBefore = player.balance;
-    player.balance -= tournament.buyIn;
-    player.last_activity = Date.now();
-    await kv.set(playerKey, player, { ex: 2592000 });
 
     // Register player (stocker linkingKey pour distribution des prix)
     tournament.players.push({
@@ -96,20 +104,18 @@ export default async function handler(req) {
     try {
       await kv.set(tKey, tournament, { ex: 86400 });
     } catch (err) {
-      console.error(`[TOURNAMENT] register save failed for ${tournamentId}, rolling back debit ${tournament.buyIn} sats for ${linkingKey}:`, err);
+      console.error(`[TOURNAMENT] register save failed for ${tournamentId}, rolling back debit ${buyIn} sats for ${linkingKey}:`, err);
       try {
-        const fresh = await kv.get(playerKey);
-        if (fresh) {
-          fresh.balance = (fresh.balance || 0) + tournament.buyIn;
-          fresh.last_activity = Date.now();
-          await kv.set(playerKey, fresh, { ex: 2592000 });
-        } else {
-          // Joueur disparu entre debit et rollback — refund par balance reset
-          player.balance = balanceBefore;
-          await kv.set(playerKey, player, { ex: 2592000 });
-        }
+        await withPlayerLock(linkingKey, async () => {
+          const fresh = await kv.get(playerKey);
+          if (fresh) {
+            fresh.balance = (fresh.balance || 0) + buyIn;
+            fresh.last_activity = Date.now();
+            await kv.set(playerKey, fresh, { ex: 2592000 });
+          }
+        });
       } catch (rollbackErr) {
-        console.error(`[TOURNAMENT] CRITICAL: rollback FAILED for ${linkingKey}, lost ${tournament.buyIn} sats:`, rollbackErr);
+        console.error(`[TOURNAMENT] CRITICAL: rollback FAILED for ${linkingKey}, lost ${buyIn} sats:`, rollbackErr);
       }
       return json(500, { error: 'Inscription échouée, solde restauré. Réessayez.' });
     }
@@ -131,7 +137,7 @@ export default async function handler(req) {
 
     return json(200, {
       success: true,
-      balance: player.balance,
+      balance: balanceAfter,
       chips: tournament.startingChips,
       playerCount: tournament.players.length,
       startTime: tournament.startTime

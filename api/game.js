@@ -62,8 +62,12 @@ export default async function handler(req) {
     return json(429, { error: 'Trop de requetes, attendez un instant' });
   }
 
-  // Lock pour eviter les race conditions
-  const lockKey = `lock:game:${sessionId}`;
+  // Verrou SOLDE par-joueur (et non par-session): le solde mute ici (mise,
+  // payouts) doit être sérialisé avec TOUS les autres sous-systèmes (table,
+  // tournoi, dépôt, retrait, tip, session) qui partagent lock:player:{linkingKey}.
+  // Un lock par-session laissait 2 sessions du même joueur (ou un retrait
+  // concurrent) se lost-update → double dépense.
+  const lockKey = `lock:player:${linkingKey}`;
   const lockAcquired = await kv.set(lockKey, '1', { nx: true, ex: 10 });
   if (!lockAcquired) {
     return json(429, { error: 'Action en cours, reessayez' });

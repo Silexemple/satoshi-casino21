@@ -109,6 +109,49 @@ export async function getTxKey(sessionId) {
   return linkingKey ? `transactions:${linkingKey}` : null;
 }
 
+// ═══ VERROU SOLDE JOUEUR (sérialise TOUTES les mutations de balance) ═══
+//
+// Le solde est stocké dans un blob JSON `player:{linkingKey}` et muté en
+// read-modify-write. Sans un verrou COMMUN à tous les sous-systèmes (jeu solo,
+// tables, tournois, dépôt, retrait, tip, session), deux requêtes concurrentes
+// du même joueur lisent le même solde et s'écrasent (lost update) → double
+// dépense exploitable. Tout site qui modifie `player:{linkingKey}.balance` DOIT
+// passer par withPlayerLock(linkingKey, ...).
+//
+// IMPORTANT anti-deadlock: ne JAMAIS appeler creditPlayers()/un autre code qui
+// acquiert lock:player:* pendant qu'on tient déjà ce verrou. withPlayerLock
+// relâche en finally avant de rendre la main, donc enchaîner les sections
+// verrouillées séquentiellement est sûr; les imbriquer ne l'est pas.
+export async function withPlayerLock(linkingKey, fn, { retries = 25, delayMs = 200, ttlSec = 10 } = {}) {
+  if (!linkingKey) throw new Error('withPlayerLock: linkingKey manquant');
+  const lockKey = `lock:player:${linkingKey}`;
+  let acquired = false;
+  for (let attempt = 0; attempt < retries; attempt++) {
+    acquired = await kv.set(lockKey, '1', { nx: true, ex: ttlSec });
+    if (acquired) break;
+    await new Promise(r => setTimeout(r, delayMs));
+  }
+  if (!acquired) {
+    const err = new Error('player_locked');
+    err.code = 'PLAYER_LOCKED';
+    throw err;
+  }
+  try {
+    return await fn();
+  } finally {
+    try { await kv.del(lockKey); } catch (_) {}
+  }
+}
+
+// Verrou sur DEUX joueurs (ex. tip émetteur→destinataire). Acquiert dans un
+// ordre canonique (tri lexicographique des linkingKeys) pour éviter le deadlock
+// croisé A→B / B→A. Si les deux clés sont identiques, un seul verrou est pris.
+export async function withTwoPlayerLocks(linkingKeyA, linkingKeyB, fn, opts) {
+  if (linkingKeyA === linkingKeyB) return withPlayerLock(linkingKeyA, fn, opts);
+  const [first, second] = [linkingKeyA, linkingKeyB].sort();
+  return withPlayerLock(first, () => withPlayerLock(second, fn, opts), opts);
+}
+
 // ═══ RATE LIMIT IP GLOBAL ═══
 // Limite configurable par route: ex. rateLimit(req, 'game', 60, 60)
 // = max 60 actions par 60 secondes par IP pour la route 'game'

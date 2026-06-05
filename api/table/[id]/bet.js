@@ -1,5 +1,5 @@
 import { kv } from '@vercel/kv';
-import { json, getSessionId, rateLimit, normalizePlayer } from '../../_helpers.js';
+import { json, getSessionId, rateLimit, normalizePlayer, withPlayerLock } from '../../_helpers.js';
 import { checkTimeouts, startDealing, creditPlayers, BETTING_TIMEOUT } from '../[id].js';
 
 export const config = { runtime: 'edge' };
@@ -67,10 +67,11 @@ export default async function handler(req) {
     const linkingKey = seat.linkingKey || await kv.get(`session:${sessionId}`);
     if (!linkingKey) return json(401, { error: 'Session invalide', auth_required: true });
 
-    // Verifier le solde du joueur
+    // Pré-vérification du solde (UX rapide; le check autoritaire est refait
+    // sous verrou au moment du débit).
     const playerKey = `player:${linkingKey}`;
-    const player = normalizePlayer(await kv.get(playerKey));
-    if (!player || player.balance < amount) {
+    const preview = normalizePlayer(await kv.get(playerKey));
+    if (!preview || preview.balance < amount) {
       return json(400, { error: 'Solde insuffisant' });
     }
 
@@ -100,9 +101,24 @@ export default async function handler(req) {
       return json(400, { error: `Mise max acceptée: ${maxAcceptable} sats (bankroll limitée)` });
     }
 
-    // Débiter le joueur
-    player.balance -= amount;
-    await kv.set(playerKey, player, { ex: 2592000 });
+    // Débit sous VERROU SOLDE (check + debit atomiques). On NE tient PAS ce
+    // verrou pendant creditPlayers() plus bas (qui acquiert lock:player:*) —
+    // withPlayerLock relâche avant de rendre la main → pas de self-deadlock.
+    let playerBalanceAfter;
+    try {
+      const dres = await withPlayerLock(linkingKey, async () => {
+        const player = normalizePlayer(await kv.get(playerKey));
+        if (!player || player.balance < amount) return { insufficient: true };
+        player.balance -= amount;
+        await kv.set(playerKey, player, { ex: 2592000 });
+        return { balance: player.balance };
+      });
+      if (dres.insufficient) return json(400, { error: 'Solde insuffisant' });
+      playerBalanceAfter = dres.balance;
+    } catch (e) {
+      if (e.code === 'PLAYER_LOCKED') return json(429, { error: 'Solde occupé par une autre action, réessayez' });
+      throw e;
+    }
 
     // Enregistrer la mise
     seat.bet = amount;
@@ -131,14 +147,13 @@ export default async function handler(req) {
     } catch (err) {
       console.error(`[BET] table save failed for ${tableId}, rolling back ${amount} sats for ${linkingKey}:`, err);
       try {
-        const freshPlayer = await kv.get(playerKey);
-        if (freshPlayer) {
-          freshPlayer.balance = (freshPlayer.balance || 0) + amount;
-          await kv.set(playerKey, freshPlayer, { ex: 2592000 });
-        } else {
-          player.balance += amount;
-          await kv.set(playerKey, player, { ex: 2592000 });
-        }
+        await withPlayerLock(linkingKey, async () => {
+          const freshPlayer = await kv.get(playerKey);
+          if (freshPlayer) {
+            freshPlayer.balance = (freshPlayer.balance || 0) + amount;
+            await kv.set(playerKey, freshPlayer, { ex: 2592000 });
+          }
+        });
       } catch (rollbackErr) {
         console.error(`[BET] CRITICAL: rollback FAILED for ${linkingKey}, lost ${amount} sats:`, rollbackErr);
       }
@@ -153,11 +168,11 @@ export default async function handler(req) {
       // Relire le solde mis à jour après crédit
       const updatedPlayer = await kv.get(playerKey);
       if (updatedPlayer) {
-        player.balance = updatedPlayer.balance;
+        playerBalanceAfter = updatedPlayer.balance;
       }
     }
 
-    return json(200, { success: true, bet: amount, balance: player.balance });
+    return json(200, { success: true, bet: amount, balance: playerBalanceAfter });
   } finally {
     await kv.del(lockKey);
   }
