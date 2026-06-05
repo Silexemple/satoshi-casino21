@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Satoshi 21 — Blackjack Lightning. Sans nom.</title>
+<meta name="description" content="Casino de blackjack sur Lightning. Pas de KYC, pas d'email, dépôts instantanés en sats, équité prouvée. Connexion par ton wallet Bitcoin.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@0,6..96,400;0,6..96,500;0,6..96,700;0,6..96,900;1,6..96,500&family=IBM+Plex+Mono:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --void:#08090b;
+    --void-2:#0c0e11;
+    --felt:#0c3a26;          /* vert feutre, en halo seulement */
+    --ink:#ece6d6;           /* parchemin chaud */
+    --ink-dim:#9a9486;
+    --brass:#c9a86a;         /* filets laiton */
+    --brass-deep:#8a6f3e;
+    --voltage:#f7931a;       /* orange Bitcoin = l'accent électrique */
+    --voltage-2:#ff7a18;
+    --blood:#c8453b;         /* cœurs / carreaux */
+    --line:rgba(201,168,106,.18);
+    --ease:cubic-bezier(.2,.7,.2,1);
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    background:var(--void);
+    color:var(--ink);
+    font-family:'IBM Plex Mono',ui-monospace,monospace;
+    font-weight:300;
+    line-height:1.6;
+    overflow-x:hidden;
+    cursor:none;
+  }
+  /* ── Atmosphère: halo feutre + vignette + grain ── */
+  body::before{
+    content:'';position:fixed;inset:0;z-index:-2;pointer-events:none;
+    background:
+      radial-gradient(120% 80% at 50% -10%, rgba(18,72,48,.55), transparent 60%),
+      radial-gradient(90% 60% at 110% 110%, rgba(247,147,26,.10), transparent 55%),
+      radial-gradient(70% 50% at -10% 90%, rgba(200,69,59,.08), transparent 55%),
+      var(--void);
+  }
+  body::after{ /* grain */
+    content:'';position:fixed;inset:0;z-index:50;pointer-events:none;opacity:.05;mix-blend-mode:overlay;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+  ::selection{background:var(--voltage);color:#000}
+
+  /* ── Curseur custom ── */
+  .cursor{position:fixed;top:0;left:0;width:26px;height:26px;border:1px solid var(--brass);border-radius:50%;pointer-events:none;z-index:9999;transform:translate(-50%,-50%);transition:width .25s var(--ease),height .25s var(--ease),background .25s,border-color .25s;mix-blend-mode:difference}
+  .cursor.dot{width:5px;height:5px;background:var(--voltage);border-color:var(--voltage)}
+  @media (hover:none){ body{cursor:auto} .cursor{display:none} }
+
+  a{color:inherit;text-decoration:none}
+  .wrap{max-width:1180px;margin:0 auto;padding:0 28px}
+
+  /* ── Nav ── */
+  nav{position:fixed;top:0;left:0;right:0;z-index:40;display:flex;align-items:center;justify-content:space-between;
+      padding:18px 28px;backdrop-filter:blur(8px);
+      background:linear-gradient(var(--void),transparent);border-bottom:1px solid transparent;transition:border-color .4s,background .4s}
+  nav.scrolled{background:rgba(8,9,11,.82);border-color:var(--line)}
+  .brand{display:flex;align-items:center;gap:10px;font-family:'Bodoni Moda',serif;font-weight:700;font-size:1.15rem;letter-spacing:.02em}
+  .brand .star{color:var(--voltage);font-size:.8em;transform:translateY(-1px)}
+  .brand b{color:var(--voltage);font-weight:900}
+  .nav-links{display:flex;gap:30px;align-items:center;font-size:.72rem;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-dim)}
+  .nav-links a{position:relative;transition:color .3s}
+  .nav-links a:hover{color:var(--ink)}
+  .nav-links a::after{content:'';position:absolute;left:0;bottom:-6px;height:1px;width:0;background:var(--voltage);transition:width .3s var(--ease)}
+  .nav-links a:hover::after{width:100%}
+  .nav-cta{border:1px solid var(--brass);padding:10px 18px;border-radius:2px;color:var(--ink);
+    font-size:.72rem;letter-spacing:.16em;text-transform:uppercase;transition:all .3s var(--ease);white-space:nowrap}
+  .nav-cta:hover{background:var(--voltage);border-color:var(--voltage);color:#000;box-shadow:0 0 30px rgba(247,147,26,.4)}
+  @media(max-width:760px){.nav-links{display:none}}
+
+  /* ── Hero ── */
+  header{position:relative;min-height:100vh;display:flex;flex-direction:column;justify-content:center;padding:120px 0 60px}
+  .eyebrow{display:flex;align-items:center;gap:14px;font-size:.7rem;letter-spacing:.34em;text-transform:uppercase;color:var(--voltage);margin-bottom:30px}
+  .eyebrow::before{content:'';width:46px;height:1px;background:var(--brass)}
+  h1{font-family:'Bodoni Moda',serif;font-weight:400;line-height:.94;letter-spacing:-.01em;
+     font-size:clamp(3.2rem,11.5vw,9.5rem);color:var(--ink);margin-bottom:6px}
+  h1 .it{font-style:italic;font-weight:500}
+  h1 .v{color:var(--voltage)}
+  h1 .stroke{-webkit-text-stroke:1.4px var(--brass);color:transparent}
+  .hero-grid{display:grid;grid-template-columns:1.5fr 1fr;gap:50px;align-items:end;margin-top:42px}
+  @media(max-width:880px){.hero-grid{grid-template-columns:1fr;gap:34px}}
+  .lede{font-size:clamp(.95rem,1.3vw,1.1rem);color:var(--ink-dim);max-width:46ch;font-weight:300}
+  .lede b{color:var(--ink);font-weight:500}
+  .hero-cta{display:flex;gap:16px;flex-wrap:wrap;margin-top:34px}
+  .btn{display:inline-flex;align-items:center;gap:12px;padding:16px 30px;border-radius:2px;font-size:.76rem;
+       letter-spacing:.18em;text-transform:uppercase;transition:all .35s var(--ease);position:relative;overflow:hidden}
+  .btn-primary{background:var(--voltage);color:#000;font-weight:600}
+  .btn-primary:hover{box-shadow:0 0 0 1px var(--voltage),0 14px 50px rgba(247,147,26,.45);transform:translateY(-2px)}
+  .btn-primary .arrow{transition:transform .35s var(--ease)}
+  .btn-primary:hover .arrow{transform:translateX(5px)}
+  .btn-ghost{border:1px solid var(--line);color:var(--ink)}
+  .btn-ghost:hover{border-color:var(--brass);background:rgba(201,168,106,.06)}
+
+  /* carte 21 décorative */
+  .hero-card{justify-self:end;width:200px;height:280px;border:1px solid var(--brass);border-radius:10px;
+    background:linear-gradient(165deg,#10130f,#0a0b0d);position:relative;
+    box-shadow:0 30px 80px rgba(0,0,0,.6),inset 0 0 60px rgba(247,147,26,.04);
+    transform:rotate(6deg);transition:transform .6s var(--ease)}
+  .hero-card:hover{transform:rotate(0deg) translateY(-6px)}
+  .hero-card .corner{position:absolute;font-family:'Bodoni Moda',serif;font-weight:700;line-height:.8;font-size:1.5rem}
+  .hero-card .corner small{display:block;font-size:1.3rem}
+  .hero-card .tl{top:16px;left:16px;color:var(--voltage)}
+  .hero-card .br{bottom:16px;right:16px;color:var(--voltage);transform:rotate(180deg)}
+  .hero-card .pip{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-family:'Bodoni Moda',serif;
+    font-size:5.5rem;font-weight:900;color:var(--ink);text-shadow:0 0 40px rgba(247,147,26,.3)}
+  .hero-card .suit{position:absolute;top:50%;left:50%;transform:translate(-50%,40px);font-size:1.2rem;color:var(--blood)}
+  @media(max-width:880px){.hero-card{justify-self:start;margin-top:8px}}
+
+  /* ── Marquee ── */
+  .marquee{border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:18px 0;overflow:hidden;white-space:nowrap;background:rgba(12,14,17,.5)}
+  .marquee-track{display:inline-block;animation:scroll 30s linear infinite;font-family:'Bodoni Moda',serif;font-style:italic;font-size:1.3rem;color:var(--ink-dim)}
+  .marquee-track span{margin:0 26px}
+  .marquee-track .dot{color:var(--voltage);font-style:normal}
+  @keyframes scroll{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+
+  /* ── Sections ── */
+  section{padding:110px 0;position:relative}
+  .sec-label{font-size:.7rem;letter-spacing:.32em;text-transform:uppercase;color:var(--voltage);margin-bottom:20px;display:flex;gap:12px;align-items:center}
+  .sec-label::before{content:'※';color:var(--brass)}
+  .sec-title{font-family:'Bodoni Moda',serif;font-weight:400;font-size:clamp(2rem,5vw,3.4rem);line-height:1.05;margin-bottom:18px;letter-spacing:-.01em}
+  .sec-title .it{font-style:italic;color:var(--voltage)}
+
+  /* piliers */
+  .pillars{display:grid;grid-template-columns:repeat(3,1fr);gap:0;border:1px solid var(--line);margin-top:50px}
+  @media(max-width:820px){.pillars{grid-template-columns:1fr}}
+  .pillar{padding:42px 34px;border-right:1px solid var(--line);transition:background .4s}
+  .pillars .pillar:last-child{border-right:none}
+  @media(max-width:820px){.pillar{border-right:none;border-bottom:1px solid var(--line)}}
+  .pillar:hover{background:rgba(247,147,26,.04)}
+  .pillar .ico{font-size:1.6rem;margin-bottom:22px;display:inline-block}
+  .pillar h3{font-family:'Bodoni Moda',serif;font-weight:500;font-size:1.5rem;margin-bottom:12px}
+  .pillar p{color:var(--ink-dim);font-size:.86rem}
+  .pillar .num{font-size:.7rem;letter-spacing:.2em;color:var(--brass-deep);margin-bottom:26px}
+
+  /* steps */
+  .steps{display:grid;grid-template-columns:repeat(3,1fr);gap:36px;margin-top:56px}
+  @media(max-width:820px){.steps{grid-template-columns:1fr;gap:0}}
+  .step{position:relative;padding-top:30px;border-top:1px solid var(--line)}
+  .step .n{font-family:'Bodoni Moda',serif;font-size:3rem;font-weight:900;color:transparent;-webkit-text-stroke:1px var(--brass-deep);line-height:1;margin-bottom:18px}
+  .step h4{font-size:1rem;letter-spacing:.04em;margin-bottom:10px;color:var(--ink)}
+  .step p{color:var(--ink-dim);font-size:.84rem}
+  @media(max-width:820px){.step{padding:24px 0}}
+
+  /* games */
+  .games{display:grid;grid-template-columns:repeat(3,1fr);gap:22px;margin-top:54px}
+  @media(max-width:820px){.games{grid-template-columns:1fr}}
+  .game{position:relative;border:1px solid var(--line);border-radius:4px;padding:34px 28px;min-height:260px;display:flex;flex-direction:column;justify-content:space-between;
+    background:linear-gradient(160deg,rgba(16,19,15,.6),rgba(8,9,11,.2));transition:transform .5s var(--ease),border-color .5s,box-shadow .5s;will-change:transform}
+  .game:hover{border-color:var(--brass);box-shadow:0 30px 70px rgba(0,0,0,.5)}
+  .game .suit{position:absolute;top:24px;right:26px;font-size:1.8rem;opacity:.5;transition:opacity .4s,transform .4s}
+  .game:hover .suit{opacity:1;transform:scale(1.1)}
+  .game .red{color:var(--blood)}
+  .game h3{font-family:'Bodoni Moda',serif;font-weight:500;font-size:1.7rem;margin-bottom:8px}
+  .game p{color:var(--ink-dim);font-size:.84rem;max-width:30ch}
+  .game .meta{font-size:.68rem;letter-spacing:.2em;text-transform:uppercase;color:var(--brass-deep);margin-top:auto;padding-top:24px}
+
+  /* fairness */
+  .fair{border:1px solid var(--line);border-radius:6px;padding:54px;margin-top:50px;position:relative;overflow:hidden;
+    background:radial-gradient(120% 140% at 100% 0%,rgba(247,147,26,.07),transparent 55%)}
+  .fair .formula{font-size:clamp(.8rem,2.2vw,1.15rem);color:var(--ink);background:var(--void-2);border:1px solid var(--line);
+    border-radius:4px;padding:20px 24px;margin:26px 0;letter-spacing:.02em;overflow-x:auto;white-space:nowrap}
+  .fair .formula b{color:var(--voltage)}
+  .fair p{color:var(--ink-dim);max-width:60ch;font-size:.9rem}
+
+  /* ── Footer ── */
+  footer{border-top:1px solid var(--line);padding:70px 0 50px;margin-top:40px}
+  .foot-grid{display:flex;justify-content:space-between;gap:40px;flex-wrap:wrap;align-items:flex-end}
+  .ethos{font-family:'Bodoni Moda',serif;font-style:italic;font-size:1.4rem;color:var(--ink);max-width:24ch;line-height:1.25}
+  .foot-suits{font-size:1.4rem;letter-spacing:8px;color:var(--brass)}
+  .foot-suits .r{color:var(--blood)}
+  .smallprint{font-size:.68rem;color:var(--ink-dim);letter-spacing:.06em;margin-top:30px;max-width:64ch;line-height:1.7}
+  .smallprint b{color:var(--brass-deep)}
+
+  /* reveal on load / scroll */
+  .reveal{opacity:0;transform:translateY(26px);transition:opacity 1s var(--ease),transform 1s var(--ease)}
+  .reveal.in{opacity:1;transform:none}
+  [data-d="1"]{transition-delay:.08s}[data-d="2"]{transition-delay:.16s}[data-d="3"]{transition-delay:.24s}
+  [data-d="4"]{transition-delay:.32s}[data-d="5"]{transition-delay:.4s}
+</style>
+</head>
+<body>
+<div class="cursor" id="cursor"></div>
+
+<nav id="nav">
+  <a class="brand" href="#top"><span class="star">✦</span>SATOSHI&nbsp;<b>21</b></a>
+  <div class="nav-links">
+    <a href="#jouer">Jouer</a>
+    <a href="#equite">Équité</a>
+    <a href="#etapes">Comment ça marche</a>
+    <a href="/verify.html">Vérifier</a>
+  </div>
+  <a class="nav-cta" href="/index.html">⚡ Se connecter</a>
+</nav>
+
+<header id="top">
+  <div class="wrap">
+    <p class="eyebrow reveal" data-d="1">Blackjack · Lightning · Cypherpunk</p>
+    <h1>
+      <span class="reveal" data-d="2" style="display:block">Le blackjack ne</span>
+      <span class="reveal" data-d="3" style="display:block">demande pas <span class="it v">ton nom.</span></span>
+    </h1>
+    <div class="hero-grid">
+      <div class="reveal" data-d="4">
+        <p class="lede">
+          Tu te connectes avec ton <b>wallet Bitcoin</b>. Tu déposes en <b>sats</b>, instantanément, sur Lightning.
+          Tu joues. Tu retires. <b>Aucun email, aucun KYC, aucune custody</b> de tes fonds principaux —
+          et chaque main est <b>prouvée équitable</b>.
+        </p>
+        <div class="hero-cta">
+          <a class="btn btn-primary" href="/index.html">Entrer dans la salle <span class="arrow">→</span></a>
+          <a class="btn btn-ghost" href="/verify.html">Vérifier l'équité</a>
+        </div>
+      </div>
+      <div class="reveal" data-d="5">
+        <div class="hero-card" id="tiltCard">
+          <div class="corner tl">A<small>♠</small></div>
+          <div class="pip">21</div>
+          <div class="suit">♠ ♥ ♦ ♣</div>
+          <div class="corner br">A<small>♠</small></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<div class="marquee">
+  <div class="marquee-track" id="mq">
+    <span>No email</span><span class="dot">✦</span><span>No KYC</span><span class="dot">✦</span><span>Instant Lightning</span><span class="dot">✦</span><span>Provably fair</span><span class="dot">✦</span><span>Non-custodial cash-out</span><span class="dot">✦</span>
+    <span>No email</span><span class="dot">✦</span><span>No KYC</span><span class="dot">✦</span><span>Instant Lightning</span><span class="dot">✦</span><span>Provably fair</span><span class="dot">✦</span><span>Non-custodial cash-out</span><span class="dot">✦</span>
+  </div>
+</div>
+
+<section id="jouer">
+  <div class="wrap">
+    <p class="sec-label reveal">Pourquoi ici</p>
+    <h2 class="sec-title reveal" data-d="1">Une salle de jeu <span class="it">souveraine.</span></h2>
+    <div class="pillars">
+      <div class="pillar reveal" data-d="1">
+        <div class="num">01 — RAILS</div>
+        <div class="ico">⚡</div>
+        <h3>Lightning natif</h3>
+        <p>Dépôts et retraits en sats via NWC. Pas de carte, pas de virement, pas d'attente — la liquidité circule à la vitesse d'une facture Lightning.</p>
+      </div>
+      <div class="pillar reveal" data-d="2">
+        <div class="num">02 — PREUVE</div>
+        <div class="ico">🔒</div>
+        <h3>Provably fair</h3>
+        <p>Engagement <code>sha256(serverSeed)</code> avant la main, révélation après. Tu recalcules le deck toi-même. La maison ne peut pas tricher.</p>
+      </div>
+      <div class="pillar reveal" data-d="3">
+        <div class="num">03 — IDENTITÉ</div>
+        <div class="ico">🕶️</div>
+        <h3>Auth sans données</h3>
+        <p>Connexion par signature LNURL-auth de ton wallet. Aucun mot de passe, aucune adresse, aucune fuite. Ta clé est ton compte.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="etapes">
+  <div class="wrap">
+    <p class="sec-label reveal">Le protocole</p>
+    <h2 class="sec-title reveal" data-d="1">Trois gestes, <span class="it">zéro friction.</span></h2>
+    <div class="steps">
+      <div class="step reveal" data-d="1">
+        <div class="n">01</div>
+        <h4>Signe pour entrer</h4>
+        <p>Scanne le QR LNURL avec ton wallet. Une signature, pas un formulaire. Tu es connecté.</p>
+      </div>
+      <div class="step reveal" data-d="2">
+        <div class="n">02</div>
+        <h4>Dépose en sats</h4>
+        <p>Génère une invoice, paie-la sur Lightning. Ton solde de jeu est crédité en quelques secondes.</p>
+      </div>
+      <div class="step reveal" data-d="3">
+        <div class="n">03</div>
+        <h4>Joue. Retire.</h4>
+        <p>Solo, tables multijoueurs ou tournois. Encaisse vers n'importe quelle invoice, quand tu veux.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="tables">
+  <div class="wrap">
+    <p class="sec-label reveal">La table</p>
+    <h2 class="sec-title reveal" data-d="1">Trois façons de <span class="it">battre la maison.</span></h2>
+    <div class="games">
+      <a class="game tilt reveal" data-d="1" href="/index.html">
+        <div class="suit">♠</div>
+        <div><h3>Blackjack solo</h3><p>Tête-à-tête avec le croupier. Split, double, assurance, surrender. House edge 2%.</p></div>
+        <div class="meta">100 – 2 500 sats / main</div>
+      </a>
+      <a class="game tilt reveal" data-d="2" href="/table.html">
+        <div class="suit red">♥</div>
+        <div><h3>Tables live</h3><p>Jusqu'à plusieurs joueurs sur le même tapis, en temps réel. Tips entre joueurs, chat, leaderboard du jour.</p></div>
+        <div class="meta">Multijoueur · temps réel</div>
+      </a>
+      <a class="game tilt reveal" data-d="3" href="/tournament.html">
+        <div class="suit red">♦</div>
+        <div><h3>Tournois</h3><p>Buy-in en sats, prize pool partagé. Grimpe le classement, rafle 60 / 30 / 10 %.</p></div>
+        <div class="meta">Buy-in · prize pool</div>
+      </a>
+    </div>
+  </div>
+</section>
+
+<section id="equite">
+  <div class="wrap">
+    <p class="sec-label reveal">Ne nous fais pas confiance — vérifie</p>
+    <h2 class="sec-title reveal" data-d="1">L'équité, <span class="it">démontrable.</span></h2>
+    <div class="fair reveal" data-d="1">
+      <p>Avant chaque main, le casino publie l'empreinte de sa graine secrète. Le mélange du jeu est dérivé de façon déterministe :</p>
+      <div class="formula">deck = shuffle( sha256( <b>serverSeed</b> : <b>clientSeed</b> : <b>nonce</b> ) )</div>
+      <p>À la fin, <code>serverSeed</code> est révélé. Tu vérifies que son empreinte correspond à l'engagement initial, puis tu recalcules le deck carte par carte. Si une seule carte diffère, la triche est exposée. Mélange Fisher-Yates, keystream SHA-256, rejection sampling — aucun biais.</p>
+      <div class="hero-cta" style="margin-top:30px">
+        <a class="btn btn-primary" href="/verify.html">Ouvrir le vérificateur <span class="arrow">→</span></a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div class="foot-grid">
+      <div class="ethos reveal">« Not your keys,<br>not your casino. »</div>
+      <div class="foot-suits reveal" data-d="1">♠ <span class="r">♥</span> <span class="r">♦</span> ♣</div>
+    </div>
+    <p class="smallprint reveal" data-d="2">
+      <b>Satoshi&nbsp;21</b> — blackjack sur le Lightning Network. Jeu réservé aux personnes majeures dans les juridictions où il est autorisé.
+      Joue avec ce que tu peux te permettre de perdre. Les sats déposés en jeu sont détenus le temps de ta session ; retire-les dès que tu as fini.
+      Pas de KYC, pas de collecte de données personnelles. <b>⚡ Powered by NWC · LNURL-auth · Nostr.</b>
+    </p>
+  </div>
+</footer>
+
+<script>
+  // Curseur custom + état "dot" au survol des éléments interactifs
+  const cur = document.getElementById('cursor');
+  let mx=innerWidth/2, my=innerHeight/2, cx=mx, cy=my;
+  addEventListener('mousemove', e=>{mx=e.clientX; my=e.clientY});
+  (function loop(){ cx+=(mx-cx)*.18; cy+=(my-cy)*.18; cur.style.transform=`translate(${cx}px,${cy}px) translate(-50%,-50%)`; requestAnimationFrame(loop); })();
+  document.querySelectorAll('a,button,.game,.hero-card').forEach(el=>{
+    el.addEventListener('mouseenter',()=>cur.classList.add('dot'));
+    el.addEventListener('mouseleave',()=>cur.classList.remove('dot'));
+  });
+
+  // Nav background au scroll
+  const nav=document.getElementById('nav');
+  addEventListener('scroll',()=>nav.classList.toggle('scrolled', scrollY>40),{passive:true});
+
+  // Reveal à l'entrée dans le viewport (+ hero au load)
+  const io=new IntersectionObserver((es)=>es.forEach(e=>{ if(e.isIntersecting){ e.target.classList.add('in'); io.unobserve(e.target);} }),{threshold:.16});
+  document.querySelectorAll('.reveal').forEach(el=>io.observe(el));
+  addEventListener('load',()=>document.querySelectorAll('header .reveal').forEach(el=>el.classList.add('in')));
+
+  // Tilt 3D léger sur les cartes de jeu + la carte hero
+  function tilt(el,max){
+    el.addEventListener('mousemove',e=>{
+      const r=el.getBoundingClientRect();
+      const px=(e.clientX-r.left)/r.width-.5, py=(e.clientY-r.top)/r.height-.5;
+      el.style.transform=`perspective(800px) rotateY(${px*max}deg) rotateX(${-py*max}deg) translateY(-4px)`;
+    });
+    el.addEventListener('mouseleave',()=>el.style.transform='');
+  }
+  document.querySelectorAll('.game.tilt').forEach(el=>tilt(el,8));
+</script>
+</body>
+</html>
