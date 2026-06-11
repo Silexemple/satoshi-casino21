@@ -61,6 +61,9 @@ export default async function handler(req) {
     return J(
       {
         status: 'authenticated',
+        // Aussi dans le corps : les clients natifs (app 21pay) ne peuvent pas
+        // lire un Set-Cookie HttpOnly — même canal TLS, challenge one-shot.
+        session_id: sessionId,
         balance: player?.balance ?? 0,
         nickname: player?.nickname ?? null,
         avatar: player?.avatar ?? null
