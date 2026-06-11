@@ -1,5 +1,6 @@
 {
   "casino": true,
   "custodial": true,
-  "mineurs": true
+  "mineurs": true,
+  "markets": true
 }
