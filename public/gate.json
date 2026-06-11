@@ -1,4 +1,5 @@
 {
   "casino": true,
-  "custodial": true
+  "custodial": true,
+  "mineurs": true
 }
